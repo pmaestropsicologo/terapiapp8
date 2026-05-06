@@ -18315,131 +18315,111 @@ const SVG = {
     // Emotion faces (enhanced from v7)
     alegria: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "ale-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#FFF9C4" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#FFD700" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#B8860B" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#ale-body)", stroke: "#8B6914", strokeWidth: "2" }),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "#FFE55C", opacity: "0.2" }),
-        React.createElement("path", { d: "M 26 34 Q 35 24 42 34", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 58 34 Q 65 24 74 34", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 22 58 Q 50 86 78 58", stroke: "#1D3557", strokeWidth: "5", fill: "#1D3557", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 26 60 Q 50 80 74 60 L 50 72 Z", fill: "#FF6B8E" }),
-        React.createElement("ellipse", { cx: "35", cy: "48", rx: "2", ry: "3", fill: "#1D3557" }),
-        React.createElement("ellipse", { cx: "65", cy: "48", rx: "2", ry: "3", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "20", cy: "66", r: "8", fill: "#FF9999", opacity: "0.6" }),
-        React.createElement("circle", { cx: "80", cy: "66", r: "8", fill: "#FF9999", opacity: "0.6" }),
-        React.createElement("ellipse", { cx: "36", cy: "26", rx: "8", ry: "4", fill: "#fff", opacity: "0.4" }))),
+            React.createElement("radialGradient", { id: "ale-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#FFE5C8" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#F4C896" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#ale-skin)", stroke: "#B8895E", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 30 36 Q 38 30 46 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 36 Q 62 30 70 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 32 46 Q 36 50 40 46", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 60 46 Q 64 50 68 46", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 32 64 Q 50 80 68 64 Q 50 72 32 64 Z", fill: "#8B3A52", stroke: "#5C1B2E", strokeWidth: "2" }),
+        React.createElement("path", { d: "M 35 65 Q 50 71 65 65", stroke: "#fff", strokeWidth: "1.5", fill: "none", opacity: "0.6" }),
+        React.createElement("circle", { cx: "26", cy: "62", r: "5", fill: "#FF8FA8", opacity: "0.5" }),
+        React.createElement("circle", { cx: "74", cy: "62", r: "5", fill: "#FF8FA8", opacity: "0.5" }))),
     tristeza: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "tri-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#D4F0F8" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#A8DADC" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#2B5F85" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#tri-body)", stroke: "#2B5F85", strokeWidth: "2" }),
-        React.createElement("path", { d: "M 24 42 Q 35 52 42 42", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 58 42 Q 65 52 76 42", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 28 74 Q 50 54 72 74", stroke: "#1D3557", strokeWidth: "5", fill: "none", strokeLinecap: "round" }),
-        React.createElement("ellipse", { cx: "35", cy: "50", rx: "2", ry: "5", fill: "#2B5F85" }),
-        React.createElement("ellipse", { cx: "65", cy: "50", rx: "2", ry: "5", fill: "#2B5F85" }),
-        React.createElement("path", { d: "M 32 56 Q 30 64 32 70 Q 34 74 36 70", fill: "#457B9D", opacity: "0.8" }),
-        React.createElement("ellipse", { cx: "32", cy: "64", rx: "2.5", ry: "8", fill: "#457B9D" }),
-        React.createElement("ellipse", { cx: "68", cy: "62", rx: "2", ry: "6", fill: "#457B9D", opacity: "0.7" }),
-        React.createElement("circle", { cx: "33", cy: "72", r: "2", fill: "#6FB1D4" }))),
+            React.createElement("radialGradient", { id: "tri-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#F2DCC4" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#C9A580" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#tri-skin)", stroke: "#8B6F4D", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 28 36 Q 38 42 46 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 36 Q 62 42 72 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("ellipse", { cx: "36", cy: "48", rx: "2.2", ry: "3", fill: "#3D2817" }),
+        React.createElement("ellipse", { cx: "64", cy: "48", rx: "2.2", ry: "3", fill: "#3D2817" }),
+        React.createElement("path", { d: "M 36 50 Q 34 60 36 70", stroke: "#5BA8D6", strokeWidth: "3", fill: "none", strokeLinecap: "round", opacity: "0.85" }),
+        React.createElement("circle", { cx: "36", cy: "72", r: "2.5", fill: "#5BA8D6" }),
+        React.createElement("path", { d: "M 35 68 Q 50 62 65 68", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }))),
     enfado: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "enf-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#FF9A85" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#E63946" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#8B1E26" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#enf-body)", stroke: "#5C1118", strokeWidth: "2" }),
-        React.createElement("path", { d: "M 18 28 L 44 46", stroke: "#1D3557", strokeWidth: "5", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 82 28 L 56 46", stroke: "#1D3557", strokeWidth: "5", strokeLinecap: "round" }),
-        React.createElement("circle", { cx: "36", cy: "48", r: "4", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "64", cy: "48", r: "4", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "37", cy: "47", r: "1.2", fill: "#fff" }),
-        React.createElement("circle", { cx: "65", cy: "47", r: "1.2", fill: "#fff" }),
-        React.createElement("path", { d: "M 30 74 Q 50 58 70 74", stroke: "#1D3557", strokeWidth: "5", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 18 18 Q 22 14 26 18 M 74 18 Q 78 14 82 18 M 50 8 Q 54 4 58 8", stroke: "#E63946", strokeWidth: "3", fill: "none", strokeLinecap: "round", opacity: "0.8" }),
-        React.createElement("circle", { cx: "18", cy: "12", r: "2", fill: "#E63946" }),
-        React.createElement("circle", { cx: "82", cy: "12", r: "2", fill: "#E63946" }))),
+            React.createElement("radialGradient", { id: "enf-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#FFC8B0" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#E8826A" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#enf-skin)", stroke: "#8B3A20", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 24 32 L 46 40", stroke: "#3D2817", strokeWidth: "3.5", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 76 32 L 54 40", stroke: "#3D2817", strokeWidth: "3.5", strokeLinecap: "round" }),
+        React.createElement("ellipse", { cx: "36", cy: "50", rx: "2.5", ry: "3.2", fill: "#3D2817" }),
+        React.createElement("ellipse", { cx: "64", cy: "50", rx: "2.5", ry: "3.2", fill: "#3D2817" }),
+        React.createElement("path", { d: "M 32 70 Q 50 58 68 70", stroke: "#3D2817", strokeWidth: "3", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 48 18 Q 52 8 56 16", stroke: "#9B2515", strokeWidth: "2.5", fill: "none", strokeLinecap: "round", opacity: "0.7" }),
+        React.createElement("path", { d: "M 18 42 L 14 38 M 18 50 L 12 50", stroke: "#9B2515", strokeWidth: "2", strokeLinecap: "round", opacity: "0.6" }))),
     miedo: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "mie-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#EDDDF5" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#D4A5E5" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#5D1F6F" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#mie-body)", stroke: "#5D1F6F", strokeWidth: "2" }),
-        React.createElement("circle", { cx: "34", cy: "44", r: "10", fill: "#fff" }),
-        React.createElement("circle", { cx: "66", cy: "44", r: "10", fill: "#fff" }),
-        React.createElement("circle", { cx: "34", cy: "46", r: "5", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "66", cy: "46", r: "5", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "34", cy: "45", r: "2", fill: "#fff" }),
-        React.createElement("circle", { cx: "66", cy: "45", r: "2", fill: "#fff" }),
-        React.createElement("path", { d: "M 34 36 Q 30 32 26 34", stroke: "#1D3557", strokeWidth: "2", fill: "none" }),
-        React.createElement("path", { d: "M 66 36 Q 70 32 74 34", stroke: "#1D3557", strokeWidth: "2", fill: "none" }),
-        React.createElement("ellipse", { cx: "50", cy: "72", rx: "8", ry: "11", fill: "#1D3557" }),
-        React.createElement("ellipse", { cx: "50", cy: "70", rx: "5", ry: "8", fill: "#8B1E26" }),
-        React.createElement("path", { d: "M 16 22 Q 24 30 22 40 M 84 22 Q 76 30 78 40", stroke: "#1D3557", strokeWidth: "2", fill: "none" }),
-        React.createElement("path", { d: "M 10 52 L 14 52 M 14 58 L 10 58 M 90 52 L 86 52 M 86 58 L 90 58", stroke: "#7B2D8E", strokeWidth: "2", fill: "none", strokeLinecap: "round" }))),
+            React.createElement("radialGradient", { id: "mie-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#F5E1D0" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#D9B898" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#mie-skin)", stroke: "#8B6F4D", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 28 32 Q 38 24 46 30", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 30 Q 62 24 72 32", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("circle", { cx: "36", cy: "48", r: "7", fill: "#fff", stroke: "#3D2817", strokeWidth: "1.5" }),
+        React.createElement("circle", { cx: "64", cy: "48", r: "7", fill: "#fff", stroke: "#3D2817", strokeWidth: "1.5" }),
+        React.createElement("circle", { cx: "36", cy: "49", r: "3", fill: "#3D2817" }),
+        React.createElement("circle", { cx: "64", cy: "49", r: "3", fill: "#3D2817" }),
+        React.createElement("circle", { cx: "37", cy: "48", r: "1", fill: "#fff" }),
+        React.createElement("circle", { cx: "65", cy: "48", r: "1", fill: "#fff" }),
+        React.createElement("ellipse", { cx: "50", cy: "70", rx: "5", ry: "8", fill: "#3D2817" }),
+        React.createElement("path", { d: "M 30 64 Q 50 60 70 64", stroke: "#3D2817", strokeWidth: "1.5", fill: "none", strokeLinecap: "round", opacity: "0.6" }))),
     sorpresa: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "sor-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#FFD1A8" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#F4A261" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#A0530F" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#sor-body)", stroke: "#8B3F08", strokeWidth: "2" }),
-        React.createElement("circle", { cx: "34", cy: "44", r: "11", fill: "#fff", stroke: "#1D3557", strokeWidth: "3" }),
-        React.createElement("circle", { cx: "66", cy: "44", r: "11", fill: "#fff", stroke: "#1D3557", strokeWidth: "3" }),
-        React.createElement("circle", { cx: "34", cy: "46", r: "5", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "66", cy: "46", r: "5", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "35", cy: "44", r: "1.8", fill: "#fff" }),
-        React.createElement("circle", { cx: "67", cy: "44", r: "1.8", fill: "#fff" }),
-        React.createElement("ellipse", { cx: "50", cy: "72", rx: "10", ry: "12", fill: "#1D3557" }),
-        React.createElement("ellipse", { cx: "50", cy: "70", rx: "6", ry: "8", fill: "#8B1538" }),
-        React.createElement("ellipse", { cx: "52", cy: "68", rx: "2", ry: "2.5", fill: "#fff", opacity: "0.3" }))),
+            React.createElement("radialGradient", { id: "sor-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#FFE0C2" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#E8B785" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#sor-skin)", stroke: "#8B5A2B", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 28 28 Q 38 22 46 28", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 28 Q 62 22 72 28", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("circle", { cx: "36", cy: "48", r: "5.5", fill: "#fff", stroke: "#3D2817", strokeWidth: "1.5" }),
+        React.createElement("circle", { cx: "64", cy: "48", r: "5.5", fill: "#fff", stroke: "#3D2817", strokeWidth: "1.5" }),
+        React.createElement("circle", { cx: "36", cy: "49", r: "2.5", fill: "#3D2817" }),
+        React.createElement("circle", { cx: "64", cy: "49", r: "2.5", fill: "#3D2817" }),
+        React.createElement("ellipse", { cx: "50", cy: "70", rx: "6", ry: "9", fill: "#5C2030" }),
+        React.createElement("ellipse", { cx: "50", cy: "68", rx: "3.5", ry: "5", fill: "#8B3A52" }))),
     calma: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "cal-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#DFF7E8" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#B5EAD7" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#3D9960" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#cal-body)", stroke: "#1B6A45", strokeWidth: "2" }),
-        React.createElement("path", { d: "M 26 42 Q 35 36 42 42", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 58 42 Q 65 36 74 42", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 36 64 Q 50 74 64 64", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 20 68 Q 24 66 28 68 M 72 68 Q 76 66 80 68", stroke: "#B5EAD7", strokeWidth: "2.5", fill: "none", strokeLinecap: "round", opacity: "0.8" }),
-        React.createElement("ellipse", { cx: "36", cy: "24", rx: "8", ry: "3", fill: "#fff", opacity: "0.5" }))),
+            React.createElement("radialGradient", { id: "cal-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#F5E5D3" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#D5B68A" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#cal-skin)", stroke: "#8B6B43", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 30 38 Q 38 36 46 38", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 38 Q 62 36 70 38", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 30 48 Q 36 50 42 48", stroke: "#3D2817", strokeWidth: "2", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 58 48 Q 64 50 70 48", stroke: "#3D2817", strokeWidth: "2", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 36 66 Q 50 72 64 66", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }))),
     amor: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "amo-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#FFE0EA" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#FFB6C1" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#C1487C" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#amo-body)", stroke: "#C1487C", strokeWidth: "2" }),
-        React.createElement("path", { d: "M 30 42 Q 22 38 28 30 Q 36 36 30 46 Q 38 46 42 36 Q 36 30 28 32 Z", fill: "#E63946", stroke: "#8B1E26", strokeWidth: "1" }),
-        React.createElement("path", { d: "M 70 42 Q 78 38 72 30 Q 64 36 70 46 Q 62 46 58 36 Q 64 30 72 32 Z", fill: "#E63946", stroke: "#8B1E26", strokeWidth: "1" }),
-        React.createElement("circle", { cx: "28", cy: "34", r: "1", fill: "#fff" }),
-        React.createElement("circle", { cx: "72", cy: "34", r: "1", fill: "#fff" }),
-        React.createElement("path", { d: "M 24 62 Q 50 86 76 62", stroke: "#1D3557", strokeWidth: "5", fill: "#1D3557", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 28 64 Q 50 78 72 64 L 50 72 Z", fill: "#FF6B8E" }),
-        React.createElement("circle", { cx: "18", cy: "70", r: "6", fill: "#FF9999", opacity: "0.6" }),
-        React.createElement("circle", { cx: "82", cy: "70", r: "6", fill: "#FF9999", opacity: "0.6" }),
-        React.createElement("path", { d: "M 6 30 Q 10 26 14 30 Q 12 34 8 34 Z M 86 20 Q 90 16 94 20 Q 92 24 88 24 Z", fill: "#FFB6C1", opacity: "0.8" }))),
+            React.createElement("radialGradient", { id: "amo-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#FFE0E0" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#F4B0B8" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#amo-skin)", stroke: "#A8556A", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 30 36 Q 38 30 46 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 54 36 Q 62 30 70 36", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 30 48 L 38 44 L 30 40 M 70 48 L 62 44 L 70 40", stroke: "#E63946", strokeWidth: "2.5", fill: "#E63946", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 32 64 Q 50 78 68 64", stroke: "#3D2817", strokeWidth: "3", fill: "#8B3A52", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 14 30 Q 12 26 16 26 Q 18 22 22 26 Q 24 30 18 34 Z", fill: "#E63946", opacity: "0.85" }),
+        React.createElement("path", { d: "M 78 18 Q 76 14 80 14 Q 82 10 86 14 Q 88 18 82 22 Z", fill: "#E63946", opacity: "0.7" }),
+        React.createElement("circle", { cx: "26", cy: "62", r: "4", fill: "#FF6B8E", opacity: "0.6" }),
+        React.createElement("circle", { cx: "74", cy: "62", r: "4", fill: "#FF6B8E", opacity: "0.6" }))),
     asco: (s = 60) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
-            React.createElement("radialGradient", { id: "asc-body", cx: "35%", cy: "30%" },
-                React.createElement("stop", { offset: "0%", stopColor: "#C5EFD3" }),
-                React.createElement("stop", { offset: "60%", stopColor: "#95D5B2" }),
-                React.createElement("stop", { offset: "100%", stopColor: "#1B6A45" }))),
-        React.createElement("circle", { cx: "50", cy: "50", r: "44", fill: "url(#asc-body)", stroke: "#1B4332", strokeWidth: "2" }),
-        React.createElement("path", { d: "M 24 42 L 42 36", stroke: "#1D3557", strokeWidth: "4", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 76 42 L 58 36", stroke: "#1D3557", strokeWidth: "4", strokeLinecap: "round" }),
-        React.createElement("circle", { cx: "36", cy: "46", r: "2.5", fill: "#1D3557" }),
-        React.createElement("circle", { cx: "64", cy: "46", r: "2.5", fill: "#1D3557" }),
-        React.createElement("path", { d: "M 28 68 Q 36 60 44 68 Q 52 76 60 68 Q 68 62 72 68", stroke: "#1D3557", strokeWidth: "4", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 40 22 Q 50 14 60 22", stroke: "#1D3557", strokeWidth: "3", fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: "M 36 76 L 34 82 M 38 78 L 36 84 M 40 76 L 38 82", stroke: "#52B788", strokeWidth: "2", fill: "none", strokeLinecap: "round" }))),
+            React.createElement("radialGradient", { id: "asc-skin", cx: "35%", cy: "30%" },
+                React.createElement("stop", { offset: "0%", stopColor: "#E5EBC5" }),
+                React.createElement("stop", { offset: "100%", stopColor: "#A8C57A" }))),
+        React.createElement("circle", { cx: "50", cy: "52", r: "42", fill: "url(#asc-skin)", stroke: "#5C7022", strokeWidth: "1.5" }),
+        React.createElement("path", { d: "M 28 38 L 46 32", stroke: "#3D2817", strokeWidth: "2.5", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 72 38 L 54 32", stroke: "#3D2817", strokeWidth: "2.5", strokeLinecap: "round" }),
+        React.createElement("ellipse", { cx: "36", cy: "48", rx: "2.2", ry: "2.8", fill: "#3D2817" }),
+        React.createElement("ellipse", { cx: "64", cy: "48", rx: "2.2", ry: "2.8", fill: "#3D2817" }),
+        React.createElement("path", { d: "M 30 68 Q 38 62 46 68 Q 52 74 58 68 Q 66 62 70 68", stroke: "#3D2817", strokeWidth: "2.5", fill: "none", strokeLinecap: "round" }),
+        React.createElement("path", { d: "M 42 22 Q 50 18 58 22", stroke: "#3D2817", strokeWidth: "2", fill: "none", strokeLinecap: "round" }))),
     // Geometric shapes with gradients
     cRojo: (s = 48) => (React.createElement("svg", { width: s, height: s, viewBox: "0 0 100 100" },
         React.createElement("defs", null,
@@ -23092,7 +23072,7 @@ Formato JSON:
         turnRef.current += 1;
         setLoading(true);
         const conversation = newMessages.map(m => `${m.role === "user" ? "Paciente" : "Personaje"}: ${m.text}`).join("\n");
-        const isFinalTurn = turnRef.current >= 3;
+        const isFinalTurn = turnRef.current >= 8;
         const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') +
             `Role-play en curso. Situación: "${scenario.desc}". Eres el personaje que NO es el paciente.
 
@@ -23135,7 +23115,7 @@ Formato JSON:
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Role-Play Conversacional"),
                 React.createElement(AIBadge, null)),
-            React.createElement(Instructions, null, "Practica conversaciones difíciles con la IA. Tendrás 3 turnos para responder. Al final recibes feedback sobre si fuiste asertivo, pasivo o agresivo."),
+            React.createElement(Instructions, null, "Practica conversaciones difíciles con la IA. Tendrás 8 turnos para responder. Al final recibes feedback sobre si fuiste asertivo, pasivo o agresivo."),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 } },
                 SCENARIOS.map(s => React.createElement("div", { key: s.id, onClick: () => startScenario(s.id), style: {
                     padding: 14, background: "#f9f9f9", borderRadius: 14, cursor: "pointer", textAlign: "center",
@@ -23151,7 +23131,7 @@ Formato JSON:
                 React.createElement("div", { style: { fontSize: 28 } }, scenario.emoji),
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontSize: 16, fontWeight: 800 } }, scenario.label),
-                    React.createElement("div", { style: { fontSize: 11, color: C.textL } }, "Turno ", Math.min(turnRef.current + 1, 3), " de 3"))),
+                    React.createElement("div", { style: { fontSize: 11, color: C.textL } }, "Turno ", Math.min(turnRef.current + 1, 8), " de 8"))),
             React.createElement(Btn, { color: C.textL, onClick: reset, small: true, outline: true }, "← Cambiar")),
         React.createElement("div", { style: { background: "#f5f3ee", borderRadius: 14, padding: 14, marginBottom: 14, minHeight: 240, maxHeight: 360, overflowY: "auto" } },
             messages.map((m, i) => React.createElement("div", { key: i, style: {
@@ -24624,6 +24604,7 @@ function AchievementToast({ achievementId, onDismiss }) {
 // ═══════════════════════════════════════════════════════════════
 function SessionReport({ patient, onClose }) {
     var _a, _b;
+    const [includeCharts, setIncludeCharts] = useState(true);
     const sessions = getSessions(patient.id);
     const progress = getPatientProgress(patient.id);
     const bests = storeLoad("bests:" + patient.id) || {};
@@ -24660,48 +24641,67 @@ function SessionReport({ patient, onClose }) {
         const worriesList = storeLoad("worries:" + patient.id) || [];
         const totalAreasUsed = (progress.areas || []).length;
 
+        function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+        const ageNum = patient.edad ? parseInt(patient.edad) : "";
+        const dxHTML = getPatientDiagnosticos(patient).map(d => `<span class="print-chip">${esc(d)}</span>`).join("") || '<span style="color:#888">Sin diagnóstico</span>';
+
+        // Group sessions BY AREA AND ACTIVITY (clinical, not gamified)
+        const workByArea = {}; // { areaId: { activityId: { label, attempts: [{ts, correct}, ...] } } }
+        sessions.forEach(s => {
+            workByArea[s.area] = workByArea[s.area] || {};
+            const aid = s.activity || "?";
+            // Try to find the activity label from AREA_ACTIVITIES
+            let label = aid;
+            if (typeof AREA_ACTIVITIES !== 'undefined' && AREA_ACTIVITIES[s.area]) {
+                const found = AREA_ACTIVITIES[s.area].find(a => a.id === aid);
+                if (found) label = found.label;
+            }
+            workByArea[s.area][aid] = workByArea[s.area][aid] || { label, attempts: [] };
+            workByArea[s.area][aid].attempts.push({ ts: s.ts, correct: !!(s.result && s.result.correct) });
+        });
+
+        // Build HTML for each area
+        const areasWorkedHTML = Object.keys(workByArea).sort().map(areaId => {
+            const acts = workByArea[areaId];
+            const totalAtt = Object.values(acts).reduce((s, a) => s + a.attempts.length, 0);
+            const totalOk = Object.values(acts).reduce((s, a) => s + a.attempts.filter(x => x.correct).length, 0);
+            const pct = totalAtt > 0 ? Math.round((totalOk / totalAtt) * 100) : 0;
+            const areaLabel = AREA_LABELS[areaId] || areaId;
+            const actsHTML = Object.entries(acts).sort((a, b) => b[1].attempts.length - a[1].attempts.length).map(([aid, info]) => {
+                const att = info.attempts.length;
+                const ok = info.attempts.filter(x => x.correct).length;
+                const aPct = att > 0 ? Math.round((ok / att) * 100) : 0;
+                const lastDate = info.attempts.length > 0 ? new Date(Math.max(...info.attempts.map(x => x.ts))).toLocaleDateString("es-ES") : "";
+                return `<tr><td style="padding-left:14pt">${esc(info.label)}</td><td style="text-align:center">${att}</td><td style="text-align:center">${ok}</td><td style="text-align:center;font-weight:700;color:${aPct>=70?'#2D6A4F':aPct>=50?'#A0530F':'#8B1E26'}">${aPct}%</td><td style="text-align:center;color:#666;font-size:8.5pt">${lastDate}</td></tr>`;
+            }).join("");
+            return `
+<div class="print-section print-avoid-break">
+  <div class="print-section-title">${esc(areaLabel)} · ${totalAtt} ejercicio${totalAtt===1?'':'s'} · ${pct}% rendimiento global</div>
+  <table class="print-table">
+    <thead><tr><th>Ejercicio</th><th style="text-align:center;width:50pt">Realizados</th><th style="text-align:center;width:60pt">Correctos</th><th style="text-align:center;width:60pt">Rendimiento</th><th style="text-align:center;width:70pt">Última vez</th></tr></thead>
+    <tbody>${actsHTML}</tbody>
+  </table>
+</div>`;
+        }).join("");
+
         // Format strengths
         const strengthsHTML = strengthsList.map(s => {
             const txt = typeof s === 'string' ? s : s.text;
             return `<span class="print-chip">${esc(txt)}</span>`;
         }).join("");
 
-        // Per-area accuracy
-        const byAreaHTML = Object.keys(byArea).map(a => {
-            const ad = byArea[a];
-            const pct = ad.total > 0 ? Math.round((ad.correct / ad.total) * 100) : 0;
-            return `<tr><td><strong>${AREA_LABELS[a] || a}</strong></td><td>${ad.total}</td><td>${ad.correct}</td><td>${pct}%</td></tr>`;
-        }).join("");
-
-        // Bests
-        const bestsHTML = Object.keys(bests).length === 0 ? "" :
-            Object.entries(bests).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("");
-
-        // Achievements
-        const unlockedAch = (progress.achievements || []);
-        const achHTML = unlockedAch.length === 0 ? "<em>Sin medallas todavía</em>" :
-            unlockedAch.map(id => {
-                const a = ACHIEVEMENTS.find(x => x.id === id);
-                return a ? `<span class="print-chip">${a.icon} ${esc(a.title)}</span>` : "";
-            }).join("");
-
-        // Recent sessions table (last 30)
-        const sesionesHTML = sessions.slice(-30).reverse().map(s => {
-            const dt = new Date(s.ts).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-            return `<tr><td>${dt}</td><td>${AREA_LABELS[s.area] || s.area}</td><td>${esc(s.activity || "")}</td><td>${s.result.correct ? '<span style="color:#2D6A4F;font-weight:700">✓</span>' : '<span style="color:#E63946;font-weight:700">✗</span>'}</td></tr>`;
-        }).join("");
-
-        // Logros
+        // Logros (frasco) — keep this since it's clinical content (positive moments noted by patient)
         const logrosHTML = logrosList.length === 0 ? "" :
             logrosList.slice().reverse().map(l => {
                 const dt = l.ts ? new Date(l.ts).toLocaleDateString("es-ES") : "";
-                return `<div style="padding:5pt 8pt;border-left:3pt solid ${l.color || '#E9C46A'};margin-bottom:3pt;background:#FAFAF7;font-size:9pt;border-radius:2pt"><strong>⭐</strong> ${esc(l.text)} <span style="color:#888;font-size:8pt">${dt}</span></div>`;
+                return `<div style="padding:5pt 8pt;border-left:3pt solid ${l.color || '#888'};margin-bottom:3pt;background:#FAFAF7;font-size:9pt;border-radius:2pt">${esc(l.text)} <span style="color:#888;font-size:8pt">${dt}</span></div>`;
             }).join("");
 
-        // Termómetro by day
+        // Termómetro by day with literal entries
         const termoByDay = {};
         termoList.forEach(e => { termoByDay[e.date] = termoByDay[e.date] || []; termoByDay[e.date].push(e); });
-        const termoDays = Object.keys(termoByDay).sort().reverse().slice(0, 30);
+        const termoDays = Object.keys(termoByDay).sort().reverse().slice(0, 40);
         const termoHTML = termoDays.length === 0 ? "" :
             termoDays.map(d => {
                 const dtFmt = new Date(d).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" });
@@ -24709,6 +24709,115 @@ function SessionReport({ patient, onClose }) {
                     `<span class="print-chip" style="background:${e.color}22;border-color:${e.color}66;color:${e.color}">${esc(e.emotionName)} ${e.level}/10</span>`
                 ).join(" ");
                 return `<div style="margin-bottom:6pt;font-size:9pt"><strong>${dtFmt}:</strong> ${entries}</div>`;
+            }).join("");
+
+        // Termómetro chart data — compute average emotional valence per day
+        // Map emotions to valence: alegría/calma=positive, miedo/tristeza/enfado=negative
+        const emoValence = {
+            "Alegría": 1, "Calma": 0.7, "Sorpresa": 0.3,
+            "Tristeza": -0.7, "Enfado": -0.8, "Miedo": -0.6, "Asco": -0.5,
+        };
+        const termoChartData = Object.keys(termoByDay).sort().slice(-30).map(d => {
+            const day = termoByDay[d];
+            const avg = day.reduce((s, e) => {
+                const v = emoValence[e.emotionName] || 0;
+                return s + (v * e.level / 10);
+            }, 0) / day.length;
+            return { date: d, value: avg, count: day.length };
+        });
+
+        // Build SVG line chart for emotional evolution
+        let termoChartHTML = "";
+        if (termoChartData.length >= 2) {
+            const cw = 540, ch = 140, pad = 30;
+            const xStep = (cw - 2*pad) / (termoChartData.length - 1);
+            const points = termoChartData.map((p, i) => {
+                const x = pad + i * xStep;
+                const y = ch/2 - (p.value * (ch/2 - pad - 8));
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(" ");
+            const dots = termoChartData.map((p, i) => {
+                const x = pad + i * xStep;
+                const y = ch/2 - (p.value * (ch/2 - pad - 8));
+                const color = p.value >= 0 ? "#52B788" : "#E76F51";
+                return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"/>`;
+            }).join("");
+            const firstDate = new Date(termoChartData[0].date).toLocaleDateString("es-ES", {day:"numeric", month:"short"});
+            const lastDate = new Date(termoChartData[termoChartData.length-1].date).toLocaleDateString("es-ES", {day:"numeric", month:"short"});
+            termoChartHTML = `
+<div style="margin: 8pt 0">
+  <svg width="${cw}" height="${ch}" viewBox="0 0 ${cw} ${ch}" style="background:#FAFAF7;border-radius:6pt;border:1pt solid #ddd">
+    <line x1="${pad}" y1="${ch/2}" x2="${cw-pad}" y2="${ch/2}" stroke="#ccc" stroke-width="0.5" stroke-dasharray="3 3"/>
+    <text x="${pad-4}" y="${pad+4}" text-anchor="end" font-size="7pt" fill="#52B788">+</text>
+    <text x="${pad-4}" y="${ch-pad+4}" text-anchor="end" font-size="7pt" fill="#E76F51">−</text>
+    <text x="${pad-4}" y="${ch/2+3}" text-anchor="end" font-size="7pt" fill="#888">0</text>
+    <polyline points="${points}" fill="none" stroke="#457B9D" stroke-width="1.5"/>
+    ${dots}
+    <text x="${pad}" y="${ch-4}" font-size="7pt" fill="#666">${firstDate}</text>
+    <text x="${cw-pad}" y="${ch-4}" text-anchor="end" font-size="7pt" fill="#666">${lastDate}</text>
+  </svg>
+  <div style="font-size:8pt;color:#888;text-align:center;margin-top:2pt">Valencia emocional media por día (positiva ↑ / negativa ↓), basada en ${termoChartData.length} días registrados</div>
+</div>`;
+        }
+
+        // Performance chart: % accuracy by week
+        const weeklyData = {};
+        sessions.forEach(s => {
+            const d = new Date(s.ts);
+            const monday = new Date(d);
+            monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+            const wk = monday.toISOString().slice(0, 10);
+            weeklyData[wk] = weeklyData[wk] || { ok: 0, total: 0 };
+            weeklyData[wk].total++;
+            if (s.result && s.result.correct) weeklyData[wk].ok++;
+        });
+        const weeklyArr = Object.keys(weeklyData).sort().slice(-12).map(wk => ({
+            wk, pct: weeklyData[wk].total > 0 ? (weeklyData[wk].ok / weeklyData[wk].total) * 100 : 0,
+            count: weeklyData[wk].total,
+        }));
+        let perfChartHTML = "";
+        if (weeklyArr.length >= 2) {
+            const cw = 540, ch = 140, pad = 30;
+            const xStep = (cw - 2*pad) / (weeklyArr.length - 1);
+            const points = weeklyArr.map((p, i) => {
+                const x = pad + i * xStep;
+                const y = ch - pad - (p.pct/100) * (ch - 2*pad);
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(" ");
+            const bars = weeklyArr.map((p, i) => {
+                const x = pad + i * xStep;
+                const y = ch - pad - (p.pct/100) * (ch - 2*pad);
+                return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#2D6A4F"/>
+                        <text x="${x.toFixed(1)}" y="${y-6}" text-anchor="middle" font-size="7pt" fill="#666" font-weight="700">${Math.round(p.pct)}%</text>`;
+            }).join("");
+            const firstWk = new Date(weeklyArr[0].wk).toLocaleDateString("es-ES", {day:"numeric", month:"short"});
+            const lastWk = new Date(weeklyArr[weeklyArr.length-1].wk).toLocaleDateString("es-ES", {day:"numeric", month:"short"});
+            perfChartHTML = `
+<div style="margin: 8pt 0">
+  <svg width="${cw}" height="${ch}" viewBox="0 0 ${cw} ${ch}" style="background:#FAFAF7;border-radius:6pt;border:1pt solid #ddd">
+    <line x1="${pad}" y1="${ch-pad}" x2="${cw-pad}" y2="${ch-pad}" stroke="#ccc" stroke-width="0.5"/>
+    <line x1="${pad}" y1="${ch-pad - (ch-2*pad)*0.5}" x2="${cw-pad}" y2="${ch-pad - (ch-2*pad)*0.5}" stroke="#ccc" stroke-width="0.5" stroke-dasharray="3 3"/>
+    <text x="${pad-4}" y="${pad+4}" text-anchor="end" font-size="7pt" fill="#888">100%</text>
+    <text x="${pad-4}" y="${ch-pad - (ch-2*pad)*0.5+3}" text-anchor="end" font-size="7pt" fill="#888">50%</text>
+    <text x="${pad-4}" y="${ch-pad+3}" text-anchor="end" font-size="7pt" fill="#888">0%</text>
+    <polyline points="${points}" fill="none" stroke="#2D6A4F" stroke-width="1.5"/>
+    ${bars}
+    <text x="${pad}" y="${ch-2}" font-size="7pt" fill="#666">${firstWk}</text>
+    <text x="${cw-pad}" y="${ch-2}" text-anchor="end" font-size="7pt" fill="#666">${lastWk}</text>
+  </svg>
+  <div style="font-size:8pt;color:#888;text-align:center;margin-top:2pt">Rendimiento semanal (% de aciertos), últimas ${weeklyArr.length} semanas con actividad</div>
+</div>`;
+        }
+
+        // Gratitud — show literal content
+        const gratitudHTML = gratitudList.length === 0 ? "" :
+            gratitudList.slice().reverse().slice(0, 30).map(g => {
+                const dt = new Date(g.ts).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" });
+                const items = (g.items || []).map(it => `<li style="margin-bottom:2pt">${esc(it)}</li>`).join("");
+                return `<div style="margin-bottom:8pt;padding:6pt 10pt;background:#FAFAF7;border-left:3pt solid #E9C46A;border-radius:2pt">
+                    <div style="font-size:9pt;font-weight:700;color:#666;text-transform:capitalize">${dt}</div>
+                    <ul style="margin:4pt 0 0 14pt;padding:0;font-size:9.5pt;line-height:1.5">${items}</ul>
+                </div>`;
             }).join("");
 
         // Apoyos
@@ -24720,129 +24829,133 @@ function SessionReport({ patient, onClose }) {
         const lineaHTML = lineaSorted.length === 0 ? "" :
             lineaSorted.map(ev => {
                 const cls = ev.type === "positivo" ? "#52B788" : ev.type === "dificil" ? "#E76F51" : "#457B9D";
-                return `<div style="padding:5pt 8pt;border-left:3pt solid ${cls};margin-bottom:3pt;background:#FAFAF7;font-size:9pt;border-radius:2pt">${ev.emoji || '⭐'} <strong>${esc(ev.year)} · ${esc(ev.title)}</strong>${ev.desc ? '<br><span style="color:#666">' + esc(ev.desc) + '</span>' : ''}</div>`;
+                return `<div style="padding:5pt 8pt;border-left:3pt solid ${cls};margin-bottom:3pt;background:#FAFAF7;font-size:9pt;border-radius:2pt"><strong>${esc(ev.year)} · ${esc(ev.title)}</strong>${ev.desc ? '<br><span style="color:#666">' + esc(ev.desc) + '</span>' : ''}</div>`;
             }).join("");
 
-        function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+        // Cartas — quote brief
+        const cartasHTML = cartasList.length === 0 ? "" :
+            cartasList.slice().reverse().slice(0, 5).map(l => {
+                const dt = new Date(l.ts).toLocaleDateString("es-ES");
+                const labelMap = { siempre: "Para cuando lo necesite", triste: "Para cuando esté triste", futuro: "Para mí dentro de un año", duro: "Para un día difícil" };
+                const tag = labelMap[l.openWhen] || l.openWhen || "";
+                return `<div style="padding:8pt 10pt;background:#FFFEF5;border:0.5pt solid #E9C46A66;border-radius:4pt;margin-bottom:6pt;font-size:9pt">
+                    <div style="font-size:8pt;font-weight:700;color:#A0530F;margin-bottom:2pt">${esc(tag)} · ${dt}</div>
+                    <div style="font-style:italic;color:#444;line-height:1.5;white-space:pre-wrap">${esc(l.text.slice(0, 280))}${l.text.length > 280 ? '…' : ''}</div>
+                </div>`;
+            }).join("");
 
-        const ageNum = patient.edad ? parseInt(patient.edad) : "";
-        const dxHTML = getPatientDiagnosticos(patient).map(d => `<span class="print-chip">${esc(d)}</span>`).join("") || '<span style="color:#888">Sin diagnóstico</span>';
+        const startDate = patient.created ? new Date(patient.created) : null;
+        const sessionsCount = sessions.length;
+        const firstSessionDate = sessions.length > 0 ? new Date(Math.min(...sessions.map(s => s.ts))) : null;
+        const lastSessionDate = sessions.length > 0 ? new Date(Math.max(...sessions.map(s => s.ts))) : null;
 
         const reportHTML = `
 <div class="print-header">
   <img src="${LOGO_URL}" alt="logo" style="width:70pt;height:70pt;border-radius:50%;background:#fff;border:1pt solid #ddd;flex-shrink:0">
   <div style="flex:1">
-    <div style="font-size:18pt;font-weight:900;color:#2D6A4F;letter-spacing:-0.5pt;line-height:1.1">TerapiApp · Informe de evolución</div>
+    <div style="font-size:18pt;font-weight:900;color:#2D6A4F;letter-spacing:-0.5pt;line-height:1.1">Informe de evolución</div>
     <div style="font-size:11pt;font-weight:700;color:#1D3557;margin-top:3pt">Pablo Maestro Redondo · Psicólogo General Sanitario</div>
     <div style="font-size:9pt;color:#888;margin-top:2pt">Acompañando pasos, mejorando juntos</div>
   </div>
   <div style="text-align:right;font-size:9pt;color:#666">
     <div>Generado: ${esc(today)}</div>
-    <div style="margin-top:2pt">Confidencial</div>
+    <div style="margin-top:2pt;font-style:italic;color:#888">Documento confidencial</div>
   </div>
 </div>
 
 <div class="print-section print-avoid-break">
-  <div class="print-section-title">📋 Datos del paciente</div>
+  <div class="print-section-title">Datos del paciente</div>
   <div style="font-size:11pt;line-height:1.7">
     <strong style="font-size:14pt">${esc(patient.nombre)}</strong>${ageNum ? ' · ' + ageNum + ' años' : ''}<br>
     <strong style="color:#666">Diagnóstico(s):</strong> ${dxHTML}<br>
     ${(patient.areas && patient.areas.length > 0) ? '<strong style="color:#666">Áreas a trabajar:</strong> ' + patient.areas.map(a => esc(AREA_LABELS[a] || a)).join(", ") + '<br>' : ''}
-    <strong style="color:#666">Inicio del seguimiento:</strong> ${patient.created ? new Date(patient.created).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" }) : 'N/D'}
+    ${startDate ? '<strong style="color:#666">Inicio del seguimiento:</strong> ' + startDate.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" }) : ''}
   </div>
   ${patient.notas ? '<div style="margin-top:8pt;padding:8pt;background:#FAFAF7;border-left:3pt solid #E9C46A;border-radius:2pt;font-size:10pt"><strong>Notas clínicas:</strong> ' + esc(patient.notas).replace(/\n/g, '<br>') + '</div>' : ''}
 </div>
 
 <div class="print-section print-avoid-break">
-  <div class="print-section-title">📊 Resumen general</div>
-  <div class="print-stat-grid">
-    <div class="print-stat-box"><div style="font-size:18pt;font-weight:800;color:#2D6A4F">${sessions.length}</div><div style="font-size:8pt;color:#666;font-weight:700">Sesiones</div></div>
-    <div class="print-stat-box"><div style="font-size:18pt;font-weight:800;color:#E9C46A">⭐ ${progress.stars || 0}</div><div style="font-size:8pt;color:#666;font-weight:700">Estrellas</div></div>
-    <div class="print-stat-box"><div style="font-size:18pt;font-weight:800;color:#457B9D">${accuracy}%</div><div style="font-size:8pt;color:#666;font-weight:700">Precisión global</div></div>
-    <div class="print-stat-box"><div style="font-size:18pt;font-weight:800;color:#7B2D8E">🏆 ${unlockedAch.length}</div><div style="font-size:8pt;color:#666;font-weight:700">Medallas</div></div>
-  </div>
-  <div class="print-stat-grid" style="margin-top:8pt">
-    <div class="print-stat-box"><div style="font-size:14pt;font-weight:800">${days.length}</div><div style="font-size:8pt;color:#666;font-weight:700">Días activos</div></div>
-    <div class="print-stat-box"><div style="font-size:14pt;font-weight:800">${totalAreasUsed}/7</div><div style="font-size:8pt;color:#666;font-weight:700">Áreas trabajadas</div></div>
-    <div class="print-stat-box"><div style="font-size:14pt;font-weight:800">${progress.streak || 0}</div><div style="font-size:8pt;color:#666;font-weight:700">Racha actual</div></div>
-    <div class="print-stat-box"><div style="font-size:14pt;font-weight:800">${days.length > 0 ? new Date(days[days.length - 1]).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }) : 'N/D'}</div><div style="font-size:8pt;color:#666;font-weight:700">Última sesión</div></div>
-  </div>
-</div>
-
-${byAreaHTML ? `
-<div class="print-section print-avoid-break">
-  <div class="print-section-title">📈 Rendimiento por área</div>
-  <table class="print-table">
-    <thead><tr><th>Área</th><th>Total</th><th>Correctas</th><th>Precisión</th></tr></thead>
-    <tbody>${byAreaHTML}</tbody>
+  <div class="print-section-title">Resumen de actividad</div>
+  <table class="print-table" style="max-width:100%">
+    <tr><td style="font-weight:700;width:160pt">Total de ejercicios realizados</td><td>${sessionsCount}</td></tr>
+    <tr><td style="font-weight:700">Días con actividad</td><td>${days.length}</td></tr>
+    <tr><td style="font-weight:700">Áreas trabajadas</td><td>${Object.keys(workByArea).length} de 7</td></tr>
+    <tr><td style="font-weight:700">Rendimiento global</td><td>${accuracy}% de aciertos</td></tr>
+    ${firstSessionDate ? `<tr><td style="font-weight:700">Primera sesión</td><td>${firstSessionDate.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</td></tr>` : ''}
+    ${lastSessionDate ? `<tr><td style="font-weight:700">Última sesión</td><td>${lastSessionDate.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</td></tr>` : ''}
   </table>
-</div>` : ''}
-
-${bestsHTML ? `
-<div class="print-section print-avoid-break">
-  <div class="print-section-title">🏅 Récords personales</div>
-  <table class="print-table" style="max-width:400pt"><thead><tr><th>Actividad</th><th>Récord</th></tr></thead><tbody>${bestsHTML}</tbody></table>
-</div>` : ''}
-
-<div class="print-section print-avoid-break">
-  <div class="print-section-title">🏆 Medallas conseguidas (${unlockedAch.length})</div>
-  <div>${achHTML}</div>
 </div>
 
-${strengthsList.length > 0 ? `
+${(includeCharts && perfChartHTML) ? `
 <div class="print-section print-avoid-break">
-  <div class="print-section-title">🌳 Cualidades reconocidas (${strengthsList.length})</div>
-  <div>${strengthsHTML}</div>
-  <div style="font-size:8pt;color:#888;margin-top:6pt;font-style:italic">Cualidades que el paciente ha identificado en sí mismo a lo largo de las sesiones (Árbol de Fortalezas + Espejo Positivo).</div>
+  <div class="print-section-title">Evolución del rendimiento</div>
+  ${perfChartHTML}
 </div>` : ''}
 
-${logrosHTML ? `
+${areasWorkedHTML ? `
 <div class="print-section">
-  <div class="print-section-title">⭐ Frasco de logros (${logrosList.length})</div>
-  ${logrosHTML}
+  <div class="print-section-title">Trabajo realizado por área</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Detalle de ejercicios trabajados, frecuencia y rendimiento por área terapéutica.</div>
+  ${areasWorkedHTML}
+</div>` : ''}
+
+${(includeCharts && termoChartHTML) ? `
+<div class="print-section print-avoid-break">
+  <div class="print-section-title">Evolución emocional (termómetro)</div>
+  ${termoChartHTML}
 </div>` : ''}
 
 ${termoHTML ? `
 <div class="print-section">
-  <div class="print-section-title">🌡️ Termómetro emocional (${termoList.length} mediciones · ${Object.keys(termoByDay).length} días)</div>
+  <div class="print-section-title">Registro emocional detallado</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">${termoList.length} medicion${termoList.length===1?'':'es'} en ${Object.keys(termoByDay).length} día${Object.keys(termoByDay).length===1?'':'s'} distintos.</div>
   ${termoHTML}
 </div>` : ''}
 
-${cartasList.length > 0 ? `
+${strengthsList.length > 0 ? `
 <div class="print-section print-avoid-break">
-  <div class="print-section-title">💌 Cartas a sí mismo/a (${cartasList.length})</div>
-  <div style="font-size:9pt;color:#888;font-style:italic;margin-bottom:6pt">El paciente ha escrito ${cartasList.length} carta${cartasList.length === 1 ? '' : 's'} para abrir en momentos concretos.</div>
+  <div class="print-section-title">Cualidades reconocidas por el paciente</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Identificadas a lo largo de las sesiones (Árbol de Fortalezas, Espejo Positivo).</div>
+  <div>${strengthsHTML}</div>
+</div>` : ''}
+
+${gratitudHTML ? `
+<div class="print-section">
+  <div class="print-section-title">Diario de gratitud</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Contenido literal registrado por el paciente. ${gratitudList.length} día${gratitudList.length===1?'':'s'} con entradas.</div>
+  ${gratitudHTML}
+</div>` : ''}
+
+${logrosHTML ? `
+<div class="print-section">
+  <div class="print-section-title">Logros personales registrados</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Pequeños logros que el paciente ha decidido guardar (Frasco de logros).</div>
+  ${logrosHTML}
+</div>` : ''}
+
+${cartasHTML ? `
+<div class="print-section">
+  <div class="print-section-title">Cartas escritas a sí mismo/a</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Mensajes que el paciente escribió para abrir en momentos concretos.</div>
+  ${cartasHTML}
 </div>` : ''}
 
 ${apoyosList.length > 0 ? `
 <div class="print-section print-avoid-break">
-  <div class="print-section-title">🗺️ Mapa de apoyos (${apoyosList.length} personas)</div>
+  <div class="print-section-title">Mapa de apoyos</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Personas significativas identificadas por el paciente (${apoyosList.length} en total).</div>
   <div>${apoyosHTML}</div>
 </div>` : ''}
 
 ${lineaHTML ? `
 <div class="print-section">
-  <div class="print-section-title">📈 Línea de vida (${lineaList.length} momentos)</div>
+  <div class="print-section-title">Línea de vida</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Hitos personales registrados por el paciente (${lineaList.length} momento${lineaList.length===1?'':'s'}).</div>
   ${lineaHTML}
 </div>` : ''}
 
-${gratitudList.length > 0 ? `
-<div class="print-section print-avoid-break">
-  <div class="print-section-title">🌻 Diario de gratitud</div>
-  <div style="font-size:9pt">El paciente ha registrado gratitud en ${gratitudList.length} día${gratitudList.length === 1 ? '' : 's'} distintos.</div>
-</div>` : ''}
-
-${sesionesHTML ? `
-<div class="print-section">
-  <div class="print-section-title">📅 Últimas sesiones (${Math.min(sessions.length, 30)})</div>
-  <table class="print-table">
-    <thead><tr><th>Fecha y hora</th><th>Área</th><th>Actividad</th><th>Resultado</th></tr></thead>
-    <tbody>${sesionesHTML}</tbody>
-  </table>
-</div>` : ''}
-
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v17</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v18</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -24994,7 +25107,10 @@ ${sesionesHTML ? `
                 React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } },
                     "\uD83D\uDCCA Informe de ",
                     patient.nombre),
-                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" } },
+                    React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: C.textL, cursor: "pointer", padding: "4px 10px", background: includeCharts ? C.primary + "22" : "#f5f5f5", borderRadius: 10, border: `1px solid ${includeCharts ? C.primary : C.border}` } },
+                        React.createElement("input", { type: "checkbox", checked: includeCharts, onChange: e => setIncludeCharts(e.target.checked), style: { margin: 0 } }),
+                        "📈 Incluir gráficos"),
                     React.createElement(Btn, { color: C.purple, onClick: exportJSON, small: true, outline: true }, "\uD83D\uDCBE JSON"),
                     React.createElement(Btn, { color: C.blue, onClick: exportPDF, small: true }, "\uD83D\uDDA8 Imprimir/PDF"),
                     React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
@@ -25302,6 +25418,7 @@ function TerapiAppInner() {
     const [searchQuery, setSearchQuery] = useState("");
     const [focusMode, setFocusMode] = useState(false);
     const [showPlanner, setShowPlanner] = useState(false);
+    const [showChallenges, setShowChallenges] = useState(false);
     // Auto-disable focus when navigating away from activity
     useEffect(() => { if (!activity) setFocusMode(false); }, [activity]);
 
@@ -25556,6 +25673,11 @@ function TerapiAppInner() {
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                     }, title: "Plantillas de sesión" }, "📋 Plan"),
+                React.createElement("button", { onClick: () => setShowChallenges(true), style: {
+                        background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                        borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+                    }, title: "Retos terapéuticos" }, "🎯 Retos"),
                 React.createElement("button", { onClick: () => setShowRegistry(true), style: {
                         background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
@@ -25576,6 +25698,11 @@ function TerapiAppInner() {
                 onLaunch: (areaId, activityId) => { setShowPlanner(false); nav(areaId, activityId); },
                 patient: activePatient,
             }),
+            showChallenges && React.createElement(ChallengesPanel, {
+                onClose: () => setShowChallenges(false),
+                patient: activePatient,
+                onLaunchActivity: (areaId, activityId) => { setShowChallenges(false); nav(areaId, activityId); },
+            }),
             !showRegistry && !area && (React.createElement(React.Fragment, null,
                 !activePatient && (React.createElement("div", { style: { background: C.warm, borderRadius: 14, padding: 14, marginBottom: 18, borderLeft: `4px solid ${C.accentL}`, fontSize: 13 } },
                     React.createElement("strong", null, "\uD83D\uDCA1 Consejo:"),
@@ -25589,11 +25716,31 @@ function TerapiAppInner() {
                             React.createElement("span", { style: { fontWeight: 500, opacity: 0.85, fontSize: 13, marginLeft: 6 } }, "· ", activePatient.edad, " años")),
                         getPatientDiagnosticos(activePatient).length > 0 && React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 } },
                             getPatientDiagnosticos(activePatient).map((d, di) => React.createElement("span", { key: di, style: { padding: "1px 7px", borderRadius: 8, background: "rgba(255,255,255,0.25)", fontSize: 10, fontWeight: 700 } }, d)))),
-                    React.createElement("button", { onClick: () => setShowRegistry(true), style: {
-                        background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
-                        borderRadius: 10, padding: "7px 14px", color: "#fff", fontSize: 12, fontWeight: 700,
-                        cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-                    } }, "Cambiar →"))),
+                    React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                        React.createElement("button", { onClick: () => {
+                            sfx.click();
+                            const sCount = (getSessions(activePatient.id) || []).length;
+                            const last = (getSessions(activePatient.id) || []).slice(-1)[0];
+                            const sinceTodaySessions = (getSessions(activePatient.id) || []).filter(s => {
+                                const today = new Date(); today.setHours(0,0,0,0);
+                                return s.ts >= today.getTime();
+                            }).length;
+                            if (!confirm(`¿Terminar sesión con ${activePatient.nombre}?\n\nEjercicios en sesión de hoy: ${sinceTodaySessions}\n\nEsto cerrará la sesión actual. Los datos quedan guardados en el perfil. Podrás retomar cuando quieras.`)) return;
+                            setActivePatient(null);
+                            storeSave("lastActivePatientId", null);
+                            setArea(null); setActivity(null);
+                            // Show summary
+                            setReportPatient(activePatient);
+                        }, style: {
+                            background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                            borderRadius: 10, padding: "7px 14px", color: "#fff", fontSize: 12, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                        } }, "✓ Terminar sesión"),
+                        React.createElement("button", { onClick: () => setShowRegistry(true), style: {
+                            background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                            borderRadius: 10, padding: "7px 14px", color: "#fff", fontSize: 12, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                        } }, "Cambiar →")))),
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 4 } }, "\u00C1reas Terap\u00E9uticas"),
                 React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 12 } }, "Selecciona un \u00E1rea o busca una actividad"),
                 React.createElement("div", { style: { position: "relative", marginBottom: 16 } },
@@ -25719,7 +25866,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v17"),
+                "© 2026 Todos los derechos reservados · TerapiApp v18"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
@@ -25843,6 +25990,202 @@ const SESSION_TEMPLATES = [
         ],
     },
 ];
+
+function ChallengesPanel({ onClose, patient, onLaunchActivity }) {
+    const [challenges, setChallenges] = useState(() => patient ? (storeLoad("challenges:" + patient.id) || []) : []);
+    const [unlocks, setUnlocks] = useState(() => patient ? (storeLoad("unlocks:" + patient.id) || []) : []);
+    const [tab, setTab] = useState("activos"); // activos | completados | desbloqueos | nuevo
+    const [form, setForm] = useState({ titulo: "", desc: "", activityArea: "", activityId: "", target: 5, deadline: "" });
+
+    const TEMPLATE_CHALLENGES = [
+        { titulo: "Trabajar atención sostenida", desc: "Hacer Stroop o Cancelación 5 veces esta semana", activityArea: "atencion", activityId: "stroop", target: 5, days: 7 },
+        { titulo: "Memoria de trabajo diaria", desc: "Practicar N-back todos los días durante una semana", activityArea: "memoria", activityId: "nback", target: 7, days: 7 },
+        { titulo: "Diario emocional regular", desc: "Escribir en el diario al menos 3 veces", activityArea: "emocional", activityId: "diario", target: 3, days: 7 },
+        { titulo: "Lectura diaria", desc: "Hacer comprensión lectora 5 veces", activityArea: "lectoescritura", activityId: "comprension", target: 5, days: 14 },
+        { titulo: "Reconocer mis cualidades", desc: "Añadir 5 fortalezas al árbol", activityArea: "autoestima", activityId: "arbol", target: 5, days: 14 },
+        { titulo: "Asertividad en role-play", desc: "Conseguir 3 respuestas asertivas en Role-Play", activityArea: "social", activityId: "roleplay", target: 3, days: 14 },
+        { titulo: "Gratitud diaria", desc: "Escribir gratitud 7 días seguidos", activityArea: "autoestima", activityId: "gratitud", target: 7, days: 10 },
+        { titulo: "Cálculo mental", desc: "Resolver 50 operaciones acumuladas", activityArea: "instrumentales", activityId: "calculo_mental", target: 50, days: 14 },
+    ];
+
+    // Compute progress for each active challenge
+    const getProgress = (ch) => {
+        if (!patient) return 0;
+        const sessions = getSessions(patient.id) || [];
+        const startMs = ch.created;
+        const relevant = sessions.filter(s => {
+            if (s.ts < startMs) return false;
+            if (ch.activityId && s.activity !== ch.activityId) return false;
+            if (ch.activityArea && s.area !== ch.activityArea) return false;
+            return true;
+        });
+        return relevant.length;
+    };
+
+    const addFromTemplate = (tpl) => {
+        const ch = {
+            id: uid(), ...tpl, created: Date.now(),
+            deadline: tpl.days ? Date.now() + tpl.days * 24 * 60 * 60 * 1000 : null,
+            completed: false,
+        };
+        const newCh = [...challenges, ch];
+        setChallenges(newCh);
+        if (patient) storeSave("challenges:" + patient.id, newCh);
+        sfx.tap();
+    };
+
+    const addCustom = () => {
+        if (!form.titulo.trim() || !form.target) return;
+        const ch = {
+            id: uid(), ...form, target: parseInt(form.target) || 1,
+            created: Date.now(),
+            deadline: form.deadline ? new Date(form.deadline).getTime() : null,
+            completed: false,
+        };
+        const newCh = [...challenges, ch];
+        setChallenges(newCh);
+        if (patient) storeSave("challenges:" + patient.id, newCh);
+        setForm({ titulo: "", desc: "", activityArea: "", activityId: "", target: 5, deadline: "" });
+        setTab("activos");
+        sfx.unlock();
+    };
+
+    const markComplete = (chId) => {
+        const newCh = challenges.map(c => c.id === chId ? { ...c, completed: true, completedAt: Date.now() } : c);
+        setChallenges(newCh);
+        if (patient) storeSave("challenges:" + patient.id, newCh);
+        // Add unlock
+        const unlock = { id: uid(), title: "Reto completado", subtitle: challenges.find(c => c.id === chId).titulo, ts: Date.now() };
+        const newUnlocks = [...unlocks, unlock];
+        setUnlocks(newUnlocks);
+        if (patient) storeSave("unlocks:" + patient.id, newUnlocks);
+        sfx.success();
+        setTimeout(() => fireConfetti(false), 100);
+    };
+
+    const removeCh = (chId) => {
+        if (!confirm("¿Eliminar este reto?")) return;
+        const newCh = challenges.filter(c => c.id !== chId);
+        setChallenges(newCh);
+        if (patient) storeSave("challenges:" + patient.id, newCh);
+    };
+
+    const active = challenges.filter(c => !c.completed);
+    const completed = challenges.filter(c => c.completed);
+
+    // Auto-detect newly completed challenges based on progress
+    useEffect(() => {
+        let updated = false;
+        const newCh = challenges.map(c => {
+            if (c.completed) return c;
+            if (getProgress(c) >= c.target) {
+                updated = true;
+                return { ...c, completed: true, completedAt: Date.now(), autoCompleted: true };
+            }
+            return c;
+        });
+        if (updated) {
+            setChallenges(newCh);
+            if (patient) storeSave("challenges:" + patient.id, newCh);
+            const newAutos = newCh.filter(c => c.autoCompleted && !challenges.find(o => o.id === c.id && o.completed));
+            const newUns = [...unlocks, ...newAutos.map(c => ({
+                id: uid(), title: "Reto completado", subtitle: c.titulo, ts: Date.now()
+            }))];
+            setUnlocks(newUns);
+            if (patient) storeSave("unlocks:" + patient.id, newUns);
+        }
+    }, [patient]);
+
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 } },
+        React.createElement("div", { style: { background: C.card, borderRadius: 20, padding: 22, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
+                React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, "🎯 Retos terapéuticos"),
+                React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar")),
+            !patient && React.createElement("div", { style: { padding: 14, background: C.warning, borderRadius: 12, fontSize: 13, marginBottom: 14 } }, "⚠️ Selecciona un paciente para gestionar sus retos."),
+            patient && React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 0, flexWrap: "wrap" } },
+                    [
+                        { id: "activos", label: "📌 Activos", count: active.length },
+                        { id: "completados", label: "✓ Completados", count: completed.length },
+                        { id: "desbloqueos", label: "🔓 Desbloqueos", count: unlocks.length },
+                        { id: "nuevo", label: "➕ Nuevo reto", count: null },
+                    ].map(t => React.createElement("button", { key: t.id, onClick: () => { sfx.tap(); setTab(t.id); }, style: {
+                        padding: "8px 14px", border: "none", borderBottom: tab === t.id ? `3px solid ${C.primary}` : "3px solid transparent",
+                        background: "transparent", fontSize: 13, fontWeight: tab === t.id ? 800 : 600,
+                        color: tab === t.id ? C.primary : C.textL, cursor: "pointer", fontFamily: "inherit",
+                    } }, t.label, t.count !== null && ` (${t.count})`))),
+                tab === "activos" && (active.length === 0 ?
+                    React.createElement("div", { style: { textAlign: "center", padding: 40, color: C.textL } },
+                        React.createElement("div", { style: { fontSize: 50, marginBottom: 10 } }, "🎯"),
+                        React.createElement("div", { style: { fontSize: 14, marginBottom: 14 } }, "No hay retos activos. Asigna uno desde la pestaña ", React.createElement("strong", null, "Nuevo reto"), "."),
+                        React.createElement(Btn, { color: C.primary, onClick: () => setTab("nuevo"), small: true }, "+ Asignar primer reto")) :
+                    React.createElement("div", null,
+                        active.map(c => {
+                            const progress = getProgress(c);
+                            const pct = Math.min(100, (progress / c.target) * 100);
+                            const dueIn = c.deadline ? Math.ceil((c.deadline - Date.now()) / (24 * 60 * 60 * 1000)) : null;
+                            const expired = dueIn !== null && dueIn < 0;
+                            return React.createElement("div", { key: c.id, style: { padding: 14, background: "#f9f9f9", borderRadius: 12, marginBottom: 10, borderLeft: `4px solid ${expired ? "#E63946" : C.primary}` } },
+                                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10, marginBottom: 6, flexWrap: "wrap" } },
+                                    React.createElement("div", { style: { flex: 1, minWidth: 180 } },
+                                        React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 3 } }, c.titulo),
+                                        c.desc && React.createElement("div", { style: { fontSize: 12, color: C.textL, lineHeight: 1.4, marginBottom: 4 } }, c.desc)),
+                                    React.createElement(Btn, { color: "#E63946", onClick: () => removeCh(c.id), small: true, outline: true }, "🗑")),
+                                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 } },
+                                    React.createElement("div", { style: { flex: 1, height: 8, background: "#e0e0e0", borderRadius: 4, overflow: "hidden" } },
+                                        React.createElement("div", { style: { width: pct + "%", height: "100%", background: pct >= 100 ? C.primary : C.accent, transition: "width 0.3s" } })),
+                                    React.createElement("div", { style: { fontSize: 12, fontWeight: 700, minWidth: 60, textAlign: "right" } }, progress, "/", c.target)),
+                                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 } },
+                                    React.createElement("div", { style: { fontSize: 11, color: dueIn !== null && dueIn < 3 ? "#E63946" : C.textL } },
+                                        dueIn === null ? "Sin fecha límite" : dueIn < 0 ? `⚠ Vencido hace ${Math.abs(dueIn)} días` : dueIn === 0 ? "Vence hoy" : `Quedan ${dueIn} días`),
+                                    React.createElement("div", { style: { display: "flex", gap: 6 } },
+                                        c.activityArea && c.activityId && onLaunchActivity && React.createElement(Btn, { color: C.blue, onClick: () => { onLaunchActivity(c.activityArea, c.activityId); onClose(); }, small: true, outline: true }, "▶ Hacer ahora"),
+                                        progress >= c.target && React.createElement(Btn, { color: C.success, onClick: () => markComplete(c.id), small: true }, "✓ Completar"))));
+                        }))),
+                tab === "completados" && (completed.length === 0 ?
+                    React.createElement("div", { style: { textAlign: "center", padding: 40, color: C.textL } }, "Aún no hay retos completados.") :
+                    React.createElement("div", null,
+                        completed.slice().reverse().map(c => React.createElement("div", { key: c.id, style: { padding: 12, background: C.success, borderRadius: 12, marginBottom: 8, borderLeft: `4px solid ${C.primary}` } },
+                            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 3 } },
+                                React.createElement("span", { style: { fontSize: 18 } }, "✓"),
+                                React.createElement("div", { style: { fontSize: 14, fontWeight: 800 } }, c.titulo)),
+                            React.createElement("div", { style: { fontSize: 11, color: C.textL } },
+                                "Completado el ", new Date(c.completedAt || c.created).toLocaleDateString("es-ES")))))),
+                tab === "desbloqueos" && (unlocks.length === 0 ?
+                    React.createElement("div", { style: { textAlign: "center", padding: 40, color: C.textL } },
+                        React.createElement("div", { style: { fontSize: 50, marginBottom: 10 } }, "🔒"),
+                        React.createElement("div", null, "Aún no se ha desbloqueado nada."),
+                        React.createElement("div", { style: { fontSize: 12, marginTop: 6 } }, "Cumpliendo retos se desbloquearán reconocimientos personalizados.")) :
+                    React.createElement("div", null,
+                        unlocks.slice().reverse().map(u => React.createElement("div", { key: u.id, style: { padding: 12, background: "linear-gradient(135deg, #FFFEF5, #FFF8DC)", borderRadius: 12, marginBottom: 8, border: `2px solid ${C.accent}` } },
+                            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                                React.createElement("div", { style: { fontSize: 28 } }, "🔓"),
+                                React.createElement("div", null,
+                                    React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: C.primary } }, u.title),
+                                    React.createElement("div", { style: { fontSize: 12, color: C.textL } }, u.subtitle),
+                                    React.createElement("div", { style: { fontSize: 10, color: C.textL, marginTop: 2 } }, new Date(u.ts).toLocaleDateString("es-ES")))))))),
+                tab === "nuevo" && React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 14 } },
+                        "Asigna un reto al paciente. Puedes usar una plantilla o crear uno propio. Los retos sirven para enfocar el trabajo entre sesiones."),
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 8 } }, "📋 Plantillas sugeridas"),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8, marginBottom: 18 } },
+                        TEMPLATE_CHALLENGES.map((t, i) => React.createElement("div", { key: i, onClick: () => addFromTemplate(t), style: {
+                            padding: 12, background: "#f9f9f9", borderRadius: 10, cursor: "pointer",
+                            border: `1px solid ${C.border}`, transition: "all 0.15s",
+                        } },
+                            React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 3 } }, t.titulo),
+                            React.createElement("div", { style: { fontSize: 11, color: C.textL, lineHeight: 1.4, marginBottom: 6 } }, t.desc),
+                            React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: C.primary } }, "+ Asignar →")))),
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` } }, "✏️ Reto personalizado"),
+                    React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+                        React.createElement("input", { value: form.titulo, onChange: e => setForm({ ...form, titulo: e.target.value }), placeholder: "Título del reto", style: { padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } }),
+                        React.createElement("textarea", { value: form.desc, onChange: e => setForm({ ...form, desc: e.target.value }), placeholder: "Descripción (opcional)", rows: 2, style: { padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none", resize: "vertical" } }),
+                        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                            React.createElement("input", { value: form.target, onChange: e => setForm({ ...form, target: e.target.value.replace(/\D/g, "") }), placeholder: "Veces", type: "text", inputMode: "numeric", style: { width: 80, padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } }),
+                            React.createElement("input", { value: form.deadline, onChange: e => setForm({ ...form, deadline: e.target.value }), type: "date", style: { flex: 1, minWidth: 140, padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } })),
+                        React.createElement("div", { style: { display: "flex", justifyContent: "center", marginTop: 8 } },
+                            React.createElement(Btn, { color: C.primary, onClick: addCustom, disabled: !form.titulo.trim() || !form.target, small: true }, "💾 Asignar reto")))))));
+}
 
 function SessionPlanner({ onClose, onLaunch, patient }) {
     const [selected, setSelected] = useState(null);
