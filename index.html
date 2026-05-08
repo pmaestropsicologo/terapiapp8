@@ -18886,117 +18886,332 @@ function useAIGeneration(activityKey, promptBuilder, validator, fallback) {
 // ATENCIÓN 1 — Busca y Cuenta
 // ═══════════════════════════════════════════════════════════════
 function BuscaCuenta({ patient }) {
+    // Each grid cell: { obj, big, scale } — `big` flag is the conjunctive attribute (size, more discriminable than mirror)
     const [grid, setGrid] = useState([]);
-    const [target, setTarget] = useState(null);
+    const [target, setTarget] = useState(null); // { obj, big } main target
+    const [target2, setTarget2] = useState(null); // for dual-target mode (difícil)
     const [count, setCount] = useState(0);
-    const [found, setFound] = useState([]);
+    const [count2, setCount2] = useState(0);
+    const [found, setFound] = useState([]); // taps on target1 OR target2
+    const [foundT2, setFoundT2] = useState([]); // taps on target2 specifically
+    const [falseAlarms, setFalseAlarms] = useState([]); // taps on distractors
     const [done, setDone] = useState(false);
     const [diff, setDiff] = useState("medio");
     const [setName, setSetName] = useState("");
     const [loading, setLoading] = useState(false);
     const [source, setSource] = useState("local");
-    const buildGrid = (items, t, c, sz) => {
-        const others = items.filter(a => a !== t);
-        let arr = Array(c).fill(t);
-        while (arr.length < sz)
-            arr.push(others[randInt(0, others.length - 1)]);
+    const [phase, setPhase] = useState("idle"); // idle | playing | done
+    const [timeLeft, setTimeLeft] = useState(0);
+    const [stats, setStats] = useState(null);
+    const startTimeRef = useRef(null);
+
+    const buildGrid = (items, t, c, sz, cfg, t2 = null, c2 = 0) => {
+        const others = items.filter(a => a !== t.obj && (!t2 || a !== t2.obj));
+        const arr = [];
+        // Add primary targets
+        for (let i = 0; i < c; i++) arr.push({ obj: t.obj, big: t.big, isTarget: true, isTarget2: false });
+        // Add second targets if dual
+        if (t2 && c2 > 0) {
+            for (let i = 0; i < c2; i++) arr.push({ obj: t2.obj, big: t2.big, isTarget: false, isTarget2: true });
+        }
+        // Critical distractor (P6): same object as target but with opposite size
+        let criticalCount = 0;
+        if (cfg.criticalDistractor && cfg.conjunctive) {
+            criticalCount = Math.max(2, Math.floor(c * 0.6));
+            for (let i = 0; i < criticalCount; i++) {
+                arr.push({ obj: t.obj, big: !t.big, isTarget: false, isTarget2: false });
+            }
+            // Also for second target if dual
+            if (t2 && c2 > 0) {
+                const c2Crit = Math.max(2, Math.floor(c2 * 0.6));
+                for (let i = 0; i < c2Crit; i++) {
+                    arr.push({ obj: t2.obj, big: !t2.big, isTarget: false, isTarget2: false });
+                }
+            }
+        }
+        // If conjunctive (no critical), add some opposite-size of target as distractors
+        else if (cfg.conjunctive) {
+            const wrongSize = Math.max(1, Math.floor(c * 0.5));
+            for (let i = 0; i < wrongSize; i++) {
+                arr.push({ obj: t.obj, big: !t.big, isTarget: false, isTarget2: false });
+            }
+        }
+        // Fill rest with semantically related distractors
+        while (arr.length < sz) {
+            const o = others.length > 0 ? others[randInt(0, others.length - 1)] : "estrella";
+            arr.push({
+                obj: o,
+                big: cfg.conjunctive ? Math.random() < 0.5 : false,
+                isTarget: false, isTarget2: false,
+            });
+        }
         return shuffle(arr);
     };
+
     const genLocal = useCallback(() => {
-        const sz = { "fácil": 20, "medio": 35, "difícil": 54 }[diff];
-        const s = ANIMAL_SETS[randInt(0, ANIMAL_SETS.length - 1)];
-        const t = s.items[randInt(0, s.items.length - 1)];
-        const c = randInt(3, Math.min(7, Math.floor(sz / 5)));
-        setGrid(buildGrid(s.items, t, c, sz));
-        setTarget(t);
-        setCount(c);
-        setFound([]);
-        setDone(false);
+        const cfg = {
+            "fácil": { sz: 25, cols: 5, iconSize: 38, timer: null, penalize: false, conjunctive: false, semanticDistractors: true, dual: false, criticalDistractor: false },
+            "medio": { sz: 49, cols: 7, iconSize: 30, timer: 60, penalize: true, conjunctive: true, semanticDistractors: true, dual: false, criticalDistractor: false },
+            "difícil": { sz: 81, cols: 9, iconSize: 24, timer: 45, penalize: true, conjunctive: true, semanticDistractors: true, dual: true, criticalDistractor: true },
+        }[diff];
+        // Pick a semantically rich set (≥4 items so distractors are abundant)
+        const richSets = ANIMAL_SETS.filter(s => s.items.length >= 4);
+        const s = richSets[randInt(0, richSets.length - 1)];
+        // Primary target
+        const tObj = s.items[randInt(0, s.items.length - 1)];
+        const tBig = cfg.conjunctive ? Math.random() < 0.5 : false;
+        const t = { obj: tObj, big: tBig };
+        const c = randInt(4, Math.min(8, Math.floor(cfg.sz / 8)));
+        // Second target for dual mode
+        let t2 = null, c2 = 0;
+        if (cfg.dual) {
+            const otherItems = s.items.filter(it => it !== tObj);
+            const t2Obj = otherItems[randInt(0, otherItems.length - 1)];
+            t2 = { obj: t2Obj, big: cfg.conjunctive ? Math.random() < 0.5 : false };
+            c2 = randInt(3, 6);
+        }
+        setGrid(buildGrid(s.items, t, c, cfg.sz, cfg, t2, c2));
+        setTarget(t); setTarget2(t2);
+        setCount(c); setCount2(c2);
+        setFound([]); setFoundT2([]); setFalseAlarms([]);
+        setDone(false); setStats(null);
         setSetName(s.name);
         setSource("local");
+        setTimeLeft(cfg.timer || 0);
+        setPhase(cfg.timer ? "idle" : "playing");
+        if (!cfg.timer) startTimeRef.current = Date.now();
     }, [diff]);
+
     const genAI = useCallback(async () => {
         setLoading(true);
-        const sz = { "fácil": 20, "medio": 35, "difícil": 54 }[diff];
-        const c = randInt(3, Math.min(7, Math.floor(sz / 5)));
+        const cfg = {
+            "fácil": { sz: 25, cols: 5, iconSize: 38, timer: null, penalize: false, conjunctive: false, semanticDistractors: true, dual: false, criticalDistractor: false },
+            "medio": { sz: 49, cols: 7, iconSize: 30, timer: 60, penalize: true, conjunctive: true, semanticDistractors: true, dual: false, criticalDistractor: false },
+            "difícil": { sz: 81, cols: 9, iconSize: 24, timer: 45, penalize: true, conjunctive: true, semanticDistractors: true, dual: true, criticalDistractor: true },
+        }[diff];
         const validObjects = ALL_OBJECTS.join(", ");
         const prompt = `${PatientContext(patient)}
-Elige UN tema coherente y un objeto diana de esa categoría para un ejercicio de búsqueda visual. Los objetos DEBEN venir de esta lista: ${validObjects}
+Para un ejercicio de búsqueda visual neuropsicológica, elige una categoría coherente de objetos. Da un objeto diana y al menos 4 distractores DE LA MISMA CATEGORÍA SEMÁNTICA (p. ej. si el target es perro, los distractores deben ser otros animales). Los objetos DEBEN venir de esta lista: ${validObjects}
 
 Formato JSON:
 {
-  "theme": "nombre del tema (ej: 'animales del bosque')",
+  "theme": "nombre breve de la categoría",
   "target": "un objeto de la lista",
-  "distractors": ["3-5 objetos distintos del target, todos de la lista"]
+  "distractors": ["4-6 objetos de la misma categoría que el target, todos de la lista"]
 }`;
         const result = await callClaude(prompt, "busca_cuenta");
         setLoading(false);
-        if (result && result.__noKey) {
-            alert("Primero configura tu API key en ⚙️ (arriba a la derecha).");
-            return;
-        }
-        if (result && result.__authError) {
-            alert("Tu API key no es válida o no tiene saldo. Revisa en ⚙️.");
-            return;
-        }
+        if (result && result.__noKey) { alert("Configura tu API key en ⚙️."); return; }
+        if (result && result.__authError) { alert("API key inválida."); return; }
         if (result && result.target && ALL_OBJECTS.includes(result.target) && Array.isArray(result.distractors)) {
             const validDistr = result.distractors.filter(d => ALL_OBJECTS.includes(d) && d !== result.target);
-            if (validDistr.length >= 2) {
+            if (validDistr.length >= 3) {
                 const items = [result.target, ...validDistr];
-                setGrid(buildGrid(items, result.target, c, sz));
-                setTarget(result.target);
-                setCount(c);
-                setFound([]);
-                setDone(false);
+                const tBig = cfg.conjunctive ? Math.random() < 0.5 : false;
+                const t = { obj: result.target, big: tBig };
+                const c = randInt(4, Math.min(8, Math.floor(cfg.sz / 8)));
+                let t2 = null, c2 = 0;
+                if (cfg.dual) {
+                    const t2Obj = validDistr[randInt(0, validDistr.length - 1)];
+                    t2 = { obj: t2Obj, big: cfg.conjunctive ? Math.random() < 0.5 : false };
+                    c2 = randInt(3, 6);
+                }
+                setGrid(buildGrid(items, t, c, cfg.sz, cfg, t2, c2));
+                setTarget(t); setTarget2(t2);
+                setCount(c); setCount2(c2);
+                setFound([]); setFoundT2([]); setFalseAlarms([]);
+                setDone(false); setStats(null);
                 setSetName(result.theme);
                 setSource("ai");
+                setTimeLeft(cfg.timer || 0);
+                setPhase(cfg.timer ? "idle" : "playing");
+                if (!cfg.timer) startTimeRef.current = Date.now();
                 addToHistory("busca_cuenta", `${result.theme} - target:${result.target}`);
                 return;
             }
         }
         genLocal();
     }, [diff, patient, genLocal]);
+
     useEffect(() => { genLocal(); }, [genLocal]);
-    const tap = i => {
-        if (done)
-            return;
-        if (grid[i] === target)
-            setFound(f => f.includes(i) ? f.filter(x => x !== i) : [...f, i]);
+
+    // Timer countdown
+    useEffect(() => {
+        if (phase !== "playing" || !config.timer || done) return;
+        if (timeLeft <= 0) { finishGame(); return; }
+        const t = setTimeout(() => setTimeLeft(s => s - 1), 1000);
+        return () => clearTimeout(t);
+    }, [phase, timeLeft, done]);
+
+    const startTimed = () => {
+        setPhase("playing");
+        startTimeRef.current = Date.now();
     };
-    const cols = diff === "fácil" ? 5 : diff === "medio" ? 7 : 9;
+
+    const tap = (i) => {
+        if (done || phase !== "playing") return;
+        const cell = grid[i];
+        // Match against target1
+        if (cell.isTarget) {
+            sfx.tap();
+            setFound(f => f.includes(i) ? f.filter(x => x !== i) : [...f, i]);
+            return;
+        }
+        // Match against target2 (dual mode)
+        if (cell.isTarget2) {
+            sfx.tap();
+            setFoundT2(f => f.includes(i) ? f.filter(x => x !== i) : [...f, i]);
+            return;
+        }
+        // False alarm — penalize if config says so
+        if (config.penalize) {
+            if (falseAlarms.includes(i)) {
+                // Toggle off (already marked as false alarm)
+                setFalseAlarms(fa => fa.filter(x => x !== i));
+            } else {
+                sfx.fail();
+                setFalseAlarms(fa => [...fa, i]);
+                if (_activePatientId) breakStreak(_activePatientId);
+            }
+        }
+    };
+
+    const finishGame = () => {
+        setDone(true);
+        setPhase("done");
+        const elapsed = startTimeRef.current ? Math.round((Date.now() - startTimeRef.current) / 1000) : 0;
+        const totalTargets = count + count2;
+        const totalFound = found.length + foundT2.length;
+        const omissions = totalTargets - totalFound;
+        const fa = falseAlarms.length;
+        const accuracy = totalTargets > 0 ? Math.round((totalFound / totalTargets) * 100) : 0;
+        // Eficacia index: hits − false alarms, normalized
+        const eficacia = Math.max(0, totalFound - fa);
+        const perMinute = elapsed > 0 ? Math.round((totalFound / elapsed) * 60 * 10) / 10 : 0;
+        const success = totalFound === totalTargets && fa === 0;
+        const passed = totalFound >= totalTargets * 0.7 && fa <= totalTargets * 0.3;
+        setStats({ totalTargets, totalFound, omissions, fa, accuracy, eficacia, perMinute, elapsed, success, passed });
+        if (success) { sfx.success(); setTimeout(() => fireConfetti(true), 200); }
+        else if (passed) sfx.success();
+        else sfx.fail();
+        if (_activePatientId) {
+            addStar(_activePatientId, _activeAreaId, success);
+            saveBest(_activePatientId, "busca_cuenta_" + diff, eficacia);
+        }
+        logCurrentResult(passed);
+    };
+
+    // Phase config (recomputed on every render — cheap, only used for rendering)
+    const config = {
+        "fácil": { sz: 25, cols: 5, iconSize: 38, timer: null, penalize: false, conjunctive: false, semanticDistractors: true, dual: false, criticalDistractor: false },
+        "medio": { sz: 49, cols: 7, iconSize: 30, timer: 60, penalize: true, conjunctive: true, semanticDistractors: true, dual: false, criticalDistractor: false },
+        "difícil": { sz: 81, cols: 9, iconSize: 24, timer: 45, penalize: true, conjunctive: true, semanticDistractors: true, dual: true, criticalDistractor: true },
+    }[diff];
+
+    const renderIco = (cell) => {
+        // big size attribute — visually obvious size difference
+        const sz = cell.big ? Math.round(config.iconSize * 1.4) : Math.round(config.iconSize * 0.7);
+        return React.createElement(Ico, { name: cell.obj, size: sz });
+    };
+
+    const cfg = config;
+
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Busca y Cuenta"),
                 source === "ai" && React.createElement(AIBadge, null)),
-            React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
+            !done && React.createElement(DiffSelect, { value: diff, onChange: (newDiff) => { sfx.tap(); setDiff(newDiff); } })),
+        // Allow changing difficulty after done
+        done && React.createElement("div", { style: { textAlign: "center", marginBottom: 8 } },
+            React.createElement(DiffSelect, { value: diff, onChange: (newDiff) => { sfx.tap(); setDiff(newDiff); } })),
+        // Instructions adapted per difficulty
         React.createElement(Instructions, null,
-            "Busca los ",
-            React.createElement("span", { style: { display: "inline-block", verticalAlign: "middle" } },
-                React.createElement(Ico, { name: target, size: 28 })),
-            " escondidos entre ",
-            setName,
-            ". \u00A1Hay ",
-            React.createElement("strong", null, count),
-            "!"),
-        loading ? React.createElement(LoadingCard, null) : (React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4, background: "#f0f0f0", borderRadius: 14, padding: 10, marginBottom: 14 } }, grid.map((a, i) => (React.createElement("div", { key: i, onClick: () => tap(i), style: {
-                display: "flex", alignItems: "center", justifyContent: "center",
-                padding: 4, borderRadius: 8, cursor: "pointer", aspectRatio: "1",
-                background: found.includes(i) ? C.success : done && a === target && !found.includes(i) ? C.error : "#fff",
-                border: found.includes(i) ? `2px solid ${C.primary}` : "2px solid transparent",
-                transition: "all 0.12s", transform: found.includes(i) ? "scale(1.08)" : "scale(1)",
-            } },
-            React.createElement(Ico, { name: a, size: diff === "difícil" ? 24 : diff === "medio" ? 30 : 38 })))))),
+            cfg.dual ? React.createElement(React.Fragment, null,
+                "Cuenta cuántos ",
+                React.createElement("span", { style: { display: "inline-flex", alignItems: "center", verticalAlign: "middle" } },
+                    target && React.createElement(Ico, { name: target.obj, size: target && target.big ? 32 : 22 })),
+                target && cfg.conjunctive && React.createElement("strong", { style: { fontSize: 13 } }, target.big ? " GRANDES" : " pequeños"),
+                " y cuántos ",
+                React.createElement("span", { style: { display: "inline-flex", alignItems: "center", verticalAlign: "middle" } },
+                    target2 && React.createElement(Ico, { name: target2.obj, size: target2 && target2.big ? 32 : 22 })),
+                target2 && cfg.conjunctive && React.createElement("strong", { style: { fontSize: 13 } }, target2.big ? " GRANDES" : " pequeños"),
+                " hay entre los ", setName, ".",
+                cfg.penalize && React.createElement("div", { style: { fontSize: 12, marginTop: 4, color: "#A0530F" } }, "⚠ Tocar otros restará puntos"),
+            ) : cfg.conjunctive ? React.createElement(React.Fragment, null,
+                "Cuenta los ",
+                React.createElement("span", { style: { display: "inline-flex", alignItems: "center", verticalAlign: "middle" } },
+                    target && React.createElement(Ico, { name: target.obj, size: target && target.big ? 36 : 22 })),
+                React.createElement("strong", null, target && target.big ? " GRANDES" : " pequeños"),
+                " entre los ", setName, ". Hay otros ", target && target.obj, " del tamaño contrario que ", React.createElement("strong", null, "no"), " cuentan.",
+                cfg.penalize && React.createElement("div", { style: { fontSize: 12, marginTop: 4, color: "#A0530F" } }, "⚠ Tocar uno incorrecto restará puntos"),
+            ) : React.createElement(React.Fragment, null,
+                "Busca los ",
+                React.createElement("span", { style: { display: "inline-block", verticalAlign: "middle" } },
+                    target && React.createElement(Ico, { name: target.obj, size: 28 })),
+                " escondidos entre los ", setName, ". ¡Hay ", React.createElement("strong", null, count), "!"
+            )
+        ),
+        // Status bar (timer + counters)
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 } },
+            cfg.timer && phase !== "idle" && React.createElement(Badge, { color: timeLeft < 10 ? "#E63946" : C.blue }, "⏱ ", timeLeft, "s"),
+            !cfg.dual && React.createElement(Badge, { color: C.primary }, found.length, "/", count),
+            cfg.dual && React.createElement(React.Fragment, null,
+                React.createElement(Badge, { color: C.primary }, target && target.obj, ": ", found.length, "/", count),
+                React.createElement(Badge, { color: C.purple }, target2 && target2.obj, ": ", foundT2.length, "/", count2)),
+            cfg.penalize && falseAlarms.length > 0 && React.createElement(Badge, { color: "#E63946" }, "✗ ", falseAlarms.length)),
+        // Idle gate when timed
+        loading ? React.createElement(LoadingCard, null) : phase === "idle" ? React.createElement("div", { style: { textAlign: "center", padding: 30 } },
+            React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 14 } }, "Cuando estés listo, pulsa empezar. Tienes ", cfg.timer, " segundos."),
+            React.createElement(Btn, { color: C.primary, onClick: startTimed }, "▶ Empezar")
+        ) : (React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${cfg.cols}, 1fr)`, gap: 4, background: "#f0f0f0", borderRadius: 14, padding: 10, marginBottom: 14 } },
+            grid.map((cell, i) => {
+                const isFound1 = found.includes(i);
+                const isFound2 = foundT2.includes(i);
+                const isFA = falseAlarms.includes(i);
+                const isMissed = done && (cell.isTarget || cell.isTarget2) && !isFound1 && !isFound2;
+                const bg = isFound1 ? C.success : isFound2 ? "#E0BBFF" : isFA ? "#FFD9D9" : isMissed ? "#FFE4E4" : "#fff";
+                const border = isFound1 ? `2px solid ${C.primary}` :
+                              isFound2 ? `2px solid ${C.purple}` :
+                              isFA ? `2px solid #E63946` :
+                              isMissed ? `2px dashed #E63946` :
+                              "2px solid transparent";
+                return React.createElement("div", { key: i, onClick: () => tap(i), style: {
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: 4, borderRadius: 8, cursor: done ? "default" : "pointer", aspectRatio: "1",
+                    background: bg, border: border,
+                    transition: "all 0.12s", transform: (isFound1 || isFound2) ? "scale(1.08)" : "scale(1)",
+                } }, renderIco(cell, i, isFound1 || isFound2));
+            })
+        )),
+        // Action buttons
         React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
-            !done && React.createElement(Btn, { color: C.primary, onClick: () => setDone(true), small: true },
-                "\u2713 Comprobar (",
-                found.length,
-                "/",
-                count,
-                ")"),
-            React.createElement(Btn, { color: C.accent, onClick: genLocal, small: true, outline: true }, "\u21BB Local"),
-            React.createElement(Btn, { color: C.purple, onClick: genAI, loading: loading, small: true }, "\u2728 Generar con IA")),
-        done && React.createElement(Feedback, { success: found.length === count }, found.length === count ? "¡Perfecto! Los encontraste todos" : `Encontraste ${found.length} de ${count}.`)));
+            !done && phase === "playing" && React.createElement(Btn, { color: C.primary, onClick: finishGame, small: true },
+                "✓ Comprobar"),
+            done && React.createElement(Btn, { color: C.accent, onClick: genLocal, small: true, outline: true }, "↻ Otra ronda"),
+            !done && React.createElement(Btn, { color: C.accent, onClick: genLocal, small: true, outline: true }, "↻ Local"),
+            !done && React.createElement(Btn, { color: C.purple, onClick: genAI, loading: loading, small: true }, "✨ Generar con IA")),
+        // Results panel
+        done && stats && React.createElement("div", { style: { padding: 16, marginTop: 14, background: "#fff", borderRadius: 14, border: `2px solid ${C.border}` } },
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 12 } },
+                stats.success ? "✓ Perfecto" : stats.passed ? "Resultado" : "Hay que afinar"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginBottom: 12 } },
+                React.createElement("div", { style: { padding: 10, background: stats.success ? C.success : C.warm, borderRadius: 10, textAlign: "center" } },
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: C.primary } }, stats.totalFound, "/", stats.totalTargets),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Aciertos")),
+                React.createElement("div", { style: { padding: 10, background: stats.fa === 0 ? "#fafafa" : "#FFE4E4", borderRadius: 10, textAlign: "center" } },
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: stats.fa === 0 ? C.text : "#E63946" } }, stats.fa),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Falsas alarmas")),
+                React.createElement("div", { style: { padding: 10, background: "#fafafa", borderRadius: 10, textAlign: "center" } },
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: stats.omissions === 0 ? C.text : "#A0530F" } }, stats.omissions),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Omisiones")),
+                React.createElement("div", { style: { padding: 10, background: "#fafafa", borderRadius: 10, textAlign: "center" } },
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: C.text } }, stats.elapsed, "s"),
+                    React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Tiempo"))),
+            React.createElement("div", { style: { padding: 10, background: `linear-gradient(135deg, ${C.primary}11, ${C.accent}11)`, borderRadius: 10, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.textL, textTransform: "uppercase", marginBottom: 2 } }, "Índice de eficacia"),
+                React.createElement("div", { style: { fontSize: 28, fontWeight: 800, color: C.primary } }, stats.eficacia),
+                stats.perMinute > 0 && React.createElement("div", { style: { fontSize: 11, color: C.textL, marginTop: 2 } }, "≈ ", stats.perMinute, " aciertos/min")))));
 }
 // ═══════════════════════════════════════════════════════════════
 // ATENCIÓN 2 — Encuentra las Diferencias
@@ -20567,6 +20782,7 @@ function PizarraDibujo({ patient }) {
     const lastRef = useRef({ x: 0, y: 0 });
     const [penColor, setPenColor] = useState("#2D6A4F");
     const [penSize, setPenSize] = useState(3);
+    const [tool, setTool] = useState("pen"); // "pen" | "eraser"
     const clearCanvas = () => {
         const c = canvasRef.current;
         if (c) {
@@ -20622,8 +20838,14 @@ Formato JSON:
         ctx.beginPath();
         ctx.moveTo(lastRef.current.x, lastRef.current.y);
         ctx.lineTo(p.x, p.y);
-        ctx.strokeStyle = penColor;
-        ctx.lineWidth = penSize;
+        // Eraser: paint white wider; pen: paint with selected color and size
+        if (tool === "eraser") {
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = penSize * 4 + 6; // wider, more "eraser-like"
+        } else {
+            ctx.strokeStyle = penColor;
+            ctx.lineWidth = penSize;
+        }
         ctx.lineCap = "round";
         ctx.stroke();
         lastRef.current = p;
@@ -20636,15 +20858,28 @@ Formato JSON:
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Pizarra Creativa"),
             source === "ai" && React.createElement(AIBadge, null)),
         React.createElement("div", { style: { fontSize: 17, fontWeight: 700, textAlign: "center", padding: "14px 18px", background: "linear-gradient(135deg, #FEFAE0, #D8F3DC)", borderRadius: 14, marginBottom: 12, borderLeft: `4px solid ${C.accentL}` } }, loading ? "Generando propuesta..." : prompt),
-        React.createElement("div", { style: { display: "flex", gap: 5, justifyContent: "center", marginBottom: 8, flexWrap: "wrap", alignItems: "center" } },
+        // Tool selector — pen vs eraser
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 8, flexWrap: "wrap" } },
+            React.createElement("button", { onClick: () => { sfx.tap(); setTool("pen"); }, style: {
+                padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: tool === "pen" ? C.primary : "#fff", color: tool === "pen" ? "#fff" : C.text,
+                border: `2px solid ${tool === "pen" ? C.primary : C.border}`, fontFamily: "inherit",
+            } }, "✏️ Pincel"),
+            React.createElement("button", { onClick: () => { sfx.tap(); setTool("eraser"); }, style: {
+                padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: tool === "eraser" ? "#FF8FA8" : "#fff", color: tool === "eraser" ? "#fff" : C.text,
+                border: `2px solid ${tool === "eraser" ? "#FF8FA8" : C.border}`, fontFamily: "inherit",
+            } }, "🧽 Borrador")),
+        // Color palette (disabled when eraser is active)
+        React.createElement("div", { style: { display: "flex", gap: 5, justifyContent: "center", marginBottom: 8, flexWrap: "wrap", alignItems: "center", opacity: tool === "eraser" ? 0.4 : 1, pointerEvents: tool === "eraser" ? "none" : "auto" } },
             PEN_COLORS.map(c => (React.createElement("div", { key: c, onClick: () => setPenColor(c), style: { width: 28, height: 28, borderRadius: "50%", background: c, cursor: "pointer", border: penColor === c ? "3px solid #333" : "3px solid transparent" } }))),
             React.createElement("div", { style: { width: 1, height: 24, background: C.border, margin: "0 4px" } }),
-            [2, 5, 10].map(s => (React.createElement("div", { key: s, onClick: () => setPenSize(s), style: { width: 26, height: 26, borderRadius: "50%", background: penSize === s ? penColor : "#ddd", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } },
+            [2, 5, 10].map(s => (React.createElement("div", { key: s, onClick: () => setPenSize(s), style: { width: 26, height: 26, borderRadius: "50%", background: penSize === s ? (tool === "eraser" ? "#FF8FA8" : penColor) : "#ddd", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" } },
                 React.createElement("div", { style: { width: s * 1.5, height: s * 1.5, borderRadius: "50%", background: penSize === s ? "#fff" : "#999" } }))))),
-        React.createElement("div", { style: { borderRadius: 12, overflow: "hidden", border: `2px solid ${C.border}`, marginBottom: 12, touchAction: "none" } },
-            React.createElement("canvas", { ref: canvasRef, width: 800, height: 440, style: { width: "100%", height: "auto", display: "block" }, onMouseDown: startDraw, onMouseMove: draw, onMouseUp: stopDraw, onMouseLeave: stopDraw, onTouchStart: startDraw, onTouchMove: draw, onTouchEnd: stopDraw })),
+        React.createElement("div", { style: { borderRadius: 12, overflow: "hidden", border: `2px solid ${tool === "eraser" ? "#FF8FA8" : C.border}`, marginBottom: 12, touchAction: "none" } },
+            React.createElement("canvas", { ref: canvasRef, width: 800, height: 440, style: { width: "100%", height: "auto", display: "block", cursor: tool === "eraser" ? "cell" : "crosshair" }, onMouseDown: startDraw, onMouseMove: draw, onMouseUp: stopDraw, onMouseLeave: stopDraw, onTouchStart: startDraw, onTouchMove: draw, onTouchEnd: stopDraw })),
         React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
-            React.createElement(Btn, { color: C.textL, onClick: clearCanvas, small: true }, "\uD83D\uDDD1 Borrar"),
+            React.createElement(Btn, { color: C.textL, onClick: clearCanvas, small: true }, "\uD83D\uDDD1 Limpiar todo"),
             React.createElement(Btn, { color: C.accentL, onClick: genLocal, small: true, outline: true }, "\u21BB Local"),
             React.createElement(Btn, { color: C.purple, onClick: genAI, loading: loading, small: true }, "\u2728 Generar con IA"))));
 }
@@ -20658,8 +20893,17 @@ function ArbolFortalezas({ patient }) {
     const [loading, setLoading] = useState(false);
     const [source, setSource] = useState("local");
     const [saved, setSaved] = useState(false);
-    // Load saved strengths on mount
-    const savedStrengths = patient ? (storeLoad("strengths:" + patient.id) || []) : [];
+    const [customInput, setCustomInput] = useState("");
+    // Reactive saved strengths — updates immediately after saving
+    const [savedStrengths, setSavedStrengths] = useState(() =>
+        patient ? (storeLoad("strengths:" + patient.id) || []) : []);
+    // Reload when patient changes
+    useEffect(() => {
+        setSavedStrengths(patient ? (storeLoad("strengths:" + patient.id) || []) : []);
+        setSelected([]);
+        setSaved(false);
+        setCustomInput("");
+    }, [patient && patient.id]);
     const genAI = async () => {
         setLoading(true);
         const prompt = `${PatientContext(patient)}
@@ -20681,24 +20925,44 @@ Formato JSON:
             setStrengths(result.strengths.slice(0, 16));
             setSelected([]);
             setSource("ai");
+            setSaved(false);
             addToHistory("arbol_fortalezas", result.strengths.slice(0, 3).join(","));
             return;
         }
-        setStrengths(STRENGTHS_BASE);
-        setSelected([]);
+        // Fallback to local: do NOT clear if user already had selections
         setSource("local");
     };
-    const toggle = s => { sfx.tap(); setSelected(sel => sel.includes(s) ? sel.filter(x => x !== s) : [...sel, s]); setSaved(false); };
+    const toggle = s => {
+        sfx.tap();
+        setSelected(sel => sel.includes(s) ? sel.filter(x => x !== s) : [...sel, s]);
+        setSaved(false);
+    };
+    const addCustom = () => {
+        const v = customInput.trim();
+        if (!v) return;
+        sfx.tap();
+        // Add to current strengths list AND to selected
+        if (!strengths.includes(v)) setStrengths([...strengths, v]);
+        if (!selected.includes(v)) setSelected([...selected, v]);
+        setCustomInput("");
+        setSaved(false);
+    };
     const saveStrengths = () => {
         if (!patient || selected.length === 0) return;
+        // Merge by text — keep first timestamp if already saved
         const existing = storeLoad("strengths:" + patient.id) || [];
-        const merged = Array.from(new Set([...existing, ...selected.map(s => ({ text: s, ts: Date.now() })).map(s => JSON.stringify(s))])).map(s => JSON.parse(s));
-        // Simpler: just merge by text, keep first timestamp
         const map = {};
-        existing.forEach(e => { if (typeof e === 'string') map[e] = { text: e, ts: Date.now() }; else map[e.text] = e; });
-        selected.forEach(s => { if (!map[s]) map[s] = { text: s, ts: Date.now() }; });
+        existing.forEach(e => {
+            const txt = typeof e === 'string' ? e : e.text;
+            const ts = (typeof e === 'object' && e.ts) ? e.ts : Date.now();
+            map[txt] = { text: txt, ts };
+        });
+        selected.forEach(s => {
+            if (!map[s]) map[s] = { text: s, ts: Date.now() };
+        });
         const final = Object.values(map);
         storeSave("strengths:" + patient.id, final);
+        setSavedStrengths(final); // update locally for immediate feedback
         sfx.unlock();
         setSaved(true);
         setTimeout(() => fireConfetti(false), 100);
@@ -20709,13 +20973,13 @@ Formato JSON:
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Mi \u00C1rbol de Fortalezas"),
             source === "ai" && React.createElement(AIBadge, null)),
-        React.createElement(Instructions, null, "Toca todas las fortalezas que sientes que te representan. Cuando termines, gu\u00E1rdalas en tu perfil para no olvidarlas."),
+        React.createElement(Instructions, null, "Toca todas las fortalezas que sientes que te representan. Si tienes alguna que no aparece, escríbela abajo. Cuando termines, gu\u00E1rdalas en tu perfil para no olvidarlas."),
         savedStrengths.length > 0 && React.createElement("div", { style: { padding: 12, background: `${C.primary}11`, borderRadius: 12, marginBottom: 14, borderLeft: `4px solid ${C.primary}` } },
             React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: C.primary, marginBottom: 6 } }, "🌳 Tus fortalezas guardadas (", savedStrengths.length, ")"),
             React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 } },
                 savedStrengths.slice(-12).map((s, i) => React.createElement("span", { key: i, style: { padding: "3px 8px", borderRadius: 10, background: "#fff", fontSize: 10, fontWeight: 600, color: C.text, border: `1px solid ${C.border}` } }, typeof s === 'string' ? s : s.text)))),
         React.createElement("div", { style: { textAlign: "center", marginBottom: 14 } },
-            React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 8 } }, selected.length === 0 ? "Toca tus fortalezas abajo..." : `¡Tienes ${selected.length} fortalezas!`),
+            React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 8 } }, selected.length === 0 ? "Toca tus fortalezas abajo..." : `¡Tienes ${selected.length} fortaleza${selected.length === 1 ? "" : "s"}!`),
             React.createElement("div", { style: {
                     display: "inline-block", padding: "18px 26px", borderRadius: 22,
                     background: `linear-gradient(180deg, ${selected.length > 8 ? "#2D6A4F" : selected.length > 4 ? "#40916C" : selected.length > 0 ? "#52B788" : "#D8F3DC"} 0%, #8B5E3C 85%)`,
@@ -20723,10 +20987,10 @@ Formato JSON:
                     transform: `scale(${0.75 + Math.min(selected.length, 10) * 0.03})`,
                 } },
                 React.createElement("div", { style: { marginBottom: 4 } },
-                    React.createElement(Ico, { name: "arbol", size: 50 + selected.length * 2 })),
+                    React.createElement(Ico, { name: "arbol", size: 50 + Math.min(selected.length, 10) * 2 })),
                 React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", maxWidth: 260 } }, selected.map(s => (React.createElement("span", { key: s, style: { padding: "3px 8px", borderRadius: 10, background: "rgba(255,255,255,0.85)", fontSize: 10, fontWeight: 700, color: C.primary } }, s)))))),
         loading && React.createElement(LoadingCard, { message: "Generando fortalezas..." }),
-        !loading && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: 500, margin: "0 auto 14px" } }, strengths.map(s => (React.createElement("button", { key: s, onClick: () => toggle(s), style: {
+        !loading && (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", maxWidth: 500, margin: "0 auto 12px" } }, strengths.map(s => (React.createElement("button", { key: s, onClick: () => toggle(s), style: {
                 padding: "8px 14px", borderRadius: 30, fontSize: 13, fontWeight: 700, cursor: "pointer",
                 background: selected.includes(s) ? C.primary : "#f9f9f9",
                 color: selected.includes(s) ? "#fff" : C.text,
@@ -20735,6 +20999,17 @@ Formato JSON:
             } },
             selected.includes(s) ? "✓ " : "",
             s))))),
+        // Custom strength input
+        !loading && React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } },
+            React.createElement("input", {
+                value: customInput,
+                onChange: e => setCustomInput(e.target.value),
+                onKeyDown: e => { if (e.key === "Enter") addCustom(); },
+                placeholder: "Escribe una fortaleza propia...",
+                maxLength: 60,
+                style: { flex: 1, minWidth: 180, maxWidth: 320, padding: "8px 12px", borderRadius: 12, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" },
+            }),
+            React.createElement(Btn, { color: C.accent, onClick: addCustom, disabled: !customInput.trim(), small: true }, "+ Añadir")),
         React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" } },
             React.createElement(Btn, { color: C.primary, onClick: saveStrengths, disabled: selected.length === 0 || saved, small: true }, saved ? "✓ Guardado en tu perfil" : "💾 Guardar en mi perfil"),
             React.createElement(Btn, { color: C.purple, onClick: genAI, loading: loading, small: true }, "\u2728 Generar con IA"))));
@@ -20954,6 +21229,7 @@ function Laberinto({ patient }) {
     const [path, setPath] = useState([]);
     const [done, setDone] = useState(false);
     const [moves, setMoves] = useState(0);
+    const touchStartRef = useRef(null);
     const SIZE_BY_DIFF = { "fácil": 6, "medio": 9, "difícil": 12 };
     const SIZE = SIZE_BY_DIFF[diff];
     // Simple maze generation: recursive backtracker on grid
@@ -21022,7 +21298,6 @@ function Laberinto({ patient }) {
         return React.createElement(LoadingCard, { message: "Generando laberinto..." });
     const cellSize = Math.min(380 / SIZE, 50);
     // Touch/swipe handlers
-    const touchStartRef = useRef(null);
     const handleTouchStart = (e) => {
         const touch = (e.touches && e.touches[0]) || e;
         touchStartRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
@@ -21259,6 +21534,10 @@ function Stroop({ patient }) {
     const [round, setRound] = useState(0);
     const [startTime, setStartTime] = useState(Date.now());
     const [rt, setRt] = useState(null);
+    const [rtList, setRtList] = useState([]); // all response times in current training
+    const [errorRounds, setErrorRounds] = useState(0);
+    const [targetRounds, setTargetRounds] = useState(null); // null=libre, otherwise 5/10/20
+    const [trainingDone, setTrainingDone] = useState(false);
     const gen = useCallback(() => {
         // pick a word and a different color for the ink
         const w = STROOP_COLORS[randInt(0, STROOP_COLORS.length - 1)];
@@ -21271,46 +21550,111 @@ function Stroop({ patient }) {
         setStartTime(Date.now());
         setRt(null);
     }, []);
-    useEffect(() => { gen(); }, [gen, round]);
+    useEffect(() => {
+        if (trainingDone) return;
+        // If we hit the target rounds, finish
+        if (targetRounds !== null && round >= targetRounds) {
+            setTrainingDone(true);
+            sfx.success();
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, score / round >= 0.7);
+                logCurrentResult(score / round >= 0.7);
+                const avgRt = rtList.reduce((s, x) => s + x, 0) / Math.max(rtList.length, 1);
+                saveBest(_activePatientId, "stroop_" + mode + "_avg_rt", Math.round(avgRt));
+            }
+            return;
+        }
+        gen();
+    }, [round, gen, targetRounds, trainingDone]);
     const select = (colorName) => {
-        if (sel)
+        if (sel || trainingDone)
             return;
         setSel(colorName);
         const responseTime = Date.now() - startTime;
         setRt(responseTime);
         const target = mode === "ink" ? word.inkName : word.text;
-        if (colorName === target)
+        const isCorrect = colorName === target;
+        if (isCorrect) {
             setScore(s => s + 1);
+            setRtList(list => [...list, responseTime]);
+        } else {
+            setErrorRounds(e => e + 1);
+        }
         setTimeout(() => setRound(r => r + 1), 1000);
+    };
+    const restartTraining = (rounds) => {
+        sfx.tap();
+        setTargetRounds(rounds);
+        setScore(0); setRound(0); setRtList([]); setErrorRounds(0);
+        setSel(null); setRt(null); setTrainingDone(false);
+        setWord(null);
+        // Trigger gen via useEffect
+        setTimeout(() => gen(), 50);
     };
     const target = mode === "ink" ? word === null || word === void 0 ? void 0 : word.inkName : word === null || word === void 0 ? void 0 : word.text;
     const isRight = sel === target;
+    // Training-end summary view
+    if (trainingDone) {
+        const totalAttempts = score + errorRounds;
+        const accuracy = totalAttempts > 0 ? Math.round((score / totalAttempts) * 100) : 0;
+        const avgRt = rtList.length > 0 ? Math.round(rtList.reduce((s, x) => s + x, 0) / rtList.length) : 0;
+        const fastest = rtList.length > 0 ? Math.min(...rtList) : 0;
+        const slowest = rtList.length > 0 ? Math.max(...rtList) : 0;
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Stroop - Resultado del entrenamiento"),
+            React.createElement("div", { style: { padding: 18, background: `linear-gradient(135deg, ${C.primary}11, ${C.accent}11)`, borderRadius: 14, marginBottom: 14, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: C.primary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 } },
+                    "Modo: ", mode === "ink" ? "Color de tinta" : "Leer palabra"),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 } },
+                    React.createElement("div", { style: { padding: 10, background: accuracy >= 80 ? C.success : accuracy >= 60 ? C.warm : "#FFE4E4", borderRadius: 10 } },
+                        React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: C.primary } }, score, "/", totalAttempts),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Aciertos")),
+                    React.createElement("div", { style: { padding: 10, background: "#fafafa", borderRadius: 10 } },
+                        React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, accuracy, "%"),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Precisión")),
+                    React.createElement("div", { style: { padding: 10, background: "#fafafa", borderRadius: 10 } },
+                        React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, avgRt, "ms"),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Tiempo medio")),
+                    React.createElement("div", { style: { padding: 10, background: "#fafafa", borderRadius: 10 } },
+                        React.createElement("div", { style: { fontSize: 14, fontWeight: 800 } }, fastest, " / ", slowest, " ms"),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Más rápido / lento")))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" } },
+                React.createElement(Btn, { color: C.primary, onClick: () => restartTraining(targetRounds), small: true }, "↻ Repetir"),
+                React.createElement(Btn, { color: C.textL, onClick: () => restartTraining(null), small: true, outline: true }, "Volver al modo libre")));
+    }
     return (React.createElement("div", null,
         React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Stroop - Color y palabra"),
         React.createElement(Instructions, null, mode === "ink"
             ? "Mira la palabra e ignora lo que dice. Elige el color con el que está escrita."
             : "Mira la palabra e ignora el color. Elige lo que dice la palabra."),
-        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 14 } },
-            React.createElement("button", { onClick: () => { setMode("ink"); setScore(0); setRound(0); }, style: {
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 10 } },
+            React.createElement("button", { onClick: () => { setMode("ink"); restartTraining(targetRounds); }, style: {
                     padding: "6px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
                     background: mode === "ink" ? C.primary : "#f9f9f9", color: mode === "ink" ? "#fff" : C.text,
                     border: `2px solid ${mode === "ink" ? C.primary : C.border}`, fontFamily: "inherit",
                 } }, "Color de tinta"),
-            React.createElement("button", { onClick: () => { setMode("word"); setScore(0); setRound(0); }, style: {
+            React.createElement("button", { onClick: () => { setMode("word"); restartTraining(targetRounds); }, style: {
                     padding: "6px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
                     background: mode === "word" ? C.primary : "#f9f9f9", color: mode === "word" ? "#fff" : C.text,
                     border: `2px solid ${mode === "word" ? C.primary : C.border}`, fontFamily: "inherit",
                 } }, "Leer palabra")),
-        React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 14 } },
+        // Training rounds selector
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
+            React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginRight: 4 } }, "Rondas:"),
+            [{ v: null, l: "Libre" }, { v: 5, l: "5" }, { v: 10, l: "10" }, { v: 20, l: "20" }].map(opt =>
+                React.createElement("button", { key: String(opt.v), onClick: () => restartTraining(opt.v), style: {
+                    padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: targetRounds === opt.v ? C.accent : "#fff",
+                    color: targetRounds === opt.v ? "#fff" : C.text,
+                    border: `2px solid ${targetRounds === opt.v ? C.accent : C.border}`, fontFamily: "inherit",
+                } }, opt.l))),
+        React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
             React.createElement(Badge, { color: C.accent },
-                "Ronda ",
-                round + 1),
+                "Ronda ", round + 1, targetRounds ? "/" + targetRounds : ""),
             React.createElement(Badge, { color: C.primary },
-                "Aciertos: ",
-                score),
+                "Aciertos: ", score),
             rt && React.createElement(Badge, { color: C.blue },
-                rt,
-                " ms")),
+                rt, " ms")),
         word && (React.createElement("div", { style: {
                 textAlign: "center", padding: "40px 20px", background: "#fff",
                 borderRadius: 16, marginBottom: 18, minHeight: 120,
@@ -22083,6 +22427,7 @@ function SopaNumeros({ patient }) {
 // ═══════════════════════════════════════════════════════════════
 function NBack({ patient }) {
     const [n, setN] = useState(2);
+    const [totalRounds, setTotalRounds] = useState(18); // 12, 18, 30
     const [running, setRunning] = useState(false);
     const [sequence, setSequence] = useState([]);
     const [current, setCurrent] = useState(null);
@@ -22093,7 +22438,6 @@ function NBack({ patient }) {
     const [responseGiven, setResponseGiven] = useState(false);
     const [done, setDone] = useState(false);
     const positionsRef = useRef([]);
-    const totalRounds = 18;
     const positions = [0, 1, 2, 3, 4, 5, 6, 7, 8]; // 3x3 grid
     const start = () => {
         positionsRef.current = [];
@@ -22109,7 +22453,7 @@ function NBack({ patient }) {
             sfx.success();
             if (_activePatientId) {
                 addStar(_activePatientId, _activeAreaId, accuracy >= 0.85);
-                saveBest(_activePatientId, "nback_" + n, Math.round(accuracy * 100));
+                saveBest(_activePatientId, "nback_" + n + "_" + totalRounds, Math.round(accuracy * 100));
             }
             logCurrentResult(accuracy >= 0.6);
             if (accuracy >= 0.85) setTimeout(() => fireConfetti(true), 200);
@@ -22138,7 +22482,7 @@ function NBack({ patient }) {
             setRound(r => r + 1);
         }, 2200);
         return () => clearTimeout(t);
-    }, [running, round, n]);
+    }, [running, round, n, totalRounds]);
     const respond = () => {
         if (!running || round < n || responseGiven) return;
         setResponseGiven(true);
@@ -22158,13 +22502,22 @@ function NBack({ patient }) {
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, n + "-back"),
             !running && React.createElement("div", { style: { display: "flex", gap: 6 } },
-                [1, 2, 3].map(v => React.createElement("button", { key: v, onClick: () => setN(v), style: {
+                [1, 2, 3].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setN(v); }, style: {
                     padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700,
                     background: n === v ? C.primary : "#f5f5f5", color: n === v ? "#fff" : C.text,
                     border: `2px solid ${n === v ? C.primary : "transparent"}`, cursor: "pointer", fontFamily: "inherit",
                 } }, v + "-back")))),
         React.createElement(Instructions, null,
             React.createElement("strong", null, "Memoria de trabajo. "), "Aparecerán cuadrados en distintas posiciones. Pulsa ", React.createElement("strong", null, "¡COINCIDE!"), " si la posición actual es la misma que hace ", React.createElement("strong", null, n), " posiciones."),
+        // Rounds selector
+        !running && React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
+            React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginRight: 4 } }, "Rondas:"),
+            [12, 18, 30].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setTotalRounds(v); }, style: {
+                padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: totalRounds === v ? C.accent : "#fff",
+                color: totalRounds === v ? "#fff" : C.text,
+                border: `2px solid ${totalRounds === v ? C.accent : C.border}`, fontFamily: "inherit",
+            } }, v))),
         React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
             React.createElement(Badge, { color: C.primary }, "Ronda: ", round, "/", totalRounds),
             React.createElement(Badge, { color: C.blue }, "Aciertos: ", hits),
@@ -22448,6 +22801,7 @@ Formato JSON:
 // ═══════════════════════════════════════════════════════════════
 function CalculoMental({ patient }) {
     const [diff, setDiff] = useState("medio");
+    const [duration, setDuration] = useState(60); // 30, 60, 90, 120 seconds
     const [running, setRunning] = useState(false);
     const [problem, setProblem] = useState(null);
     const [answer, setAnswer] = useState("");
@@ -22467,7 +22821,7 @@ function CalculoMental({ patient }) {
     }, [diff]);
     const start = () => {
         setRunning(true); setDone(false); setScore({ correct: 0, total: 0 });
-        setTimeLeft(60); setProblem(generateProblem()); setAnswer("");
+        setTimeLeft(duration); setProblem(generateProblem()); setAnswer("");
     };
     useEffect(() => {
         if (!running) return;
@@ -22476,7 +22830,7 @@ function CalculoMental({ patient }) {
             sfx.success();
             if (_activePatientId) {
                 addStar(_activePatientId, _activeAreaId, score.total >= 15);
-                saveBest(_activePatientId, "calculo_mental", score.correct);
+                saveBest(_activePatientId, "calculo_mental_" + duration + "s", score.correct);
             }
             logCurrentResult(score.correct >= 5);
             return;
@@ -22496,9 +22850,18 @@ function CalculoMental({ patient }) {
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Cálculo Mental"),
             !running && React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
-        React.createElement(Instructions, null, "Resuelve el máximo de operaciones en 60 segundos. ¡Sin papel ni calculadora!"),
+        React.createElement(Instructions, null, "Resuelve el máximo de operaciones en el tiempo elegido. ¡Sin papel ni calculadora!"),
+        // Duration selector
+        !running && React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
+            React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginRight: 4 } }, "Duración:"),
+            [30, 60, 90, 120].map(d => React.createElement("button", { key: d, onClick: () => { sfx.tap(); setDuration(d); }, style: {
+                padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: duration === d ? C.accent : "#fff",
+                color: duration === d ? "#fff" : C.text,
+                border: `2px solid ${duration === d ? C.accent : C.border}`, fontFamily: "inherit",
+            } }, d, "s"))),
         !running && !done && React.createElement("div", { style: { textAlign: "center", padding: 30 } },
-            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar (60s)")),
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar (", duration, "s)")),
         running && problem && React.createElement("div", { style: { textAlign: "center" } },
             React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 18 } },
                 React.createElement(Badge, { color: timeLeft < 10 ? C.error : C.blue }, "⏱ " + timeLeft + "s"),
@@ -23108,12 +23471,18 @@ Formato JSON estricto:
 // ═══════════════════════════════════════════════════════════════
 function RolePlayConversacional({ patient }) {
     const SCENARIOS = [
-        { id: "compa_dificil", label: "Compañero/a difícil", emoji: "😤", desc: "Un compañero te molesta sin razón aparente" },
-        { id: "amigo_enfadado", label: "Amigo/a enfadado", emoji: "😠", desc: "Tu amigo está enfadado contigo" },
-        { id: "rechazo", label: "Pedir y ser rechazado", emoji: "🚪", desc: "Pides algo y te dicen que no" },
-        { id: "presion_grupo", label: "Presión de grupo", emoji: "👥", desc: "Te presionan a hacer algo que no quieres" },
-        { id: "decir_no", label: "Decir que no", emoji: "🛑", desc: "Aprende a decir que no sin sentirte mal" },
-        { id: "pedir_ayuda", label: "Pedir ayuda", emoji: "🙋", desc: "Practica pedir ayuda a alguien" },
+        { id: "compa_dificil", label: "Compañero/a difícil", emoji: "😤", desc: "Un compañero te molesta sin razón aparente",
+          personality: "Eres un compañero de clase que se mete con el paciente sin razón aparente. Eres CONFRONTATIVO, INSISTENTE y un poco hiriente. Te metes con sus cosas, te ríes de él/ella, no te das por aludido a la primera, y cuando te confrontan al principio respondes con sarcasmo o subestimas (\"venga ya\", \"qué exagerado\", \"siempre estás igual\"). Solo cedes si el paciente es claramente asertivo y firme varios turnos seguidos. NO seas un personaje fácil — la dificultad de este ejercicio es entrenar al paciente a sostenerse frente a alguien que le presiona." },
+        { id: "amigo_enfadado", label: "Amigo/a enfadado", emoji: "😠", desc: "Tu amigo está enfadado contigo",
+          personality: "Eres un amigo cercano del paciente que está dolido y enfadado. Hablas desde el dolor pero sin atacar gratuitamente. Reaccionas con desilusión, no con agresividad. Necesitas que el paciente reconozca lo que ha pasado y muestre genuina empatía antes de calmarte." },
+        { id: "rechazo", label: "Pedir y ser rechazado", emoji: "🚪", desc: "Pides algo y te dicen que no",
+          personality: "Eres alguien (profe, padre/madre, amigo) que tiene que decir que no a una petición razonable del paciente, por motivos legítimos pero firmes. Mantienes el no de forma respetuosa pero clara, sin ceder a chantajes emocionales o insistencias." },
+        { id: "presion_grupo", label: "Presión de grupo", emoji: "👥", desc: "Te presionan a hacer algo que no quieres",
+          personality: "Eres un par del paciente que le presiona para hacer algo que no quiere (saltar clase, probar algo, burlarse de otro, mentir...). Insistes con frases tipo 'todos lo hacen', 'no seas aburrido', 'te vamos a dejar tirado'. No cedes fácilmente — solo si el paciente mantiene una negativa firme y razonada." },
+        { id: "decir_no", label: "Decir que no", emoji: "🛑", desc: "Aprende a decir que no sin sentirte mal",
+          personality: "Eres alguien que pide al paciente algo que él/ella no quiere o no puede hacer. Insistes con buen tono pero pones presión, usas culpa suave ('pensaba que éramos amigos', 'siempre cuento contigo'). Solo aceptas el no cuando es claro y bien sostenido." },
+        { id: "pedir_ayuda", label: "Pedir ayuda", emoji: "🙋", desc: "Practica pedir ayuda a alguien",
+          personality: "Eres un adulto de confianza (profe, padre/madre, terapeuta, monitor) al que el paciente debe pedir ayuda. Eres receptivo y cariñoso pero NO adivinas nada — si el paciente no es claro al pedir ayuda, le pides que se explique más. Validas el esfuerzo de pedir ayuda." },
     ];
     const [scenarioId, setScenarioId] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -23124,14 +23493,31 @@ function RolePlayConversacional({ patient }) {
     const turnRef = useRef(0);
     const scenario = SCENARIOS.find(s => s.id === scenarioId);
 
+    // Save completed conversation to patient's history (used in reports)
+    const saveConversation = (msgs, fb) => {
+        if (!patient || !scenario || msgs.length < 2) return;
+        const existing = storeLoad("roleplay:" + patient.id) || [];
+        const entry = {
+            id: uid(), ts: Date.now(),
+            scenarioId: scenario.id, scenarioLabel: scenario.label, scenarioEmoji: scenario.emoji,
+            messages: msgs, // [{role: "user"|"other", text}]
+            feedback: fb, // {tipo, explicacion, alternativa}
+            turns: turnRef.current,
+        };
+        existing.push(entry);
+        // Keep last 30
+        if (existing.length > 30) existing.splice(0, existing.length - 30);
+        storeSave("roleplay:" + patient.id, existing);
+    };
+
     const startScenario = async (id) => {
         setScenarioId(id); setMessages([]); setFeedback(null); setDone(false); turnRef.current = 0;
         setLoading(true);
         const sc = SCENARIOS.find(x => x.id === id);
         const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') +
-            `Vas a hacer un role-play conversacional con un paciente. Eres "el otro personaje" en esta situación: "${sc.desc}".
+            `Vas a hacer un role-play conversacional con un paciente. PERSONAJE: ${sc.personality}
 
-Empieza la conversación con UNA frase realista que abra la situación (algo que ese personaje diría primero). No ofrezcas opciones, no expliques nada. Solo la frase que diría el personaje, en estilo natural, máximo 15 palabras.
+Empieza la conversación con UNA frase realista que abra la situación (algo que ese personaje diría primero, en primera persona y en su tono característico). No ofrezcas opciones, no expliques nada. Solo la frase que diría el personaje, en estilo natural, máximo 20 palabras.
 
 Formato JSON:
 {"opener": "frase del personaje"}`;
@@ -23144,7 +23530,7 @@ Formato JSON:
         }
     };
 
-    const sendMessage = async () => {
+    const sendMessage = async (forceFinal = false) => {
         if (!input.trim() || loading) return;
         const userMsg = input.trim();
         const newMessages = [...messages, { role: "user", text: userMsg }];
@@ -23153,23 +23539,23 @@ Formato JSON:
         turnRef.current += 1;
         setLoading(true);
         const conversation = newMessages.map(m => `${m.role === "user" ? "Paciente" : "Personaje"}: ${m.text}`).join("\n");
-        const isFinalTurn = turnRef.current >= 8;
+        const isFinalTurn = forceFinal || turnRef.current >= 8;
         const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') +
-            `Role-play en curso. Situación: "${scenario.desc}". Eres el personaje que NO es el paciente.
+            `Role-play en curso. PERSONAJE: ${scenario.personality}
 
 Conversación hasta ahora:
 ${conversation}
 
-${isFinalTurn ? `Esta es la última respuesta. Responde brevemente (máximo 15 palabras) Y ADEMÁS ofrece feedback educativo SOBRE LA RESPUESTA DEL PACIENTE detectando si fue:
+${isFinalTurn ? `Esta es la última respuesta del personaje. Responde brevemente (máximo 20 palabras) MANTENIENDO TU PERSONAJE Y ADEMÁS ofrece feedback educativo SOBRE EL CONJUNTO DE RESPUESTAS DEL PACIENTE detectando si fueron globalmente:
 - ASERTIVA (defiende su posición sin agredir, "buena")
 - PASIVA (no defiende sus intereses, evita)
 - AGRESIVA (ataca, descalifica)
 
 Formato JSON:
 {
-  "reply": "respuesta del personaje en max 15 palabras",
-  "feedback": {"tipo": "asertiva|pasiva|agresiva", "explicacion": "1-2 frases sobre por qué", "alternativa": "ejemplo de respuesta más asertiva si no lo era"}
-}` : `Responde brevemente (máximo 15 palabras) como reaccionaría el personaje al mensaje del paciente. Sigue la conversación de forma natural y realista.
+  "reply": "respuesta del personaje en max 20 palabras",
+  "feedback": {"tipo": "asertiva|pasiva|agresiva", "explicacion": "2-3 frases sobre por qué, evaluando el conjunto de la conversación", "alternativa": "ejemplo concreto de respuesta más asertiva si no lo era; cadena vacía si fue asertiva"}
+}` : `Responde brevemente (máximo 20 palabras) MANTENIENDO TU PERSONAJE. Sigue la conversación de forma natural y realista, sin romper el rol. Si el paciente es asertivo y firme varios turnos seguidos, puedes ir cediendo gradualmente (no en el primer intento).
 
 Formato JSON:
 {"reply": "respuesta del personaje"}`}`;
@@ -23177,15 +23563,46 @@ Formato JSON:
         setLoading(false);
         if (result && result.__noKey) { alert("Configura tu API key."); return; }
         if (result && result.reply) {
-            setMessages(m => [...m, { role: "other", text: result.reply }]);
+            const finalMessages = [...newMessages, { role: "other", text: result.reply }];
+            setMessages(finalMessages);
             if (isFinalTurn && result.feedback) {
                 setFeedback(result.feedback); setDone(true);
+                saveConversation(finalMessages, result.feedback);
                 if (_activePatientId) {
                     addStar(_activePatientId, _activeAreaId, result.feedback.tipo === "asertiva");
                     if (result.feedback.tipo === "asertiva") setTimeout(() => fireConfetti(false), 200);
                 }
                 logCurrentResult(true);
             }
+        }
+    };
+
+    const finishEarly = async () => {
+        if (loading || messages.length < 2 || done) return;
+        // Ask the IA only for the global feedback (no need for another reply)
+        setLoading(true);
+        const conversation = messages.map(m => `${m.role === "user" ? "Paciente" : "Personaje"}: ${m.text}`).join("\n");
+        const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') +
+            `Has hecho un role-play con un paciente que ha decidido terminar antes del último turno. Personaje: ${scenario.personality}
+
+Conversación completa:
+${conversation}
+
+Evalúa el conjunto de respuestas del paciente y clasifícalas globalmente como ASERTIVA / PASIVA / AGRESIVA. Da feedback educativo concreto.
+
+Formato JSON:
+{"feedback": {"tipo": "asertiva|pasiva|agresiva", "explicacion": "2-3 frases evaluando el conjunto", "alternativa": "ejemplo de respuesta más asertiva, o cadena vacía si fue asertiva"}}`;
+        const result = await callClaude(prompt, "roleplay_conv_finish");
+        setLoading(false);
+        if (result && result.__noKey) { alert("Configura tu API key."); return; }
+        if (result && result.feedback) {
+            setFeedback(result.feedback); setDone(true);
+            saveConversation(messages, result.feedback);
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, result.feedback.tipo === "asertiva");
+                if (result.feedback.tipo === "asertiva") setTimeout(() => fireConfetti(false), 200);
+            }
+            logCurrentResult(true);
         }
     };
 
@@ -23196,7 +23613,7 @@ Formato JSON:
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Role-Play Conversacional"),
                 React.createElement(AIBadge, null)),
-            React.createElement(Instructions, null, "Practica conversaciones difíciles con la IA. Tendrás 8 turnos para responder. Al final recibes feedback sobre si fuiste asertivo, pasivo o agresivo."),
+            React.createElement(Instructions, null, "Practica conversaciones difíciles con la IA. Tienes hasta 8 turnos para responder, pero puedes terminar antes cuando quieras. Al final recibes feedback sobre si fuiste asertivo, pasivo o agresivo."),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 } },
                 SCENARIOS.map(s => React.createElement("div", { key: s.id, onClick: () => startScenario(s.id), style: {
                     padding: 14, background: "#f9f9f9", borderRadius: 14, cursor: "pointer", textAlign: "center",
@@ -23207,7 +23624,7 @@ Formato JSON:
                     React.createElement("div", { style: { fontSize: 11, color: C.textL, lineHeight: 1.3 } }, s.desc)))));
     }
     return React.createElement("div", null,
-        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 6 } },
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
                 React.createElement("div", { style: { fontSize: 28 } }, scenario.emoji),
                 React.createElement("div", null,
@@ -23227,12 +23644,16 @@ Formato JSON:
                     boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
                 } }, m.text))),
             loading && React.createElement("div", { style: { textAlign: "center", padding: 10, color: C.textL, fontSize: 12 } }, "✨ Pensando...")),
-        !done && React.createElement("div", { style: { display: "flex", gap: 8 } },
-            React.createElement("input", { value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === "Enter" && sendMessage(), placeholder: "Tu respuesta...", disabled: loading, style: {
-                flex: 1, padding: "12px 14px", borderRadius: 12, border: `2px solid ${C.border}`,
-                fontSize: 14, fontFamily: "inherit", outline: "none",
-            } }),
-            React.createElement(Btn, { color: C.primary, onClick: sendMessage, disabled: !input.trim() || loading, loading: loading, small: true }, "Enviar →")),
+        !done && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("input", { value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === "Enter" && sendMessage(), placeholder: "Tu respuesta...", disabled: loading, style: {
+                    flex: 1, padding: "12px 14px", borderRadius: 12, border: `2px solid ${C.border}`,
+                    fontSize: 14, fontFamily: "inherit", outline: "none",
+                } }),
+                React.createElement(Btn, { color: C.primary, onClick: () => sendMessage(false), disabled: !input.trim() || loading, loading: loading, small: true }, "Enviar →")),
+            // Finish-early button — only after at least 1 turn
+            messages.filter(m => m.role === "user").length >= 1 && React.createElement("div", { style: { display: "flex", justifyContent: "center", marginTop: 10 } },
+                React.createElement(Btn, { color: C.textL, onClick: finishEarly, disabled: loading, small: true, outline: true }, "✓ Terminar y recibir feedback ahora"))),
         done && feedback && React.createElement("div", null,
             React.createElement("div", { style: {
                 padding: 16, borderRadius: 14, marginBottom: 12,
@@ -23240,7 +23661,7 @@ Formato JSON:
                 borderLeft: `5px solid ${feedback.tipo === "asertiva" ? C.primary : feedback.tipo === "pasiva" ? C.accent : "#E63946"}`,
             } },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 800, textTransform: "uppercase", marginBottom: 6, color: feedback.tipo === "asertiva" ? C.primary : feedback.tipo === "pasiva" ? "#A0530F" : "#8B1E26" } },
-                    feedback.tipo === "asertiva" ? "✓ Respuesta asertiva" : feedback.tipo === "pasiva" ? "⚠ Respuesta pasiva" : "⚠ Respuesta agresiva"),
+                    feedback.tipo === "asertiva" ? "✓ Respuestas asertivas" : feedback.tipo === "pasiva" ? "⚠ Respuestas pasivas" : "⚠ Respuestas agresivas"),
                 React.createElement("div", { style: { fontSize: 13, lineHeight: 1.5, marginBottom: feedback.alternativa ? 10 : 0 } }, feedback.explicacion),
                 feedback.alternativa && feedback.tipo !== "asertiva" && React.createElement("div", { style: { padding: 10, background: "rgba(255,255,255,0.6)", borderRadius: 10, fontSize: 12, lineHeight: 1.5 } },
                     React.createElement("strong", null, "💡 Más asertivo: "), feedback.alternativa)),
@@ -24714,6 +25135,585 @@ Los pasos deben tener un orden lógico inequívoco basado en dependencias reales
 }
 
 // ═══════════════════════════════════════════════════════════════
+// REASONING — 4 en raya (planificación, anticipación)
+// ═══════════════════════════════════════════════════════════════
+function CuatroEnRaya({ patient }) {
+    const ROWS = 6, COLS = 7;
+    const [diff, setDiff] = useState("medio");
+    const [board, setBoard] = useState(() => Array.from({ length: ROWS }, () => Array(COLS).fill(0)));
+    const [turn, setTurn] = useState("p"); // 'p' player, 'a' AI
+    const [winner, setWinner] = useState(null); // null | 'p' | 'a' | 'draw'
+    const [winLine, setWinLine] = useState([]);
+    const [thinking, setThinking] = useState(false);
+    const [stats, setStats] = useState(() => storeLoad("4enraya:stats") || { p: 0, a: 0, d: 0 });
+    const reset = () => {
+        setBoard(Array.from({ length: ROWS }, () => Array(COLS).fill(0)));
+        setTurn("p"); setWinner(null); setWinLine([]);
+    };
+    const dropCol = (b, col, who) => {
+        // Returns new board & row of placement, or null
+        for (let r = ROWS - 1; r >= 0; r--) {
+            if (b[r][col] === 0) {
+                const nb = b.map(row => row.slice());
+                nb[r][col] = who;
+                return { nb, row: r };
+            }
+        }
+        return null;
+    };
+    const checkWin = (b, who) => {
+        // Horizontal, vertical, both diagonals
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (b[r][c] !== who) continue;
+                // Horizontal
+                if (c + 3 < COLS && b[r][c+1] === who && b[r][c+2] === who && b[r][c+3] === who)
+                    return [[r,c],[r,c+1],[r,c+2],[r,c+3]];
+                // Vertical
+                if (r + 3 < ROWS && b[r+1][c] === who && b[r+2][c] === who && b[r+3][c] === who)
+                    return [[r,c],[r+1,c],[r+2,c],[r+3,c]];
+                // Diag down-right
+                if (r + 3 < ROWS && c + 3 < COLS && b[r+1][c+1] === who && b[r+2][c+2] === who && b[r+3][c+3] === who)
+                    return [[r,c],[r+1,c+1],[r+2,c+2],[r+3,c+3]];
+                // Diag down-left
+                if (r + 3 < ROWS && c - 3 >= 0 && b[r+1][c-1] === who && b[r+2][c-2] === who && b[r+3][c-3] === who)
+                    return [[r,c],[r+1,c-1],[r+2,c-2],[r+3,c-3]];
+            }
+        }
+        return null;
+    };
+    const isFull = (b) => b[0].every(c => c !== 0);
+    // Score function for AI: counts threats and opportunities
+    const evalBoard = (b, who) => {
+        const opp = who === 'p' ? 'a' : 'p';
+        let score = 0;
+        // Center column preference
+        for (let r = 0; r < ROWS; r++) {
+            if (b[r][3] === who) score += 3;
+            if (b[r][3] === opp) score -= 3;
+        }
+        // Count windows of 4
+        const countWindow = (cells, target) => {
+            const t = cells.filter(c => c === target).length;
+            const e = cells.filter(c => c === 0).length;
+            const o = cells.filter(c => c !== target && c !== 0).length;
+            if (o > 0) return 0;
+            if (t === 4) return 10000;
+            if (t === 3 && e === 1) return 50;
+            if (t === 2 && e === 2) return 5;
+            return 0;
+        };
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (c + 3 < COLS) {
+                    const w = [b[r][c],b[r][c+1],b[r][c+2],b[r][c+3]];
+                    score += countWindow(w, who); score -= countWindow(w, opp) * 1.1;
+                }
+                if (r + 3 < ROWS) {
+                    const w = [b[r][c],b[r+1][c],b[r+2][c],b[r+3][c]];
+                    score += countWindow(w, who); score -= countWindow(w, opp) * 1.1;
+                }
+                if (r + 3 < ROWS && c + 3 < COLS) {
+                    const w = [b[r][c],b[r+1][c+1],b[r+2][c+2],b[r+3][c+3]];
+                    score += countWindow(w, who); score -= countWindow(w, opp) * 1.1;
+                }
+                if (r + 3 < ROWS && c - 3 >= 0) {
+                    const w = [b[r][c],b[r+1][c-1],b[r+2][c-2],b[r+3][c-3]];
+                    score += countWindow(w, who); score -= countWindow(w, opp) * 1.1;
+                }
+            }
+        }
+        return score;
+    };
+    // Minimax with depth limit
+    const minimax = (b, depth, alpha, beta, maximizing) => {
+        const winA = checkWin(b, 'a');
+        const winP = checkWin(b, 'p');
+        if (winA) return { score: 100000 - (10 - depth) };
+        if (winP) return { score: -100000 + (10 - depth) };
+        if (isFull(b) || depth === 0) return { score: evalBoard(b, 'a') };
+        const valid = [];
+        for (let c = 0; c < COLS; c++) if (b[0][c] === 0) valid.push(c);
+        // Try center first for better pruning
+        valid.sort((a, b) => Math.abs(3 - a) - Math.abs(3 - b));
+        let bestCol = valid[0];
+        if (maximizing) {
+            let value = -Infinity;
+            for (const c of valid) {
+                const next = dropCol(b, c, 'a').nb;
+                const r = minimax(next, depth - 1, alpha, beta, false).score;
+                if (r > value) { value = r; bestCol = c; }
+                alpha = Math.max(alpha, value);
+                if (alpha >= beta) break;
+            }
+            return { score: value, col: bestCol };
+        } else {
+            let value = Infinity;
+            for (const c of valid) {
+                const next = dropCol(b, c, 'p').nb;
+                const r = minimax(next, depth - 1, alpha, beta, true).score;
+                if (r < value) { value = r; bestCol = c; }
+                beta = Math.min(beta, value);
+                if (alpha >= beta) break;
+            }
+            return { score: value, col: bestCol };
+        }
+    };
+    const aiMove = (b) => {
+        const depthByDiff = { "fácil": 1, "medio": 3, "difícil": 5 };
+        const depth = depthByDiff[diff];
+        // Easy: 50% of moves are random
+        if (diff === "fácil" && Math.random() < 0.5) {
+            const valid = [];
+            for (let c = 0; c < COLS; c++) if (b[0][c] === 0) valid.push(c);
+            return valid[randInt(0, valid.length - 1)];
+        }
+        const result = minimax(b, depth, -Infinity, Infinity, true);
+        return result.col != null ? result.col : 3;
+    };
+    const playerDrop = async (col) => {
+        if (turn !== "p" || winner || thinking) return;
+        if (board[0][col] !== 0) return;
+        const after = dropCol(board, col, 'p');
+        if (!after) return;
+        sfx.tap();
+        setBoard(after.nb);
+        const win = checkWin(after.nb, 'p');
+        if (win) {
+            setWinner("p"); setWinLine(win);
+            const ns = { ...stats, p: stats.p + 1 }; setStats(ns); storeSave("4enraya:stats", ns);
+            sfx.success(); setTimeout(() => fireConfetti(true), 200);
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+            return;
+        }
+        if (isFull(after.nb)) {
+            setWinner("draw");
+            const ns = { ...stats, d: stats.d + 1 }; setStats(ns); storeSave("4enraya:stats", ns);
+            return;
+        }
+        setTurn("a"); setThinking(true);
+        // AI plays after small delay
+        setTimeout(() => {
+            const aiCol = aiMove(after.nb);
+            const aiAfter = dropCol(after.nb, aiCol, 'a');
+            if (!aiAfter) { setThinking(false); return; }
+            setBoard(aiAfter.nb); setThinking(false);
+            const aWin = checkWin(aiAfter.nb, 'a');
+            if (aWin) {
+                setWinner("a"); setWinLine(aWin);
+                const ns = { ...stats, a: stats.a + 1 }; setStats(ns); storeSave("4enraya:stats", ns);
+                sfx.fail();
+                if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+                return;
+            }
+            if (isFull(aiAfter.nb)) {
+                setWinner("draw");
+                const ns = { ...stats, d: stats.d + 1 }; setStats(ns); storeSave("4enraya:stats", ns);
+                return;
+            }
+            setTurn("p");
+        }, 350);
+    };
+    const isWinCell = (r, c) => winLine.some(([wr, wc]) => wr === r && wc === c);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "4 en raya"),
+            !winner && React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); reset(); } })),
+        React.createElement(Instructions, null, "Conecta 4 fichas en línea (horizontal, vertical o diagonal) antes que la IA. Trabaja planificación, anticipación y pensamiento estratégico."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 8 } },
+            React.createElement(Badge, { color: C.primary }, "Tú: ", stats.p),
+            React.createElement(Badge, { color: "#E63946" }, "IA: ", stats.a),
+            React.createElement(Badge, { color: C.textL }, "Empates: ", stats.d)),
+        // Drop indicators on top
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 4, maxWidth: 480, margin: "0 auto 4px" } },
+            Array.from({ length: COLS }, (_, c) => React.createElement("button", {
+                key: "drop-" + c,
+                onClick: () => playerDrop(c),
+                disabled: !!winner || turn !== "p" || thinking || board[0][c] !== 0,
+                style: {
+                    aspectRatio: "1", border: "none", background: "transparent", fontSize: 22,
+                    cursor: (!winner && turn === "p" && !thinking && board[0][c] === 0) ? "pointer" : "default",
+                    color: (turn === "p" && !winner && !thinking && board[0][c] === 0) ? C.primary : "transparent",
+                    fontFamily: "inherit",
+                },
+            }, "▼"))),
+        // Board
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 4, maxWidth: 480, margin: "0 auto 12px", padding: 8, background: "#457B9D", borderRadius: 10 } },
+            board.flatMap((row, r) => row.map((cell, c) => React.createElement("div", {
+                key: `${r}-${c}`,
+                style: {
+                    aspectRatio: "1", borderRadius: "50%",
+                    background: cell === 'p' ? C.primary : cell === 'a' ? "#E63946" : "#fff",
+                    border: isWinCell(r, c) ? "3px solid #FFD700" : "none",
+                    boxShadow: cell ? "inset 0 -3px 6px rgba(0,0,0,0.2)" : "inset 0 2px 4px rgba(0,0,0,0.1)",
+                    transition: "all 0.2s",
+                },
+            })))),
+        thinking && React.createElement("div", { style: { textAlign: "center", color: C.textL, fontSize: 12, marginBottom: 8 } }, "🤔 IA pensando..."),
+        winner && React.createElement(React.Fragment, null,
+            React.createElement(Feedback, { success: winner === 'p', reward: false },
+                winner === 'p' ? "¡Has ganado! 🎉" : winner === 'a' ? "Esta vez gana la IA. ¡Otra ronda!" : "Empate."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap", marginTop: 10 } },
+                React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Nueva partida"))));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REASONING — Buscaminas (razonamiento deductivo + tolerancia incertidumbre)
+// ═══════════════════════════════════════════════════════════════
+function Buscaminas({ patient }) {
+    const [diff, setDiff] = useState("medio");
+    const config = { "fácil": { sz: 6, mines: 5 }, "medio": { sz: 8, mines: 12 }, "difícil": { sz: 10, mines: 20 } }[diff];
+    const [board, setBoard] = useState(null);
+    const [revealed, setRevealed] = useState(new Set());
+    const [flagged, setFlagged] = useState(new Set());
+    const [status, setStatus] = useState("playing"); // playing | won | lost
+    const [mode, setMode] = useState("dig"); // dig | flag
+    const [startTime, setStartTime] = useState(null);
+    const [time, setTime] = useState(0);
+
+    const generate = useCallback(() => {
+        const sz = config.sz, total = sz * sz;
+        const minePositions = new Set();
+        while (minePositions.size < config.mines) {
+            minePositions.add(randInt(0, total - 1));
+        }
+        const b = [];
+        for (let r = 0; r < sz; r++) {
+            const row = [];
+            for (let c = 0; c < sz; c++) {
+                const idx = r * sz + c;
+                if (minePositions.has(idx)) {
+                    row.push("M");
+                } else {
+                    let count = 0;
+                    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < sz && nc >= 0 && nc < sz && minePositions.has(nr * sz + nc)) count++;
+                    }
+                    row.push(count);
+                }
+            }
+            b.push(row);
+        }
+        setBoard(b);
+        setRevealed(new Set());
+        setFlagged(new Set());
+        setStatus("playing");
+        setStartTime(null);
+        setTime(0);
+    }, [config.sz, config.mines]);
+
+    useEffect(() => { generate(); }, [generate]);
+
+    // Timer
+    useEffect(() => {
+        if (status !== "playing" || !startTime) return;
+        const t = setInterval(() => setTime(Math.floor((Date.now() - startTime) / 1000)), 250);
+        return () => clearInterval(t);
+    }, [status, startTime]);
+
+    const reveal = (r, c) => {
+        if (status !== "playing" || !board) return;
+        const sz = config.sz;
+        if (mode === "flag") {
+            sfx.tap();
+            const idx = r * sz + c;
+            if (revealed.has(idx)) return;
+            const newF = new Set(flagged);
+            if (newF.has(idx)) newF.delete(idx); else newF.add(idx);
+            setFlagged(newF);
+            return;
+        }
+        if (!startTime) setStartTime(Date.now());
+        const idx = r * sz + c;
+        if (flagged.has(idx)) return;
+        if (revealed.has(idx)) return;
+        if (board[r][c] === "M") {
+            sfx.fail();
+            // Reveal all mines
+            const all = new Set(revealed);
+            for (let r2 = 0; r2 < sz; r2++) for (let c2 = 0; c2 < sz; c2++) {
+                if (board[r2][c2] === "M") all.add(r2 * sz + c2);
+            }
+            setRevealed(all);
+            setStatus("lost");
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+            return;
+        }
+        sfx.tap();
+        // Flood fill if 0
+        const newR = new Set(revealed);
+        const stack = [[r, c]];
+        while (stack.length > 0) {
+            const [cr, cc] = stack.pop();
+            const ci = cr * sz + cc;
+            if (newR.has(ci) || flagged.has(ci)) continue;
+            newR.add(ci);
+            if (board[cr][cc] === 0) {
+                for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = cr + dr, nc = cc + dc;
+                    if (nr >= 0 && nr < sz && nc >= 0 && nc < sz) {
+                        const ni = nr * sz + nc;
+                        if (!newR.has(ni) && board[nr][nc] !== "M") stack.push([nr, nc]);
+                    }
+                }
+            }
+        }
+        setRevealed(newR);
+        // Check win: revealed all non-mines
+        const safeTotal = sz * sz - config.mines;
+        if (newR.size >= safeTotal) {
+            setStatus("won");
+            sfx.success();
+            setTimeout(() => fireConfetti(true), 200);
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, true);
+                saveBest(_activePatientId, "buscaminas_" + diff, time || 999);
+                logCurrentResult(true);
+            }
+        }
+    };
+
+    if (!board) return React.createElement(LoadingCard, null);
+    const sz = config.sz;
+    const colors = { 1: "#1976D2", 2: "#388E3C", 3: "#D32F2F", 4: "#7B1FA2", 5: "#F57C00", 6: "#0097A7", 7: "#000", 8: "#666" };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Buscaminas"),
+            status === "playing" && React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
+        React.createElement(Instructions, null, "Descubre todas las casillas que ", React.createElement("strong", null, "no"), " tienen mina. Los números indican cuántas minas hay alrededor. Marca las minas con la bandera 🚩. Trabaja razonamiento deductivo y planificación bajo incertidumbre."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 } },
+            React.createElement(Badge, { color: C.error }, "💣 ", config.mines, " minas"),
+            React.createElement(Badge, { color: C.warning }, "🚩 ", flagged.size),
+            React.createElement(Badge, { color: C.blue }, "⏱ ", time, "s")),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 10 } },
+            React.createElement("button", { onClick: () => { sfx.tap(); setMode("dig"); }, disabled: status !== "playing", style: {
+                padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: mode === "dig" ? C.primary : "#fff", color: mode === "dig" ? "#fff" : C.text,
+                border: `2px solid ${mode === "dig" ? C.primary : C.border}`, fontFamily: "inherit",
+            } }, "⛏ Cavar"),
+            React.createElement("button", { onClick: () => { sfx.tap(); setMode("flag"); }, disabled: status !== "playing", style: {
+                padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                background: mode === "flag" ? "#E76F51" : "#fff", color: mode === "flag" ? "#fff" : C.text,
+                border: `2px solid ${mode === "flag" ? "#E76F51" : C.border}`, fontFamily: "inherit",
+            } }, "🚩 Bandera")),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${sz}, 1fr)`, gap: 2, maxWidth: 380, margin: "0 auto 12px", padding: 8, background: "#888", borderRadius: 6 } },
+            board.flatMap((row, r) => row.map((cell, c) => {
+                const idx = r * sz + c;
+                const isRev = revealed.has(idx);
+                const isFlag = flagged.has(idx);
+                const display = isRev ? (cell === "M" ? "💣" : cell === 0 ? "" : cell) : isFlag ? "🚩" : "";
+                const bg = isRev ? (cell === "M" ? "#FFB4A8" : "#E8E8E8") : "#BBB";
+                return React.createElement("div", { key: idx, onClick: () => reveal(r, c), style: {
+                    aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: bg, borderRadius: 3, cursor: status === "playing" ? "pointer" : "default",
+                    fontSize: 14, fontWeight: 800, color: typeof cell === 'number' && colors[cell] ? colors[cell] : C.text,
+                    userSelect: "none",
+                } }, display);
+            }))),
+        status === "won" && React.createElement(Feedback, { success: true, reward: false }, `¡Despejado! Tiempo: ${time}s`),
+        status === "lost" && React.createElement(Feedback, { success: false, reward: false }, "💥 ¡Boom! Las minas se han revelado. Vuelve a intentarlo."),
+        status !== "playing" && React.createElement("div", { style: { display: "flex", justifyContent: "center", marginTop: 10 } },
+            React.createElement(Btn, { color: C.primary, onClick: generate, small: true }, "↻ Otra partida")));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REASONING — Othello/Reversi mini (visión estratégica espacial)
+// ═══════════════════════════════════════════════════════════════
+function OthelloMini({ patient }) {
+    const [diff, setDiff] = useState("medio");
+    const SZ = 6;
+    const initBoard = () => {
+        const b = Array.from({ length: SZ }, () => Array(SZ).fill(0));
+        const m = SZ / 2;
+        b[m-1][m-1] = "a"; b[m-1][m] = "p";
+        b[m][m-1] = "p"; b[m][m] = "a";
+        return b;
+    };
+    const [board, setBoard] = useState(initBoard);
+    const [turn, setTurn] = useState("p");
+    const [thinking, setThinking] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
+
+    const reset = () => { setBoard(initBoard()); setTurn("p"); setGameOver(false); };
+
+    // Direction vectors
+    const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+    const flippedFor = (b, r, c, who) => {
+        // Returns array of cells to flip if (r,c) is a valid move for `who`
+        if (b[r][c] !== 0) return [];
+        const opp = who === 'p' ? 'a' : 'p';
+        const all = [];
+        for (const [dr, dc] of DIRS) {
+            const captures = [];
+            let nr = r + dr, nc = c + dc;
+            while (nr >= 0 && nr < SZ && nc >= 0 && nc < SZ && b[nr][nc] === opp) {
+                captures.push([nr, nc]);
+                nr += dr; nc += dc;
+            }
+            if (captures.length > 0 && nr >= 0 && nr < SZ && nc >= 0 && nc < SZ && b[nr][nc] === who) {
+                all.push(...captures);
+            }
+        }
+        return all;
+    };
+    const validMoves = (b, who) => {
+        const moves = [];
+        for (let r = 0; r < SZ; r++) for (let c = 0; c < SZ; c++) {
+            if (flippedFor(b, r, c, who).length > 0) moves.push([r, c]);
+        }
+        return moves;
+    };
+    const applyMove = (b, r, c, who) => {
+        const flips = flippedFor(b, r, c, who);
+        if (flips.length === 0) return null;
+        const nb = b.map(row => row.slice());
+        nb[r][c] = who;
+        flips.forEach(([fr, fc]) => nb[fr][fc] = who);
+        return nb;
+    };
+    const countPieces = (b) => {
+        let p = 0, a = 0;
+        b.forEach(row => row.forEach(cell => { if (cell === 'p') p++; if (cell === 'a') a++; }));
+        return { p, a };
+    };
+    // AI: pick move that maximizes flips (medium) + corners bonus (difícil)
+    const aiPickMove = (b) => {
+        const moves = validMoves(b, 'a');
+        if (moves.length === 0) return null;
+        if (diff === "fácil") return moves[randInt(0, moves.length - 1)];
+        // Score each move
+        const scoreMove = ([r, c]) => {
+            const flips = flippedFor(b, r, c, 'a').length;
+            let bonus = 0;
+            // Corners are golden
+            if ((r === 0 || r === SZ-1) && (c === 0 || c === SZ-1)) bonus += 100;
+            // Edges are good
+            else if (r === 0 || r === SZ-1 || c === 0 || c === SZ-1) bonus += 5;
+            // Adjacent-to-corner is BAD (gives opponent the corner)
+            const corners = [[0,0],[0,SZ-1],[SZ-1,0],[SZ-1,SZ-1]];
+            for (const [cr, cc] of corners) {
+                if (Math.abs(r - cr) <= 1 && Math.abs(c - cc) <= 1 && !(r === cr && c === cc)) bonus -= 15;
+            }
+            return flips + bonus;
+        };
+        if (diff === "difícil") {
+            // 1-ply lookahead: simulate and pick best worst-case for opponent
+            let best = -Infinity, bestM = moves[0];
+            for (const [r, c] of moves) {
+                const nb = applyMove(b, r, c, 'a');
+                const playerMoves = validMoves(nb, 'p');
+                let worstReply = -Infinity;
+                for (const [pr, pc] of playerMoves) {
+                    const flips = flippedFor(nb, pr, pc, 'p').length;
+                    if (flips > worstReply) worstReply = flips;
+                }
+                const score = scoreMove([r, c]) - (worstReply || 0) * 0.5;
+                if (score > best) { best = score; bestM = [r, c]; }
+            }
+            return bestM;
+        }
+        // medio: just maximize score
+        let best = -Infinity, bestM = moves[0];
+        for (const m of moves) {
+            const s = scoreMove(m);
+            if (s > best) { best = s; bestM = m; }
+        }
+        return bestM;
+    };
+
+    const playerMove = (r, c) => {
+        if (turn !== 'p' || gameOver || thinking) return;
+        const nb = applyMove(board, r, c, 'p');
+        if (!nb) return;
+        sfx.tap();
+        setBoard(nb);
+        // Check if AI has moves
+        const aiMoves = validMoves(nb, 'a');
+        if (aiMoves.length === 0) {
+            // AI passes — check if player has moves still
+            const pMoves = validMoves(nb, 'p');
+            if (pMoves.length === 0) endGame(nb);
+            // else turn stays player
+            return;
+        }
+        setTurn('a'); setThinking(true);
+        setTimeout(() => {
+            const move = aiPickMove(nb);
+            if (!move) { setThinking(false); endGame(nb); return; }
+            const nb2 = applyMove(nb, move[0], move[1], 'a');
+            setBoard(nb2); setThinking(false);
+            // Check if player has moves
+            const pMoves2 = validMoves(nb2, 'p');
+            if (pMoves2.length === 0) {
+                const aMoves2 = validMoves(nb2, 'a');
+                if (aMoves2.length === 0) { endGame(nb2); return; }
+                // Player passes, AI plays again
+                setTurn('a');
+                setTimeout(() => {
+                    const move3 = aiPickMove(nb2);
+                    if (!move3) { endGame(nb2); return; }
+                    const nb3 = applyMove(nb2, move3[0], move3[1], 'a');
+                    setBoard(nb3);
+                    setTurn('p');
+                }, 300);
+            } else {
+                setTurn('p');
+            }
+        }, 350);
+    };
+
+    const endGame = (b) => {
+        setGameOver(true);
+        const { p, a } = countPieces(b);
+        if (p > a) {
+            sfx.success(); setTimeout(() => fireConfetti(true), 200);
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        } else {
+            sfx.fail();
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+        }
+    };
+
+    const counts = countPieces(board);
+    const myMoves = turn === 'p' && !gameOver && !thinking ? validMoves(board, 'p') : [];
+    const isHint = (r, c) => myMoves.some(([mr, mc]) => mr === r && mc === c);
+
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Reversi (Othello)"),
+            !gameOver && React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); reset(); } })),
+        React.createElement(Instructions, null, "Coloca tu ficha de forma que ", React.createElement("strong", null, "captures fichas del rival"), " entre dos tuyas (en cualquier dirección). Las casillas con punto son tus jugadas válidas. Quien tenga más fichas al final, gana. Trabaja visión estratégica y razonamiento espacial."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 } },
+            React.createElement(Badge, { color: C.primary }, "🟢 Tú: ", counts.p),
+            React.createElement(Badge, { color: "#E63946" }, "🔴 IA: ", counts.a),
+            !gameOver && React.createElement(Badge, { color: turn === 'p' ? C.primary : "#E63946" }, turn === 'p' ? "Turno tuyo" : "Turno IA")),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${SZ}, 1fr)`, gap: 3, maxWidth: 360, margin: "0 auto 12px", padding: 8, background: "#2D6A4F", borderRadius: 8 } },
+            board.flatMap((row, r) => row.map((cell, c) => React.createElement("div", {
+                key: `${r}-${c}`, onClick: () => isHint(r, c) && playerMove(r, c),
+                style: {
+                    aspectRatio: "1", borderRadius: 6,
+                    background: isHint(r, c) ? "#52B788" : "#3D8B5F",
+                    cursor: isHint(r, c) ? "pointer" : "default",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s",
+                },
+            },
+                cell === 'p' && React.createElement("div", { style: { width: "75%", aspectRatio: "1", borderRadius: "50%", background: "#fff", boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.3)" } }),
+                cell === 'a' && React.createElement("div", { style: { width: "75%", aspectRatio: "1", borderRadius: "50%", background: "#222", boxShadow: "inset 0 -3px 6px rgba(255,255,255,0.15)" } }),
+                isHint(r, c) && cell === 0 && React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.6)" } }))))),
+        thinking && React.createElement("div", { style: { textAlign: "center", color: C.textL, fontSize: 12, marginBottom: 8 } }, "🤔 IA pensando..."),
+        gameOver && React.createElement(React.Fragment, null,
+            React.createElement(Feedback, { success: counts.p > counts.a, reward: false },
+                counts.p > counts.a ? `¡Has ganado! ${counts.p} vs ${counts.a}` : counts.p < counts.a ? `Esta vez gana la IA: ${counts.a} vs ${counts.p}` : "Empate"),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", marginTop: 10 } },
+                React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Nueva partida"))));
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AREA CONFIGURATION — All activities wired
 // ═══════════════════════════════════════════════════════════════
 const AREAS = [
@@ -24790,6 +25790,9 @@ const AREA_ACTIVITIES = {
         { id: "series", label: "Series Lógicas", desc: "Detecta el patrón y completa la serie", comp: SeriesLogicas, complex: true },
         { id: "acertijos", label: "Acertijos Lógicos", desc: "Razonamiento deductivo con IA", comp: AcertijosLogicos, hasAI: true, complex: true },
         { id: "planificacion", label: "Planificación de Tareas", desc: "Ordena los pasos para lograr un objetivo", comp: PlanificacionTareas, hasAI: true, complex: true },
+        { id: "cuatroenraya", label: "4 en raya", desc: "Estrategia y anticipación contra la IA", comp: CuatroEnRaya, complex: true },
+        { id: "buscaminas", label: "Buscaminas", desc: "Razonamiento deductivo bajo incertidumbre", comp: Buscaminas, complex: true },
+        { id: "othello", label: "Reversi (Othello)", desc: "Visión estratégica y captura territorial", comp: OthelloMini, complex: true },
     ],
     autoestima: [
         { id: "pizarra", label: "Pizarra Creativa", desc: "Dibuja y expresa", comp: PizarraDibujo, hasAI: true },
@@ -25039,6 +26042,7 @@ function SessionReport({ patient, onClose }) {
         const lineaList = storeLoad("linea_vida:" + patient.id) || [];
         const gratitudList = storeLoad("gratitud:" + patient.id) || [];
         const worriesList = storeLoad("worries:" + patient.id) || [];
+        const roleplayList = storeLoad("roleplay:" + patient.id) || [];
         const totalAreasUsed = (progress.areas || []).length;
 
         function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -25244,6 +26248,33 @@ function SessionReport({ patient, onClose }) {
                 </div>`;
             }).join("");
 
+        // RolePlay — full conversations with feedback
+        const roleplayHTML = roleplayList.length === 0 ? "" :
+            roleplayList.slice().reverse().slice(0, 8).map(rp => {
+                const dt = new Date(rp.ts).toLocaleDateString("es-ES");
+                const tipoColor = rp.feedback && rp.feedback.tipo === "asertiva" ? "#2D6A4F" : rp.feedback && rp.feedback.tipo === "agresiva" ? "#8B1E26" : "#A0530F";
+                const tipoLabel = rp.feedback && rp.feedback.tipo ? rp.feedback.tipo.charAt(0).toUpperCase() + rp.feedback.tipo.slice(1) : "";
+                const conversationHTML = (rp.messages || []).map(m => {
+                    const isUser = m.role === "user";
+                    return `<div style="display:flex;${isUser ? 'justify-content:flex-end' : 'justify-content:flex-start'};margin-bottom:4pt">
+                        <div style="max-width:78%;padding:5pt 9pt;border-radius:8pt;font-size:9pt;line-height:1.4;background:${isUser ? '#E9F5DC' : '#FFFFFF'};border:0.5pt solid ${isUser ? '#2D6A4F44' : '#dddddd'}">
+                            <div style="font-size:7pt;font-weight:700;color:${isUser ? '#2D6A4F' : '#666'};margin-bottom:2pt;text-transform:uppercase">${isUser ? 'Paciente' : 'Personaje'}</div>
+                            ${esc(m.text)}
+                        </div>
+                    </div>`;
+                }).join("");
+                return `<div style="margin-bottom:14pt;padding:10pt 12pt;background:#FAFAF7;border-radius:6pt;border-left:3pt solid #7B2D8E;page-break-inside:avoid">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6pt;flex-wrap:wrap;gap:4pt">
+                        <div style="font-size:10pt;font-weight:800">${esc(rp.scenarioEmoji || '')} ${esc(rp.scenarioLabel || '')}</div>
+                        <div style="font-size:9pt;color:#666">${dt} · ${rp.turns || rp.messages.filter(m => m.role === 'user').length} turno${(rp.turns || 1) === 1 ? '' : 's'}</div>
+                    </div>
+                    ${rp.feedback ? `<div style="display:inline-block;padding:2pt 8pt;background:${tipoColor}22;border:0.5pt solid ${tipoColor}66;color:${tipoColor};border-radius:8pt;font-size:8pt;font-weight:700;margin-bottom:6pt">${tipoLabel}</div>` : ''}
+                    <div style="background:#fff;padding:6pt;border-radius:4pt;margin-bottom:5pt">${conversationHTML}</div>
+                    ${rp.feedback && rp.feedback.explicacion ? `<div style="font-size:9pt;color:#444;line-height:1.5;padding:5pt 8pt;background:#fff;border-radius:4pt;margin-bottom:4pt"><strong>Análisis:</strong> ${esc(rp.feedback.explicacion)}</div>` : ''}
+                    ${rp.feedback && rp.feedback.alternativa && rp.feedback.tipo !== 'asertiva' ? `<div style="font-size:9pt;color:#444;line-height:1.5;padding:5pt 8pt;background:#FFFEF5;border-radius:4pt;font-style:italic"><strong>Alternativa más asertiva:</strong> "${esc(rp.feedback.alternativa)}"</div>` : ''}
+                </div>`;
+            }).join("");
+
         const startDate = patient.created ? new Date(patient.created) : null;
         const sessionsCount = sessions.length;
         const firstSessionDate = sessions.length > 0 ? new Date(Math.min(...sessions.map(s => s.ts))) : null;
@@ -25352,6 +26383,25 @@ ${gratitudList.length > 0 ? `
   }).join("")}
 </div>` : ''}
 
+${roleplayList.length > 0 ? (() => {
+    const asertCount = roleplayList.filter(rp => rp.feedback && rp.feedback.tipo === "asertiva").length;
+    const pasivCount = roleplayList.filter(rp => rp.feedback && rp.feedback.tipo === "pasiva").length;
+    const agresCount = roleplayList.filter(rp => rp.feedback && rp.feedback.tipo === "agresiva").length;
+    const total = roleplayList.length;
+    const dominant = asertCount >= pasivCount && asertCount >= agresCount ? "asertiva" :
+                     pasivCount >= agresCount ? "pasiva" : "agresiva";
+    const summary = dominant === "asertiva" ?
+        `Sus respuestas tienden a ser asertivas, lo que significa que está aprendiendo a defender sus intereses respetando a los demás.` :
+        dominant === "pasiva" ?
+        `Trabajamos sobre cómo defender sus propios intereses sin sentirse mal por ello. A veces le cuesta poner límites o decir lo que quiere.` :
+        `Estamos practicando cómo expresar lo que siente sin que la otra persona se sienta atacada. A veces reacciona con más fuerza de la que necesita.`;
+    return `<div class="print-section print-avoid-break">
+  <div class="print-section-title">Habilidades sociales (role-play)</div>
+  <div style="font-size:9.5pt;color:#444;margin-bottom:6pt;line-height:1.5">Hemos practicado ${total} situación${total === 1 ? '' : 'es'} de la vida real (decir que no, pedir ayuda, lidiar con compañeros difíciles, presión de grupo...). Estas situaciones son seguras porque ocurren en sesión, pero entrenan las mismas habilidades que necesita en el día a día.</div>
+  <div style="font-size:9.5pt;color:#444;line-height:1.6">${esc(summary)}</div>
+</div>`;
+})() : ''}
+
 <div class="print-section print-avoid-break">
   <div class="print-section-title">Cómo podéis apoyar desde casa</div>
   <ul style="font-size:10.5pt;line-height:1.7;color:#333;margin:0 0 0 18pt;padding:0">
@@ -25373,7 +26423,7 @@ ${gratitudList.length > 0 ? `
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v18.1</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v18.5</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -25462,6 +26512,13 @@ ${logrosHTML ? `
   ${logrosHTML}
 </div>` : ''}
 
+${roleplayHTML ? `
+<div class="print-section">
+  <div class="print-section-title">Role-Play Conversacional · Habilidades sociales</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Conversaciones de role-play registradas (${roleplayList.length} sesion${roleplayList.length === 1 ? '' : 'es'}). Se muestran las ${Math.min(8, roleplayList.length)} más recientes con análisis de asertividad.</div>
+  ${roleplayHTML}
+</div>` : ''}
+
 ${cartasHTML ? `
 <div class="print-section">
   <div class="print-section-title">Cartas escritas a sí mismo/a</div>
@@ -25484,7 +26541,7 @@ ${lineaHTML ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v18.1</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v18.5</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -26398,7 +27455,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v18.1"),
+                "© 2026 Todos los derechos reservados · TerapiApp v18.5"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
@@ -26738,8 +27795,17 @@ function SessionPlanner({ onClose, onLaunch, patient }) {
     };
     const reset = () => { setSelected(null); setActiveStep(0); setRunning(false); setCompleted([]); };
 
-    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 } },
-        React.createElement("div", { style: { background: C.card, borderRadius: 20, padding: 22, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto" } },
+    return React.createElement("div", {
+        style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 },
+        onClick: (e) => { if (e.target === e.currentTarget) onClose(); }
+    },
+        React.createElement("div", { style: { background: C.card, borderRadius: 20, padding: 22, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto", position: "relative" } },
+            React.createElement("button", { onClick: onClose, style: {
+                position: "absolute", top: 12, right: 12, width: 32, height: 32, borderRadius: "50%",
+                border: "none", background: C.border, color: C.text, fontSize: 16, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 2,
+            }, title: "Cerrar" }, "✕"),
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
                 React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, "📋 Plantillas de sesión"),
                 React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar")),
@@ -26783,7 +27849,9 @@ function SessionPlanner({ onClose, onLaunch, patient }) {
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, tpl.emoji, " ", tpl.name),
                         React.createElement("div", { style: { fontSize: 11, color: C.textL } }, "Paso ", activeStep + 1, " de ", tpl.steps.length, " · ", completed.length, " completado", completed.length === 1 ? "" : "s")),
-                    React.createElement(Btn, { color: C.textL, onClick: reset, small: true, outline: true }, "← Plantillas")),
+                    React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                        React.createElement(Btn, { color: C.textL, onClick: reset, small: true, outline: true }, "← Plantillas"),
+                        React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
                 // Progress
                 React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 14 } },
                     tpl.steps.map((_, i) => React.createElement("div", { key: i, style: {
