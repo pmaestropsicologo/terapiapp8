@@ -20816,12 +20816,15 @@ function CompletaFrase({ patient }) {
         { text: "Los ___ nadan en el mar", options: ["gatos", "peces", "pájaros"], answer: "peces" },
     ];
     const [sent, setSent] = useState(null);
+    const [shuffledOpts, setShuffledOpts] = useState([]);
     const [sel, setSel] = useState(null);
     const [loading, setLoading] = useState(false);
     const [source, setSource] = useState("local");
+    // Setting `sent` and the shuffled options together guarantees the option
+    // order is fixed for the whole sentence — clicking one no longer reorders the rest.
+    const applySentence = (s) => { setSent(s); setShuffledOpts(shuffle([...s.options])); setSel(null); };
     const genLocal = useCallback(() => {
-        setSent(FALLBACK[randInt(0, FALLBACK.length - 1)]);
-        setSel(null);
+        applySentence(FALLBACK[randInt(0, FALLBACK.length - 1)]);
         setSource("local");
     }, []);
     const genAI = useCallback(async () => {
@@ -20850,8 +20853,7 @@ La respuesta debe ser obvia por contexto.`;
             return;
         }
         if (result && result.text && Array.isArray(result.options) && result.options.includes(result.answer)) {
-            setSent(result);
-            setSel(null);
+            applySentence(result);
             setSource("ai");
             addToHistory("completa_frase", result.text);
             return;
@@ -20866,7 +20868,7 @@ La respuesta debe ser obvia por contexto.`;
         React.createElement(Instructions, null, "Lee la frase y elige la palabra que falta."),
         loading ? React.createElement(LoadingCard, null) : sent && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: { background: C.warm, borderRadius: 14, padding: 20, textAlign: "center", marginBottom: 16, fontSize: 18, fontWeight: 700, lineHeight: 1.6 } }, sent.text.replace("___", sel || "___")),
-            React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } }, shuffle([...sent.options]).map(opt => {
+            React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } }, shuffledOpts.map(opt => {
                 const right = opt === sent.answer;
                 const fb = sel !== null;
                 return (React.createElement("div", { key: opt, onClick: () => !sel && setSel(opt), style: {
@@ -22638,9 +22640,9 @@ function SopaNumeros({ patient }) {
 // NEW v12: NBack (Memoria) — N-back working memory task
 // ═══════════════════════════════════════════════════════════════
 function NBack({ patient }) {
-    const [n, setN] = useState(2);
-    const [totalRounds, setTotalRounds] = useState(18);
-    const [running, setRunning] = useState(false);
+    const [n, setN] = useState(1);
+    const [totalRounds, setTotalRounds] = useState(12);
+    const [phase, setPhase] = useState("intro"); // intro | playing | done
     const [sequence, setSequence] = useState([]);
     const [current, setCurrent] = useState(null);
     const [round, setRound] = useState(0);
@@ -22648,18 +22650,19 @@ function NBack({ patient }) {
     const [misses, setMisses] = useState(0);
     const [falseAlarms, setFalseAlarms] = useState(0);
     const [responseGiven, setResponseGiven] = useState(false);
-    const [done, setDone] = useState(false);
+    const [flash, setFlash] = useState(null); // "ok" | "no" — immediate feedback
     const positionsRef = useRef([]);
     const positions = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const running = phase === "playing";
     const start = () => {
         positionsRef.current = [];
-        setSequence([]); setRound(0); setHits(0); setMisses(0); setFalseAlarms(0); setDone(false);
-        setRunning(true);
+        setSequence([]); setRound(0); setHits(0); setMisses(0); setFalseAlarms(0);
+        setFlash(null); setResponseGiven(false); setPhase("playing");
     };
     useEffect(() => {
         if (!running) return;
         if (round >= totalRounds) {
-            setRunning(false); setDone(true); setCurrent(null);
+            setPhase("done"); setCurrent(null);
             const total = totalRounds - n;
             const accuracy = total > 0 ? (hits / total) : 0;
             sfx.success();
@@ -22685,51 +22688,91 @@ function NBack({ patient }) {
             positionsRef.current.push(next);
             setCurrent(next);
         }
-        setResponseGiven(false);
+        setResponseGiven(false); setFlash(null);
         sfx.tap();
-        const t = setTimeout(() => { setRound(r => r + 1); }, 2200);
+        const t = setTimeout(() => { setRound(r => r + 1); }, 2600);
         return () => clearTimeout(t);
-    }, [running, round, n, totalRounds]);
+    }, [phase, round, n, totalRounds]);
     const respond = () => {
         if (!running || round < n || responseGiven) return;
         setResponseGiven(true);
         const last = positionsRef.current[positionsRef.current.length - 1];
         const back = positionsRef.current[positionsRef.current.length - 1 - n];
-        if (last === back) { sfx.tap(); setHits(h => h + 1); }
-        else { sfx.fail(); setFalseAlarms(f => f + 1); }
+        if (last === back) { sfx.success(); setHits(h => h + 1); setFlash("ok"); }
+        else { sfx.fail(); setFalseAlarms(f => f + 1); setFlash("no"); }
     };
     const total = totalRounds - n;
     const accuracy = total > 0 ? Math.round((hits / total) * 100) : 0;
+    const nText = n === 1 ? "el cuadrado anterior" : `el cuadrado de hace ${n} turnos`;
+
+    // ── INTRO: explain with a worked visual example ──
+    if (phase === "intro") {
+        // mini grid renderer for the example
+        const miniGrid = (litPos, highlight) => React.createElement("div", { style: {
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2, width: 54, padding: 3,
+            background: "#f0f0f0", borderRadius: 6, border: highlight ? `2px solid ${C.primary}` : "2px solid transparent",
+        } }, positions.map(p => React.createElement("div", { key: p, style: {
+            aspectRatio: "1", borderRadius: 3, background: p === litPos ? C.primary : "#fff",
+        } })));
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Memoria: N-back"),
+            React.createElement(Instructions, { adoChildren: "Tarea de memoria de trabajo. Irá apareciendo un cuadrado en distintas casillas. Pulsa el botón cuando su posición coincida con la de " + nText + "." },
+                "Vamos a entrenar la memoria. Irá saliendo un cuadrado azul cambiando de casilla. Tienes que estar atento y avisar cuando se repita."),
+            React.createElement("div", { style: { padding: 16, background: C.warm, borderRadius: 14, marginBottom: 14 } },
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 8 } }, "Cómo se juega (ejemplo)"),
+                React.createElement("div", { style: { fontSize: 13, lineHeight: 1.6, marginBottom: 10 } },
+                    "Mira cómo el cuadrado va saltando de casilla. Cuando aparezca en ", React.createElement("strong", null, "la misma casilla que ", nText), ", pulsas el botón."),
+                React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", alignItems: "center", flexWrap: "wrap", marginBottom: 8 } },
+                    miniGrid(0, false),
+                    React.createElement("span", { style: { color: C.textL } }, "→"),
+                    miniGrid(4, false),
+                    React.createElement("span", { style: { color: C.textL } }, "→"),
+                    React.createElement("div", { style: { textAlign: "center" } },
+                        miniGrid(4, true),
+                        React.createElement("div", { style: { fontSize: 9, fontWeight: 800, color: C.primary, marginTop: 2 } }, "¡COINCIDE!"))),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, fontStyle: "italic", textAlign: "center" } },
+                    n === 1 ? "El último cuadrado está en la misma casilla que el anterior: ahí pulsas." : `El último cuadrado coincide con el de hace ${n} turnos.`)),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 10, flexWrap: "wrap", alignItems: "center" } },
+                React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL } }, "Nivel:"),
+                [1, 2, 3].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setN(v); }, style: {
+                    padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                    background: n === v ? C.primary : "#fff", color: n === v ? "#fff" : C.text,
+                    border: `2px solid ${n === v ? C.primary : C.border}`, cursor: "pointer", fontFamily: "inherit",
+                } }, v + "-back"))),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginBottom: 10 } },
+                n === 1 ? "1-back es el más sencillo: empieza siempre por aquí." : "Sube de nivel solo cuando el anterior salga bien."),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
+                React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL } }, "Rondas:"),
+                [12, 18, 30].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setTotalRounds(v); }, style: {
+                    padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: totalRounds === v ? C.accent : "#fff", color: totalRounds === v ? "#fff" : C.text,
+                    border: `2px solid ${totalRounds === v ? C.accent : C.border}`, fontFamily: "inherit",
+                } }, v))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    // ── PLAYING / DONE ──
     return React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, n + "-back"),
-            !running && React.createElement("div", { style: { display: "flex", gap: 6 } },
-                [1, 2, 3].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setN(v); }, style: {
-                    padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-                    background: n === v ? C.primary : "#f5f5f5", color: n === v ? "#fff" : C.text,
-                    border: `2px solid ${n === v ? C.primary : "transparent"}`, cursor: "pointer", fontFamily: "inherit",
-                } }, v + "-back")))),
-        React.createElement(Instructions, null,
-            React.createElement("strong", null, "Memoria de trabajo. "), "Aparecerán cuadrados en distintas posiciones. Pulsa ", React.createElement("strong", null, "¡COINCIDE!"), " si la posición actual es la misma que hace ", React.createElement("strong", null, n), " posiciones."),
-        !running && React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap", alignItems: "center" } },
-            React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginRight: 4 } }, "Rondas:"),
-            [12, 18, 30].map(v => React.createElement("button", { key: v, onClick: () => { sfx.tap(); setTotalRounds(v); }, style: {
-                padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                background: totalRounds === v ? C.accent : "#fff",
-                color: totalRounds === v ? "#fff" : C.text,
-                border: `2px solid ${totalRounds === v ? C.accent : C.border}`, fontFamily: "inherit",
-            } }, v))),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPhase("intro"), small: true, outline: true }, "← Salir")),
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, textAlign: "center", marginBottom: 12, lineHeight: 1.5 } },
+            "Pulsa ", React.createElement("strong", { style: { color: C.accent } }, "¡COINCIDE!"), " cuando el cuadrado esté en la misma casilla que ", React.createElement("strong", null, nText), "."),
         React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
             React.createElement(Badge, { color: C.primary }, "Ronda: ", round, "/", totalRounds),
             React.createElement(Badge, { color: C.blue }, "Aciertos: ", hits),
             React.createElement(Badge, { color: C.error }, "Fallos: ", falseAlarms + misses)),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 280, margin: "0 auto 18px", background: "#f0f0f0", padding: 10, borderRadius: 14 } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 280, margin: "0 auto 14px",
+            background: flash === "ok" ? `${C.success}44` : flash === "no" ? `${C.error}33` : "#f0f0f0",
+            padding: 10, borderRadius: 14, transition: "background 0.2s" } },
             positions.map(p => React.createElement("div", { key: p, style: {
                 aspectRatio: "1", borderRadius: 12,
                 background: current === p && running ? C.primary : "#fff",
                 border: `2px solid ${current === p && running ? C.primary : C.border}`,
                 transition: "all 0.2s",
             } }))),
+        round < n && running && React.createElement("div", { style: { fontSize: 12, color: C.textL, textAlign: "center", marginBottom: 10, fontStyle: "italic" } },
+            n === 1 ? "Observa el primer cuadrado..." : `Observa los primeros ${n} cuadrados...`),
         running ? React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
             React.createElement("button", { onClick: respond, disabled: round < n || responseGiven, style: {
                 background: round < n || responseGiven ? "#ccc" : `linear-gradient(135deg, ${C.accent}, ${C.accentL})`,
@@ -22739,8 +22782,9 @@ function NBack({ patient }) {
                 fontFamily: "inherit", minWidth: 200,
             } }, "¡COINCIDE!")) :
             React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center" } },
-                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, done ? "↻ Otra ronda" : "▶ Empezar")),
-        done && React.createElement(Feedback, { success: accuracy >= 60 }, "Precisión: " + accuracy + "% · " + hits + " aciertos, " + misses + " omisiones, " + falseAlarms + " falsas alarmas"));
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"),
+                React.createElement(Btn, { color: C.textL, onClick: () => setPhase("intro"), small: true, outline: true }, "Cambiar nivel")),
+        phase === "done" && React.createElement(Feedback, { success: accuracy >= 60 }, "Precisión: " + accuracy + "% · " + hits + " aciertos, " + misses + " omisiones, " + falseAlarms + " falsas alarmas"));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -24096,12 +24140,15 @@ Formato JSON:
 function CaraNombre({ patient }) {
     const NOMBRES_M = ["Ana", "Lucía", "Marta", "Sofía", "Elena", "Carla", "Paula", "Olivia", "Nora", "Julia", "Inés", "Daniela"];
     const NOMBRES_H = ["Mateo", "Hugo", "Leo", "Pablo", "Diego", "Adrián", "Bruno", "Daniel", "Iván", "Marcos", "Óscar", "Tomás"];
-    const HAIR_COLORS = ["#1D3557", "#8B4513", "#D4A574", "#E5C065", "#5C3317", "#2D2D2D"];
-    const SKIN_COLORS = ["#F4D5B0", "#E8B585", "#D89968", "#A86E2F", "#6F3F1A"];
-    const SHIRT_COLORS = ["#E63946", "#457B9D", "#2D6A4F", "#7B2D8E", "#E9C46A", "#F4A261", "#5B7C99"];
+    // Richer feature palette so each face is clearly distinguishable —
+    // the whole point of a face-name memory task.
+    const HAIR_COLORS = ["#1D2D3D", "#3D2A1A", "#6B4423", "#A8825C", "#D4A574", "#E5C065", "#7A1F1F", "#888888"];
+    const SKIN_COLORS = ["#FBE0C4", "#F1C295", "#D89968", "#B07A4A", "#8A5430", "#5F3819"];
+    const SHIRT_COLORS = ["#E63946", "#457B9D", "#2D6A4F", "#7B2D8E", "#E9C46A", "#F4A261", "#5B7C99", "#C77FB3", "#1D7FB8"];
+    const EYE_COLORS = ["#3D2A1A", "#1D3557", "#2D6A4F", "#5C3317", "#4A4A4A"];
 
     const [diff, setDiff] = useState("medio");
-    const [phase, setPhase] = useState("idle"); // idle | study | quiz | done
+    const [phase, setPhase] = useState("idle");
     const [people, setPeople] = useState([]);
     const [studyIdx, setStudyIdx] = useState(0);
     const [quizIdx, setQuizIdx] = useState(0);
@@ -24109,30 +24156,87 @@ function CaraNombre({ patient }) {
     const [feedback, setFeedback] = useState(null);
     const config = { "fácil": { count: 4, study: 4 }, "medio": { count: 6, study: 3 }, "difícil": { count: 8, study: 2.5 } }[diff];
 
-    const Face = ({ p, size = 100 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 100 100" },
-        React.createElement("circle", { cx: 50, cy: 50, r: 48, fill: p.skin }),
-        // Hair
-        p.gender === "f" ? React.createElement("path", { d: "M 18 50 Q 18 12 50 12 Q 82 12 82 50 Q 78 35 64 30 Q 50 25 36 30 Q 22 35 18 50 Z M 18 50 L 18 72 M 82 50 L 82 72", fill: p.hair }) :
-            React.createElement("path", { d: "M 22 38 Q 22 18 50 18 Q 78 18 78 38 Q 76 32 50 28 Q 24 32 22 38 Z", fill: p.hair }),
-        // Eyes
-        React.createElement("ellipse", { cx: 38, cy: 48, rx: 3, ry: 4, fill: "#1D3557" }),
-        React.createElement("ellipse", { cx: 62, cy: 48, rx: 3, ry: 4, fill: "#1D3557" }),
-        React.createElement("circle", { cx: 39, cy: 47, r: 1, fill: "#fff" }),
-        React.createElement("circle", { cx: 63, cy: 47, r: 1, fill: "#fff" }),
-        // Eyebrows
-        React.createElement("path", { d: `M 33 41 Q 38 ${39 + p.eyebrow} 43 41`, stroke: p.hair, strokeWidth: 2.2, fill: "none", strokeLinecap: "round" }),
-        React.createElement("path", { d: `M 57 41 Q 62 ${39 + p.eyebrow} 67 41`, stroke: p.hair, strokeWidth: 2.2, fill: "none", strokeLinecap: "round" }),
-        // Nose
-        React.createElement("path", { d: "M 50 52 L 48 58 L 52 58", stroke: "#000", strokeWidth: 1, fill: "none", strokeLinecap: "round", opacity: 0.4 }),
-        // Mouth
-        React.createElement("path", { d: p.smile ? "M 42 68 Q 50 74 58 68" : "M 42 70 Q 50 68 58 70", stroke: "#1D3557", strokeWidth: 2.2, fill: "none", strokeLinecap: "round" }),
-        // Glasses
-        p.glasses && React.createElement(React.Fragment, null,
-            React.createElement("circle", { cx: 38, cy: 48, r: 7, fill: "none", stroke: "#1D3557", strokeWidth: 1.6 }),
-            React.createElement("circle", { cx: 62, cy: 48, r: 7, fill: "none", stroke: "#1D3557", strokeWidth: 1.6 }),
-            React.createElement("line", { x1: 45, y1: 48, x2: 55, y2: 48, stroke: "#1D3557", strokeWidth: 1.6 })),
-        // Shirt collar
-        React.createElement("path", { d: "M 18 95 Q 25 80 50 80 Q 75 80 82 95 Z", fill: p.shirt }));
+    // ── Hair styles (SVG paths). Each style gives a clearly different silhouette. ──
+    const HAIR_F = [
+        // Long loose hair
+        "M 16 48 Q 16 14 50 12 Q 84 14 84 48 L 86 88 Q 82 78 76 70 L 76 50 Q 64 28 50 28 Q 36 28 24 50 L 24 70 Q 18 78 14 88 Z",
+        // Bob cut
+        "M 18 52 Q 18 14 50 12 Q 82 14 82 52 L 84 62 Q 72 56 50 56 Q 28 56 16 62 Z",
+        // Ponytail (side)
+        "M 20 46 Q 20 14 50 12 Q 80 14 80 46 Q 72 28 50 26 Q 30 28 22 42 Z M 78 42 Q 92 48 90 70 Q 88 80 84 84 L 78 80 Q 82 70 80 56 Z",
+        // Pigtails
+        "M 18 46 Q 18 14 50 12 Q 82 14 82 46 Q 70 28 50 26 Q 30 28 18 46 Z M 12 50 Q 6 64 10 80 Q 14 84 18 82 L 22 70 Q 22 60 22 50 Z M 88 50 L 78 50 Q 78 60 78 70 L 82 82 Q 86 84 90 80 Q 94 64 88 50 Z",
+        // Curly long
+        "M 14 50 Q 12 14 50 10 Q 88 14 86 50 Q 90 70 84 86 Q 78 78 76 70 Q 74 50 64 38 Q 50 30 36 38 Q 26 50 24 70 Q 22 78 16 86 Q 10 70 14 50 Z",
+    ];
+    const HAIR_M = [
+        // Short neat
+        "M 22 40 Q 22 16 50 16 Q 78 16 78 40 Q 72 32 50 30 Q 28 32 22 40 Z",
+        // Spiky
+        "M 24 40 Q 26 18 32 22 L 36 14 L 42 20 L 50 12 L 58 20 L 64 14 L 68 22 Q 74 18 76 40 Q 68 32 50 30 Q 32 32 24 40 Z",
+        // Side parting with fringe
+        "M 22 42 Q 22 14 50 14 Q 78 14 78 42 Q 72 24 60 22 Q 50 26 38 32 Q 32 30 28 36 Q 24 38 22 42 Z",
+        // Curly short
+        "M 20 42 Q 18 22 26 18 Q 30 14 36 18 Q 44 12 50 16 Q 56 12 64 18 Q 70 14 74 18 Q 82 22 80 42 Q 72 32 50 30 Q 28 32 20 42 Z",
+        // Buzz cut / very short
+        "M 24 40 Q 26 22 50 22 Q 74 22 76 40 Q 70 36 50 36 Q 30 36 24 40 Z",
+    ];
+
+    const Face = ({ p, size = 110 }) => {
+        const hairPath = (p.gender === "f" ? HAIR_F : HAIR_M)[p.hairStyle];
+        const eyeRy = p.eyeShape === 0 ? 4 : 3;
+        const eyeRx = p.eyeShape === 0 ? 3 : 4;
+        const mouth = p.mouthStyle === 0
+            ? "M 40 68 Q 50 76 60 68" // wide smile
+            : p.mouthStyle === 1
+                ? "M 42 70 Q 50 74 58 70" // soft smile
+                : "M 42 71 L 58 71"; // neutral
+        return React.createElement("svg", { width: size, height: size, viewBox: "0 0 100 100" },
+            React.createElement("defs", null,
+                React.createElement("radialGradient", { id: "skinGrad" + p.id, cx: "50%", cy: "40%", r: "65%" },
+                    React.createElement("stop", { offset: "0%", stopColor: p.skin, stopOpacity: 1 }),
+                    React.createElement("stop", { offset: "100%", stopColor: p.skin, stopOpacity: 0.85 }))),
+            // Neck
+            React.createElement("path", { d: "M 42 80 Q 42 88 36 92 L 64 92 Q 58 88 58 80 Z", fill: p.skin, opacity: 0.95 }),
+            // Face (oval)
+            React.createElement("ellipse", { cx: 50, cy: 50, rx: p.faceShape === 0 ? 32 : 30, ry: p.faceShape === 0 ? 36 : 38, fill: "url(#skinGrad" + p.id + ")" }),
+            // Soft cheek blush (subtle)
+            React.createElement("ellipse", { cx: 32, cy: 62, rx: 4, ry: 2.5, fill: "#E89090", opacity: 0.25 }),
+            React.createElement("ellipse", { cx: 68, cy: 62, rx: 4, ry: 2.5, fill: "#E89090", opacity: 0.25 }),
+            // Hair
+            React.createElement("path", { d: hairPath, fill: p.hair }),
+            // Eyes — sclera, iris, pupil, highlight
+            React.createElement("ellipse", { cx: 38, cy: 50, rx: eyeRx + 1.2, ry: eyeRy + 0.6, fill: "#fff" }),
+            React.createElement("ellipse", { cx: 62, cy: 50, rx: eyeRx + 1.2, ry: eyeRy + 0.6, fill: "#fff" }),
+            React.createElement("ellipse", { cx: 38, cy: 50, rx: eyeRx - 0.5, ry: eyeRy, fill: p.eyeColor }),
+            React.createElement("ellipse", { cx: 62, cy: 50, rx: eyeRx - 0.5, ry: eyeRy, fill: p.eyeColor }),
+            React.createElement("circle", { cx: 38, cy: 50, r: 1.2, fill: "#000" }),
+            React.createElement("circle", { cx: 62, cy: 50, r: 1.2, fill: "#000" }),
+            React.createElement("circle", { cx: 39, cy: 49, r: 0.7, fill: "#fff" }),
+            React.createElement("circle", { cx: 63, cy: 49, r: 0.7, fill: "#fff" }),
+            // Eyebrows
+            React.createElement("path", { d: `M 31 ${42 + p.eyebrow} Q 38 ${40 + p.eyebrow} 45 ${42 + p.eyebrow}`, stroke: p.hair, strokeWidth: 2.4, fill: "none", strokeLinecap: "round" }),
+            React.createElement("path", { d: `M 55 ${42 + p.eyebrow} Q 62 ${40 + p.eyebrow} 69 ${42 + p.eyebrow}`, stroke: p.hair, strokeWidth: 2.4, fill: "none", strokeLinecap: "round" }),
+            // Nose
+            React.createElement("path", { d: "M 50 54 Q 48 60 47 62 Q 50 64 53 62 Q 52 60 50 54", stroke: "#000", strokeWidth: 0.8, fill: "none", opacity: 0.35 }),
+            // Mouth
+            React.createElement("path", { d: mouth, stroke: "#5A2828", strokeWidth: 2.2, fill: "none", strokeLinecap: "round" }),
+            // Freckles
+            p.freckles && [
+                [40, 58], [44, 60], [56, 60], [60, 58], [48, 59], [52, 59],
+            ].map(([x, y], i) => React.createElement("circle", { key: i, cx: x, cy: y, r: 0.7, fill: "#8B5430", opacity: 0.5 })),
+            // Glasses
+            p.glasses && React.createElement(React.Fragment, null,
+                React.createElement("circle", { cx: 38, cy: 50, r: 8, fill: "none", stroke: "#1D2D3D", strokeWidth: 1.6 }),
+                React.createElement("circle", { cx: 62, cy: 50, r: 8, fill: "none", stroke: "#1D2D3D", strokeWidth: 1.6 }),
+                React.createElement("line", { x1: 46, y1: 50, x2: 54, y2: 50, stroke: "#1D2D3D", strokeWidth: 1.6 })),
+            // Earring (small dot near jaw)
+            p.earring && React.createElement(React.Fragment, null,
+                React.createElement("circle", { cx: 21, cy: 64, r: 1.6, fill: "#E9C46A" }),
+                React.createElement("circle", { cx: 79, cy: 64, r: 1.6, fill: "#E9C46A" })),
+            // Shirt
+            React.createElement("path", { d: "M 14 100 Q 24 80 36 92 Q 42 96 50 96 Q 58 96 64 92 Q 76 80 86 100 Z", fill: p.shirt }));
+    };
 
     const generate = () => {
         const list = [];
@@ -24143,13 +24247,20 @@ function CaraNombre({ patient }) {
             const available = namePool.filter(n => !usedNames.includes(n));
             const name = available[randInt(0, available.length - 1)];
             list.push({
+                id: "p" + i,
                 name, gender,
                 hair: HAIR_COLORS[randInt(0, HAIR_COLORS.length - 1)],
                 skin: SKIN_COLORS[randInt(0, SKIN_COLORS.length - 1)],
                 shirt: SHIRT_COLORS[randInt(0, SHIRT_COLORS.length - 1)],
-                glasses: Math.random() < 0.35,
-                smile: Math.random() < 0.6,
-                eyebrow: randInt(-2, 4),
+                eyeColor: EYE_COLORS[randInt(0, EYE_COLORS.length - 1)],
+                hairStyle: randInt(0, (gender === "f" ? HAIR_F.length : HAIR_M.length) - 1),
+                eyeShape: randInt(0, 1),
+                mouthStyle: randInt(0, 2),
+                faceShape: randInt(0, 1),
+                glasses: Math.random() < 0.3,
+                freckles: Math.random() < 0.25,
+                earring: gender === "f" && Math.random() < 0.4,
+                eyebrow: randInt(-1, 3),
             });
         }
         return list;
@@ -24360,11 +24471,26 @@ function TablasMultiplicar({ patient }) {
     const [questionStart, setQuestionStart] = useState(null);
 
     const generate = (n) => {
+        // Build the pool of all unique (a,b) combinations and consume them shuffled.
+        // This way the same multiplication doesn't repeat until the pool is exhausted —
+        // and never two consecutively.
+        const pool = [];
+        if (tabla !== null) {
+            for (let b = 1; b <= 10; b++) pool.push({ a: tabla, b, result: tabla * b });
+        } else {
+            for (let a = 2; a <= 9; a++) for (let b = 1; b <= 10; b++) pool.push({ a, b, result: a * b });
+        }
         const list = [];
-        for (let i = 0; i < n; i++) {
-            const a = tabla !== null ? tabla : randInt(2, 9);
-            const b = randInt(1, 10);
-            list.push({ a, b, result: a * b });
+        while (list.length < n) {
+            const batch = shuffle(pool.slice());
+            // Avoid the seam case where the first of the new batch equals the last of the list
+            if (list.length > 0 && batch[0].a === list[list.length - 1].a && batch[0].b === list[list.length - 1].b && batch.length > 1) {
+                [batch[0], batch[1]] = [batch[1], batch[0]];
+            }
+            for (const op of batch) {
+                if (list.length >= n) break;
+                list.push(op);
+            }
         }
         return list;
     };
@@ -26033,6 +26159,7 @@ const AREAS = [
     { id: "emocional", label: "Reg. Emocional", color: C.primary, desc: "Identificación y regulación", illo: "corazon" },
     { id: "social", label: "Hab. Sociales", color: C.purple, desc: "Empatía y resolución", illo: "casa" },
     { id: "lectoescritura", label: "Lectoescritura", color: C.yellow, desc: "Lectura y escritura", illo: "libro" },
+    { id: "dislexia", label: "Dislexia", color: "#E07A5F", desc: "Discriminación de letras, conciencia fonémica y ortografía", illo: "libro" },
     { id: "instrumentales", label: "Instrumentales", color: "#A8DADC", desc: "Caligrafía, dislexia, cálculo", illo: "libro" },
     { id: "razonamiento", label: "Razonamiento", color: "#5A4FCF", desc: "Lógica y planificación", illo: "libro" },
     { id: "autoestima", label: "Autoestima", color: C.accentL, desc: "Fortalezas y logros", illo: "sol" },
@@ -26387,6 +26514,881 @@ Formato JSON:
                     React.createElement("strong", null, "💡 Otra forma de decirlo: "), "\"", aiFeedback.sugerencia, "\"")),
             React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
                 React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Investigar otro pensamiento"))));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Letras Espejo (discriminación de grafemas confundibles)
+// b/d/p/q reversal discrimination — a core difficulty in dyslexia.
+// ═══════════════════════════════════════════════════════════════
+// ── Shared training-mode helpers for dyslexia practice ──
+// A target selector (Libre / 10 / 20 / 30 items) and a results summary panel,
+// so dyslexia exercises can be used as routine practice sets.
+const TRAIN_TARGETS = [{ v: null, l: "Libre" }, { v: 10, l: "10" }, { v: 20, l: "20" }, { v: 30, l: "30" }];
+function TrainTargetSelect({ value, onChange }) {
+    return React.createElement("div", { style: { display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", justifyContent: "center" } },
+        React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL } }, "Ronda de práctica:"),
+        TRAIN_TARGETS.map(t => React.createElement("button", { key: String(t.v), onClick: () => onChange(t.v), style: {
+            padding: "5px 12px", borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: "pointer",
+            background: value === t.v ? C.primary : "#fff", color: value === t.v ? "#fff" : C.text,
+            border: `2px solid ${value === t.v ? C.primary : C.border}`, fontFamily: "inherit",
+        } }, t.l)));
+}
+function EntrenamientoResumen({ correct, total, elapsedSec, onRepeat, onConfig, extra }) {
+    const acc = total > 0 ? Math.round(correct / total * 100) : 0;
+    const accColor = acc >= 80 ? C.primary : acc >= 60 ? "#A0530F" : "#E63946";
+    return React.createElement("div", { style: { padding: 18, background: `linear-gradient(135deg, ${C.primary}11, ${C.accent}11)`, borderRadius: 14, border: `2px solid ${C.primary}55` } },
+        React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 12, color: C.primary, textAlign: "center" } },
+            "🎯 Ronda completada · ", total, " ítems"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginBottom: 12 } },
+            React.createElement("div", { style: { padding: 10, background: "#fff", borderRadius: 10, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: accColor } }, correct, "/", total),
+                React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Aciertos")),
+            React.createElement("div", { style: { padding: 10, background: "#fff", borderRadius: 10, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: accColor } }, acc, "%"),
+                React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Precisión")),
+            elapsedSec != null && React.createElement("div", { style: { padding: 10, background: "#fff", borderRadius: 10, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, color: C.text } }, elapsedSec, "s"),
+                React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Tiempo")),
+            extra),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.primary, onClick: onRepeat, small: true }, "↻ Otra ronda"),
+            React.createElement(Btn, { color: C.textL, onClick: onConfig, small: true, outline: true }, "Cambiar configuración")));
+}
+
+function LetrasEspejo({ patient }) {
+    // Groups of visually confusable letters
+    const CONFUSABLES = {
+        b: ["b", "d", "p", "q"],
+        d: ["d", "b", "p", "q"],
+        p: ["p", "q", "b", "d"],
+        q: ["q", "p", "d", "b"],
+        n: ["n", "u", "m", "h"],
+        u: ["u", "n", "v", "w"],
+        m: ["m", "n", "w", "u"],
+        s: ["s", "z", "c", "e"],
+    };
+    const TARGETS = Object.keys(CONFUSABLES);
+    const [diff, setDiff] = useState("medio");
+    const [round, setRound] = useState(null);
+    const [found, setFound] = useState([]);
+    const [errors, setErrors] = useState([]);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+
+    const gen = useCallback(() => {
+        const target = TARGETS[randInt(0, TARGETS.length - 1)];
+        const confs = CONFUSABLES[target];
+        const gridSize = diff === "fácil" ? 12 : diff === "medio" ? 20 : 30;
+        const targetCount = Math.max(3, Math.round(gridSize * (diff === "difícil" ? 0.3 : 0.35)));
+        const cells = [];
+        for (let i = 0; i < targetCount; i++) cells.push(target);
+        for (let i = targetCount; i < gridSize; i++) cells.push(confs[randInt(1, confs.length - 1)]);
+        setRound({ target, cells: shuffle(cells), targetCount });
+        setFound([]); setErrors([]);
+    }, [diff]);
+    useEffect(() => { gen(); }, [gen]);
+
+    const tap = (i) => {
+        if (!round || found.includes(i) || errors.includes(i)) return;
+        if (round.cells[i] === round.target) {
+            sfx.tap();
+            const nf = [...found, i];
+            setFound(nf);
+            if (nf.length === round.targetCount) {
+                const clean = errors.length === 0;
+                setScore(s => ({ correct: s.correct + (clean ? 1 : 0), total: s.total + 1 }));
+                if (_activePatientId) { addStar(_activePatientId, _activeAreaId, clean); logCurrentResult(true); }
+                setTimeout(() => gen(), 1100);
+            }
+        } else {
+            sfx.fail();
+            setErrors(e => [...e, i]);
+            if (_activePatientId) breakStreak(_activePatientId);
+        }
+    };
+
+    if (!round) return React.createElement(LoadingCard, null);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Letras Espejo"),
+            React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
+        React.createElement(Instructions, { adoChildren: "Algunas letras se parecen mucho y es fácil confundirlas. Localiza y toca todas las que sean iguales a la letra modelo." },
+            "Hay letras que se parecen mucho, como la b y la d. Busca y toca todas las letras iguales a la de arriba. ¡Fíjate bien en hacia dónde mira la letra!"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+            React.createElement(Badge, { color: C.primary }, "Encontradas: ", found.length, "/", round.targetCount),
+            errors.length > 0 && React.createElement(Badge, { color: C.error }, "Fallos: ", errors.length),
+            React.createElement(Badge, { color: C.blue }, "Rondas: ", score.correct, "/", score.total)),
+        React.createElement("div", { style: { textAlign: "center", marginBottom: 14 } },
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL } }, "Busca esta letra:"),
+            React.createElement("div", { style: { fontSize: 56, fontWeight: 900, color: C.primary, fontFamily: "Georgia, serif" } }, round.target)),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${diff === "fácil" ? 4 : diff === "medio" ? 5 : 6}, 1fr)`, gap: 6, maxWidth: 420, margin: "0 auto" } },
+            round.cells.map((c, i) => {
+                const isFound = found.includes(i);
+                const isError = errors.includes(i);
+                return React.createElement("button", { key: i, onClick: () => tap(i), disabled: isFound, style: {
+                    aspectRatio: "1", borderRadius: 10, fontSize: 26, fontWeight: 800, cursor: "pointer",
+                    fontFamily: "Georgia, serif",
+                    background: isFound ? C.success : isError ? "#FFD9D9" : "#fff",
+                    color: isFound ? "#fff" : isError ? "#E63946" : C.text,
+                    border: `2px solid ${isFound ? C.primary : isError ? "#E63946" : C.border}`,
+                    transition: "all 0.12s",
+                } }, c);
+            })));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Cazador de Sonidos (conciencia fonémica)
+// Phoneme isolation & deletion — central to dyslexia intervention.
+// ═══════════════════════════════════════════════════════════════
+function CazadorSonidos({ patient }) {
+    // Curated words with their initial phoneme/letter
+    const WORDS = [
+        { w: "sol", ini: "s", sinIni: "ol" }, { w: "luna", ini: "l", sinIni: "una" },
+        { w: "mesa", ini: "m", sinIni: "esa" }, { w: "rosa", ini: "r", sinIni: "osa" },
+        { w: "gato", ini: "g", sinIni: "ato" }, { w: "pato", ini: "p", sinIni: "ato" },
+        { w: "dedo", ini: "d", sinIni: "edo" }, { w: "foca", ini: "f", sinIni: "oca" },
+        { w: "casa", ini: "c", sinIni: "asa" }, { w: "nube", ini: "n", sinIni: "ube" },
+        { w: "taza", ini: "t", sinIni: "aza" }, { w: "vela", ini: "v", sinIni: "ela" },
+        { w: "lobo", ini: "l", sinIni: "obo" }, { w: "mano", ini: "m", sinIni: "ano" },
+        { w: "rana", ini: "r", sinIni: "ana" }, { w: "sopa", ini: "s", sinIni: "opa" },
+        { w: "pera", ini: "p", sinIni: "era" }, { w: "dado", ini: "d", sinIni: "ado" },
+    ];
+    const LETTERS = ["s", "l", "m", "r", "g", "p", "d", "f", "c", "n", "t", "v"];
+    const [mode, setMode] = useState("inicial"); // inicial | omision
+    const [target, setTarget] = useState(null); // null = libre, or 10/20/30
+    const [phase, setPhase] = useState("idle"); // idle | playing | done
+    const [round, setRound] = useState(null);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const [startTime, setStartTime] = useState(null);
+
+    const makeRound = () => {
+        const word = WORDS[randInt(0, WORDS.length - 1)];
+        if (mode === "inicial") {
+            const distractors = shuffle(LETTERS.filter(l => l !== word.ini)).slice(0, 3);
+            return { type: "inicial", word, options: shuffle([word.ini, ...distractors]), answer: word.ini };
+        }
+        const distractors = shuffle(WORDS.filter(x => x.sinIni !== word.sinIni).map(x => x.sinIni)).slice(0, 3);
+        return { type: "omision", word, options: shuffle([word.sinIni, ...distractors]), answer: word.sinIni };
+    };
+    const start = () => {
+        setScore({ correct: 0, total: 0 }); setStartTime(Date.now());
+        setRound(makeRound()); setSel(null); setPhase("playing");
+    };
+
+    const choose = (opt) => {
+        if (sel) return;
+        setSel(opt);
+        const correct = opt === round.answer;
+        const newScore = { correct: score.correct + (correct ? 1 : 0), total: score.total + 1 };
+        setScore(newScore);
+        if (correct) {
+            sfx.success();
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        } else {
+            sfx.fail();
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+        }
+        setTimeout(() => {
+            if (target && newScore.total >= target) { setPhase("done"); return; }
+            setRound(makeRound()); setSel(null);
+        }, 1400);
+    };
+
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Cazador de Sonidos"),
+            React.createElement(Instructions, { adoChildren: "Trabaja la conciencia fonémica: identifica el sonido inicial de cada palabra o quítale el primer sonido." },
+                "Vamos a cazar sonidos dentro de las palabras. Elige el modo y cuántos ítems quieres practicar."),
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 6, textAlign: "center" } }, "Modo:"),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+                [{ id: "inicial", l: "Sonido inicial" }, { id: "omision", l: "Quitar sonido" }].map(m =>
+                    React.createElement("button", { key: m.id, onClick: () => { sfx.tap(); setMode(m.id); }, style: {
+                        padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        background: mode === m.id ? C.primary : "#fff", color: mode === m.id ? "#fff" : C.text,
+                        border: `2px solid ${mode === m.id ? C.primary : C.border}`, fontFamily: "inherit",
+                    } }, m.l))),
+            React.createElement("div", { style: { marginBottom: 16 } },
+                React.createElement(TrainTargetSelect, { value: target, onChange: (v) => { sfx.tap(); setTarget(v); } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    if (phase === "done") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 14 } }, "Cazador de Sonidos"),
+            React.createElement(EntrenamientoResumen, {
+                correct: score.correct, total: score.total,
+                elapsedSec: startTime ? Math.round((Date.now() - startTime) / 1000) : null,
+                onRepeat: start, onConfig: () => setPhase("idle"),
+            }));
+    }
+    if (!round) return React.createElement(LoadingCard, null);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Cazador de Sonidos"),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPhase("idle"), small: true, outline: true }, "← Salir")),
+        React.createElement(Instructions, { adoChildren: mode === "inicial" ? "Identifica el sonido por el que empieza la palabra y selecciónalo." : "Quita mentalmente el primer sonido de la palabra y elige lo que queda." },
+            mode === "inicial"
+                ? "Escucha la palabra en tu cabeza. ¿Por qué sonido empieza? Toca la letra de ese sonido."
+                : "Quita el primer sonido de la palabra. Por ejemplo, MESA sin la /m/ queda ESA. Elige lo que queda."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 } },
+            React.createElement(Badge, { color: C.primary }, "Aciertos: ", score.correct, "/", score.total),
+            target && React.createElement(Badge, { color: C.accent }, "Objetivo: ", target)),
+        React.createElement("div", { style: { textAlign: "center", padding: "22px 16px", background: `${C.yellow}15`, borderRadius: 16, marginBottom: 16 } },
+            mode === "inicial"
+                ? React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.textL, marginBottom: 4 } }, "¿Por qué sonido empieza?"),
+                    React.createElement("div", { style: { fontSize: 40, fontWeight: 900, color: C.text } }, round.word.w))
+                : React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.textL, marginBottom: 4 } }, round.word.w, " — sin el sonido /", round.word.ini, "/"),
+                    React.createElement("div", { style: { fontSize: 40, fontWeight: 900, color: C.text } },
+                        React.createElement("span", { style: { color: "#E63946", textDecoration: "line-through" } }, round.word.ini),
+                        round.word.sinIni, " = ?"))),
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" } },
+            round.options.map(opt => {
+                const isSel = sel === opt;
+                const isAnswer = opt === round.answer;
+                const bg = !sel ? "#fff" : isAnswer ? C.success : (isSel ? C.error : "#fff");
+                return React.createElement("button", { key: opt, onClick: () => choose(opt), disabled: !!sel, style: {
+                    padding: mode === "inicial" ? "14px 22px" : "14px 18px", borderRadius: 14,
+                    fontSize: mode === "inicial" ? 28 : 20, fontWeight: 800, cursor: sel ? "default" : "pointer",
+                    background: bg, color: (sel && (isAnswer || isSel)) ? "#fff" : C.text,
+                    border: `3px solid ${sel && isAnswer ? C.primary : C.border}`, fontFamily: "inherit",
+                    textTransform: mode === "inicial" ? "uppercase" : "none",
+                } }, opt);
+            })),
+        sel && React.createElement(Feedback, { success: sel === round.answer, reward: sel === round.answer },
+            sel === round.answer ? "¡Bien cazado!" : `${round.word.w} → la respuesta es "${round.answer}"`));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Palabra Correcta (detección de errores ortográficos típicos)
+// Curated misspellings reflect typical dyslexic errors: letter reversals,
+// omissions, rotations. Trains the orthographic representation.
+// ═══════════════════════════════════════════════════════════════
+function PalabraCorrecta({ patient }) {
+    // Each item: correct word + 3 curated wrong versions (typical dyslexic errors)
+    const BANK = [
+        { ok: "caballo", wrong: ["cabalo", "cabbalo", "cabalio"] },
+        { ok: "pelota", wrong: ["petola", "pelorta", "pleota"] },
+        { ok: "ventana", wrong: ["ventaná", "ventnaa", "betana"] },
+        { ok: "espejo", wrong: ["espjeo", "esbejo", "epsejo"] },
+        { ok: "bufanda", wrong: ["dufanda", "bufnada", "bufabda"] },
+        { ok: "mariposa", wrong: ["maripsoa", "mariposá", "marpiosa"] },
+        { ok: "biblioteca", wrong: ["bibloteca", "didlioteca", "bibilioteca"] },
+        { ok: "puerta", wrong: ["pruerta", "pureta", "querta"] },
+        { ok: "estrella", wrong: ["estrlela", "etsrella", "esrtella"] },
+        { ok: "dibujo", wrong: ["bibujo", "dibjuo", "didujo"] },
+        { ok: "pájaro", wrong: ["pájara", "pjaaro", "pajraro"] },
+        { ok: "guitarra", wrong: ["guitara", "gitarra", "guirtara"] },
+        { ok: "cuaderno", wrong: ["cuanderno", "caderno", "cudaerno"] },
+        { ok: "plátano", wrong: ["plátnao", "pátalo", "plántano"] },
+        { ok: "bicicleta", wrong: ["bicleta", "dicicleta", "biciceta"] },
+    ];
+    const [target, setTarget] = useState(null);
+    const [phase, setPhase] = useState("idle");
+    const [round, setRound] = useState(null);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const [startTime, setStartTime] = useState(null);
+
+    const makeRound = () => {
+        const item = BANK[randInt(0, BANK.length - 1)];
+        const wrongs = shuffle(item.wrong).slice(0, 3);
+        return { ok: item.ok, options: shuffle([item.ok, ...wrongs]) };
+    };
+    const start = () => {
+        setScore({ correct: 0, total: 0 }); setStartTime(Date.now());
+        setRound(makeRound()); setSel(null); setPhase("playing");
+    };
+
+    const choose = (opt) => {
+        if (sel) return;
+        setSel(opt);
+        const correct = opt === round.ok;
+        const newScore = { correct: score.correct + (correct ? 1 : 0), total: score.total + 1 };
+        setScore(newScore);
+        if (correct) {
+            sfx.success();
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        } else {
+            sfx.fail();
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+        }
+        setTimeout(() => {
+            if (target && newScore.total >= target) { setPhase("done"); return; }
+            setRound(makeRound()); setSel(null);
+        }, 1500);
+    };
+
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Palabra Correcta"),
+            React.createElement(Instructions, { adoChildren: "Identifica, entre varias opciones, la palabra escrita correctamente. Elige cuántos ítems quieres practicar." },
+                "En cada ronda verás una palabra escrita de varias formas. Solo una está bien. Elige cuántas quieres practicar."),
+            React.createElement("div", { style: { marginBottom: 16 } },
+                React.createElement(TrainTargetSelect, { value: target, onChange: (v) => { sfx.tap(); setTarget(v); } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    if (phase === "done") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 14 } }, "Palabra Correcta"),
+            React.createElement(EntrenamientoResumen, {
+                correct: score.correct, total: score.total,
+                elapsedSec: startTime ? Math.round((Date.now() - startTime) / 1000) : null,
+                onRepeat: start, onConfig: () => setPhase("idle"),
+            }));
+    }
+    if (!round) return React.createElement(LoadingCard, null);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Palabra Correcta"),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPhase("idle"), small: true, outline: true }, "← Salir")),
+        React.createElement(Instructions, { adoChildren: "Solo una de las opciones está bien escrita. Léelas con atención y selecciona la correcta." },
+            "Una de estas palabras está bien escrita y las demás tienen un error. Léelas con calma y toca la que está bien."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 } },
+            React.createElement(Badge, { color: C.primary }, "Aciertos: ", score.correct, "/", score.total),
+            target && React.createElement(Badge, { color: C.accent }, "Objetivo: ", target)),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxWidth: 340, margin: "0 auto" } },
+            round.options.map(opt => {
+                const isSel = sel === opt;
+                const isAnswer = opt === round.ok;
+                const bg = !sel ? "#fff" : isAnswer ? C.success : (isSel ? C.error : "#fff");
+                return React.createElement("button", { key: opt, onClick: () => choose(opt), disabled: !!sel, style: {
+                    padding: "16px 20px", borderRadius: 14, fontSize: 22, fontWeight: 800,
+                    cursor: sel ? "default" : "pointer", letterSpacing: 1,
+                    background: bg, color: (sel && (isAnswer || isSel)) ? "#fff" : C.text,
+                    border: `3px solid ${sel && isAnswer ? C.primary : C.border}`, fontFamily: "inherit",
+                } }, opt);
+            })),
+        sel && React.createElement("div", { style: { marginTop: 14 } },
+            React.createElement(Feedback, { success: sel === round.ok, reward: sel === round.ok },
+                sel === round.ok ? "¡Correcto! Bien escrita." : `La palabra bien escrita es "${round.ok}"`)));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Completa la Palabra (letra o sílaba que falta)
+// Trains grapheme-phoneme mapping and orthographic completion.
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Nombra Rápido (RAN, Rapid Automatized Naming)
+// Naming speed is the 2nd strongest dyslexia predictor (double-deficit
+// theory, Wolf & Bowers). The therapist times oral naming; history is kept.
+// ═══════════════════════════════════════════════════════════════
+function NombraRapido({ patient }) {
+    const SETS = {
+        letras: { label: "Letras", items: ["a", "o", "s", "m", "p"], render: (x) => x, big: true },
+        numeros: { label: "Números", items: ["2", "4", "6", "7", "9"], render: (x) => x, big: true },
+        colores: { label: "Colores", items: ["#E63946", "#1D7FB8", "#2D9D5A", "#E9B premier"], render: null, big: false },
+        objetos: { label: "Objetos", items: ["🐶", "🌳", "✋", "🏠", "⚽"], render: (x) => x, big: false },
+    };
+    // fix colores set (avoid typo)
+    SETS.colores.items = ["#E63946", "#1D7FB8", "#2D9D5A", "#E9A23B", "#222222"];
+    const COLOR_NAMES = { "#E63946": "rojo", "#1D7FB8": "azul", "#2D9D5A": "verde", "#E9A23B": "amarillo", "#222222": "negro" };
+    const [setId, setSetId] = useState("objetos");
+    const [phase, setPhase] = useState("idle"); // idle | playing | done
+    const [grid, setGrid] = useState([]);
+    const [startTime, setStartTime] = useState(null);
+    const [elapsed, setElapsed] = useState(0);
+    const [history, setHistory] = useState(() => patient ? (storeLoad("ran:" + patient.id) || []) : []);
+
+    useEffect(() => {
+        setHistory(patient ? (storeLoad("ran:" + patient.id) || []) : []);
+    }, [patient && patient.id]);
+    useEffect(() => {
+        if (phase !== "playing") return;
+        const t = setInterval(() => setElapsed((Date.now() - startTime) / 1000), 100);
+        return () => clearInterval(t);
+    }, [phase, startTime]);
+
+    const start = () => {
+        const items = SETS[setId].items;
+        // 5x5 grid: each item repeated 5 times, shuffled
+        const cells = [];
+        items.forEach(it => { for (let i = 0; i < 5; i++) cells.push(it); });
+        setGrid(shuffle(cells));
+        setStartTime(Date.now());
+        setElapsed(0);
+        setPhase("playing");
+        sfx.tap();
+    };
+    const finish = () => {
+        const secs = Math.round((Date.now() - startTime) / 10) / 100;
+        setElapsed(secs);
+        setPhase("done");
+        sfx.success();
+        if (patient) {
+            const entry = { ts: Date.now(), set: setId, seconds: secs, items: grid.length };
+            const updated = [entry, ...history].slice(0, 40);
+            setHistory(updated);
+            storeSave("ran:" + patient.id, updated);
+        }
+        if (_activePatientId) { addStar(_activePatientId, _activeAreaId); logCurrentResult(true); }
+    };
+
+    const set = SETS[setId];
+    const renderCell = (cell, i) => {
+        const isColor = setId === "colores";
+        return React.createElement("div", { key: i, style: {
+            aspectRatio: "1", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+            background: isColor ? cell : "#fff", border: `1.5px solid ${C.border}`,
+            fontSize: set.big ? 30 : 26, fontWeight: 800,
+            fontFamily: set.big ? "Georgia, serif" : "inherit",
+        } }, isColor ? "" : cell);
+    };
+
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Nombra Rápido"),
+            React.createElement(Instructions, { adoChildren: "Nombra en voz alta todos los elementos de la tabla, fila por fila, lo más rápido que puedas sin equivocarte. Se mide el tiempo." },
+                "Vas a nombrar en voz alta todos los dibujos de la tabla, uno por uno, de izquierda a derecha, lo más rápido que puedas. El profesional mide el tiempo."),
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 6, textAlign: "center" } }, "¿Qué nombrar?"),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" } },
+                Object.keys(SETS).map(id => React.createElement("button", { key: id, onClick: () => { sfx.tap(); setSetId(id); }, style: {
+                    padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    background: setId === id ? C.primary : "#fff", color: setId === id ? "#fff" : C.text,
+                    border: `2px solid ${setId === id ? C.primary : C.border}`, fontFamily: "inherit",
+                } }, SETS[id].label))),
+            React.createElement("div", { style: { fontSize: 11.5, color: C.textL, textAlign: "center", marginBottom: 14, fontStyle: "italic", lineHeight: 1.5 } },
+                "La velocidad de denominación es uno de los principales indicadores en dislexia. Repetir esta prueba a lo largo de las semanas permite ver si la automatización mejora."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar y cronometrar")),
+            history.length > 0 && React.createElement("div", { style: { marginTop: 18, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, marginBottom: 8 } }, "Registros anteriores"),
+                history.slice(0, 8).map((h, i) => React.createElement("div", { key: i, style: { display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" } },
+                    React.createElement("span", null, new Date(h.ts).toLocaleDateString("es-ES"), " · ", SETS[h.set] ? SETS[h.set].label : h.set),
+                    React.createElement("strong", { style: { color: C.primary } }, h.seconds, " s")))));
+    }
+    if (phase === "done") {
+        const sameSet = history.filter(h => h.set === setId);
+        const best = sameSet.length ? Math.min(...sameSet.map(h => h.seconds)) : elapsed;
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 14 } }, "Nombra Rápido"),
+            React.createElement("div", { style: { padding: 20, background: `linear-gradient(135deg, ${C.primary}11, ${C.accent}11)`, borderRadius: 14, textAlign: "center", marginBottom: 14 } },
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.textL } }, "Tiempo · ", set.label),
+                React.createElement("div", { style: { fontSize: 46, fontWeight: 900, color: C.primary } }, elapsed, " s"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL } }, grid.length, " elementos · ", (grid.length / elapsed).toFixed(1), " por segundo"),
+                best < elapsed
+                    ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginTop: 6 } }, "Tu mejor marca con ", set.label.toLowerCase(), ": ", best, " s")
+                    : React.createElement("div", { style: { fontSize: 12, color: C.primary, fontWeight: 700, marginTop: 6 } }, "🏆 ¡Nueva mejor marca!")),
+            React.createElement("div", { style: { fontSize: 11.5, color: C.textL, textAlign: "center", marginBottom: 14, fontStyle: "italic" } },
+                "El profesional puede anotar en las notas de sesión los errores observados durante la denominación."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Repetir"),
+                React.createElement(Btn, { color: C.textL, onClick: () => setPhase("idle"), small: true, outline: true }, "Cambiar tipo")));
+    }
+    // playing
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Nombra Rápido"),
+            React.createElement("div", { style: { fontSize: 26, fontWeight: 900, color: C.primary, fontVariantNumeric: "tabular-nums" } }, elapsed.toFixed(1), " s")),
+        React.createElement("div", { style: { fontSize: 12, color: C.textL, textAlign: "center", marginBottom: 12 } },
+            "Nombra en voz alta de izquierda a derecha, fila por fila."),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 7, maxWidth: 380, margin: "0 auto 16px" } },
+            grid.map(renderCell)),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: finish }, "⏹ Terminar")));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DYSLEXIA — Sílaba a Sílaba (composición silábica / decodificación)
+// Active decoding: assembling words syllable by syllable trains the
+// sublexical reading route. Includes routine-practice training mode.
+// ═══════════════════════════════════════════════════════════════
+function SilabaASilaba({ patient }) {
+    const WORD_BANK = [
+        { w: "casa", s: ["ca", "sa"] }, { w: "mesa", s: ["me", "sa"] }, { w: "gato", s: ["ga", "to"] },
+        { w: "pelo", s: ["pe", "lo"] }, { w: "dedo", s: ["de", "do"] }, { w: "lobo", s: ["lo", "bo"] },
+        { w: "pelota", s: ["pe", "lo", "ta"] }, { w: "camino", s: ["ca", "mi", "no"] },
+        { w: "ventana", s: ["ven", "ta", "na"] }, { w: "manzana", s: ["man", "za", "na"] },
+        { w: "zapato", s: ["za", "pa", "to"] }, { w: "caballo", s: ["ca", "ba", "llo"] },
+        { w: "escuela", s: ["es", "cue", "la"] }, { w: "mariposa", s: ["ma", "ri", "po", "sa"] },
+        { w: "telefono", s: ["te", "le", "fo", "no"] }, { w: "chocolate", s: ["cho", "co", "la", "te"] },
+        { w: "bicicleta", s: ["bi", "ci", "cle", "ta"] }, { w: "elefante", s: ["e", "le", "fan", "te"] },
+    ];
+    const DISTRACTOR_SYL = ["ti", "lu", "ro", "pa", "mi", "se", "do", "na", "bo", "te", "co", "la"];
+    const [diff, setDiff] = useState("medio");
+    const [target, setTarget] = useState(null);
+    const [phase, setPhase] = useState("idle");
+    const [round, setRound] = useState(null);
+    const [built, setBuilt] = useState([]);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const [startTime, setStartTime] = useState(null);
+    const [done, setDone] = useState(false);
+
+    const makeRound = () => {
+        const pool = WORD_BANK.filter(x => {
+            if (diff === "fácil") return x.s.length <= 2;
+            if (diff === "medio") return x.s.length >= 2 && x.s.length <= 3;
+            return x.s.length >= 3;
+        });
+        const word = pool[randInt(0, pool.length - 1)];
+        const nDist = diff === "fácil" ? 1 : diff === "medio" ? 2 : 3;
+        const dist = shuffle(DISTRACTOR_SYL.filter(d => !word.s.includes(d))).slice(0, nDist);
+        return { word, tiles: shuffle([...word.s, ...dist]) };
+    };
+    const start = () => {
+        setScore({ correct: 0, total: 0 }); setStartTime(Date.now());
+        setRound(makeRound()); setBuilt([]); setDone(false); setPhase("playing");
+    };
+
+    const tapTile = (tile, idx) => {
+        if (done) return;
+        const next = [...built, { tile, idx }];
+        const expected = round.word.s[next.length - 1];
+        if (tile !== expected) {
+            sfx.fail();
+            if (_activePatientId) breakStreak(_activePatientId);
+            // wrong: flash and reset the build
+            setBuilt(next);
+            setTimeout(() => setBuilt([]), 600);
+            return;
+        }
+        sfx.tap();
+        setBuilt(next);
+        if (next.length === round.word.s.length) {
+            // word complete
+            setDone(true);
+            sfx.success();
+            const newScore = { correct: score.correct + 1, total: score.total + 1 };
+            setScore(newScore);
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+            setTimeout(() => {
+                if (target && newScore.total >= target) { setPhase("done"); return; }
+                setRound(makeRound()); setBuilt([]); setDone(false);
+            }, 1300);
+        }
+    };
+    const usedIdx = built.map(b => b.idx);
+
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Sílaba a Sílaba"),
+            React.createElement(Instructions, { adoChildren: "Construye cada palabra seleccionando sus sílabas en el orden correcto. Hay sílabas sobrantes que no encajan." },
+                "Vas a formar palabras eligiendo las sílabas en orden, de principio a fin. ¡Cuidado, hay sílabas que sobran!"),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", alignItems: "center", marginBottom: 14, flexWrap: "wrap" } },
+                React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: C.textL } }, "Dificultad:"),
+                React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
+            React.createElement("div", { style: { marginBottom: 16 } },
+                React.createElement(TrainTargetSelect, { value: target, onChange: (v) => { sfx.tap(); setTarget(v); } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    if (phase === "done") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 14 } }, "Sílaba a Sílaba"),
+            React.createElement(EntrenamientoResumen, {
+                correct: score.correct, total: score.total,
+                elapsedSec: startTime ? Math.round((Date.now() - startTime) / 1000) : null,
+                onRepeat: start, onConfig: () => setPhase("idle"),
+            }));
+    }
+    if (!round) return React.createElement(LoadingCard, null);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Sílaba a Sílaba"),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPhase("idle"), small: true, outline: true }, "← Salir")),
+        React.createElement(Instructions, { adoChildren: "Toca las sílabas en orden para componer la palabra objetivo." },
+            "Forma la palabra de abajo tocando sus sílabas en el orden correcto."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+            React.createElement(Badge, { color: C.primary }, "Palabras: ", score.correct, "/", score.total),
+            target && React.createElement(Badge, { color: C.accent }, "Objetivo: ", target)),
+        // Word being built
+        React.createElement("div", { style: { textAlign: "center", padding: "20px 16px", background: `${C.yellow}15`, borderRadius: 16, marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, marginBottom: 6 } }, "Forma esta palabra:"),
+            React.createElement("div", { style: { fontSize: 30, fontWeight: 900, color: C.text, letterSpacing: 1, marginBottom: 10, fontFamily: "Georgia, serif" } }, round.word.w),
+            React.createElement("div", { style: { display: "flex", gap: 4, justifyContent: "center", minHeight: 44, alignItems: "center" } },
+                round.word.s.map((_, i) => React.createElement("div", { key: i, style: {
+                    minWidth: 44, height: 40, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, fontWeight: 800, fontFamily: "Georgia, serif",
+                    background: built[i] ? (done ? C.success : C.primary) : "#fff",
+                    color: built[i] ? "#fff" : C.border,
+                    border: `2px dashed ${built[i] ? "transparent" : C.border}`,
+                } }, built[i] ? built[i].tile : "·")))),
+        React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginBottom: 12 } }, "Sílabas disponibles:"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
+            round.tiles.map((tile, idx) => {
+                const used = usedIdx.includes(idx);
+                return React.createElement("button", { key: idx, onClick: () => tapTile(tile, idx), disabled: used || done, style: {
+                    padding: "12px 18px", borderRadius: 12, fontSize: 22, fontWeight: 800,
+                    cursor: (used || done) ? "default" : "pointer", fontFamily: "Georgia, serif",
+                    background: used ? "#eee" : "#fff", color: used ? "#bbb" : C.text,
+                    border: `2px solid ${used ? "#eee" : C.border}`, opacity: used ? 0.5 : 1,
+                } }, tile);
+            })),
+        done && React.createElement(Feedback, { success: true, reward: true }, "¡Palabra completa: ", round.word.w, "!"));
+}
+
+function CompletaPalabra({ patient }) {
+    // Each item: word, the hidden chunk, position; options include the right chunk
+    // "letra" mode hides a single letter, "silaba" mode hides a whole syllable.
+    const BANK_LETRA = [
+        { w: "gato", hide: "g", rest: "_ato", opts: ["g", "j", "c"] },
+        { w: "mesa", hide: "m", rest: "_esa", opts: ["m", "n", "p"] },
+        { w: "dedo", hide: "d", rest: "_edo", opts: ["d", "b", "p"] },
+        { w: "barco", hide: "b", rest: "_arco", opts: ["b", "d", "v"] },
+        { w: "queso", hide: "q", rest: "_ueso", opts: ["q", "c", "g"] },
+        { w: "pluma", hide: "p", rest: "_luma", opts: ["p", "b", "t"] },
+        { w: "rueda", hide: "r", rest: "_ueda", opts: ["r", "l", "d"] },
+        { w: "sopa", hide: "s", rest: "_opa", opts: ["s", "z", "c"] },
+        { w: "flor", hide: "f", rest: "_lor", opts: ["f", "p", "t"] },
+        { w: "nido", hide: "n", rest: "_ido", opts: ["n", "m", "ñ"] },
+        { w: "vela", hide: "v", rest: "_ela", opts: ["v", "b", "f"] },
+        { w: "tigre", hide: "t", rest: "_igre", opts: ["t", "d", "p"] },
+    ];
+    const BANK_SILABA = [
+        { w: "caballo", hide: "ba", rest: "ca_llo", opts: ["ba", "da", "pa"] },
+        { w: "ventana", hide: "ta", rest: "ven_na", opts: ["ta", "da", "na"] },
+        { w: "pelota", hide: "lo", rest: "pe_ta", opts: ["lo", "ro", "to"] },
+        { w: "camino", hide: "mi", rest: "ca_no", opts: ["mi", "ni", "li"] },
+        { w: "zapato", hide: "pa", rest: "za_to", opts: ["pa", "ba", "ta"] },
+        { w: "manzana", hide: "za", rest: "man_na", opts: ["za", "sa", "ca"] },
+        { w: "tomate", hide: "ma", rest: "to_te", opts: ["ma", "na", "pa"] },
+        { w: "mariposa", hide: "ri", rest: "ma_posa", opts: ["ri", "li", "ni"] },
+        { w: "escuela", hide: "cue", rest: "es_la", opts: ["cue", "que", "gue"] },
+        { w: "bicicleta", hide: "ci", rest: "bi_cleta", opts: ["ci", "si", "ce"] },
+        { w: "elefante", hide: "fan", rest: "ele_te", opts: ["fan", "fon", "fen"] },
+        { w: "chocolate", hide: "co", rest: "cho_late", opts: ["co", "go", "to"] },
+    ];
+    const [mode, setMode] = useState("letra"); // letra | silaba
+    const [target, setTarget] = useState(null);
+    const [phase, setPhase] = useState("idle");
+    const [round, setRound] = useState(null);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const [startTime, setStartTime] = useState(null);
+
+    const makeRound = () => {
+        const bank = mode === "letra" ? BANK_LETRA : BANK_SILABA;
+        const item = bank[randInt(0, bank.length - 1)];
+        return { ...item, options: shuffle(item.opts.slice()) };
+    };
+    const start = () => {
+        setScore({ correct: 0, total: 0 }); setStartTime(Date.now());
+        setRound(makeRound()); setSel(null); setPhase("playing");
+    };
+
+    const choose = (opt) => {
+        if (sel) return;
+        setSel(opt);
+        const correct = opt === round.hide;
+        const newScore = { correct: score.correct + (correct ? 1 : 0), total: score.total + 1 };
+        setScore(newScore);
+        if (correct) {
+            sfx.success();
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        } else {
+            sfx.fail();
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+        }
+        setTimeout(() => {
+            if (target && newScore.total >= target) { setPhase("done"); return; }
+            setRound(makeRound()); setSel(null);
+        }, 1400);
+    };
+
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Completa la Palabra"),
+            React.createElement(Instructions, { adoChildren: "Completa la palabra eligiendo la letra o la sílaba que falta. Elige el modo y la ronda de práctica." },
+                "A cada palabra le falta un trozo. Tienes que elegir la letra o la sílaba correcta para completarla."),
+            React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 6, textAlign: "center" } }, "Modo:"),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+                [{ id: "letra", l: "Falta una letra" }, { id: "silaba", l: "Falta una sílaba" }].map(m =>
+                    React.createElement("button", { key: m.id, onClick: () => { sfx.tap(); setMode(m.id); }, style: {
+                        padding: "8px 14px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        background: mode === m.id ? C.primary : "#fff", color: mode === m.id ? "#fff" : C.text,
+                        border: `2px solid ${mode === m.id ? C.primary : C.border}`, fontFamily: "inherit",
+                    } }, m.l))),
+            React.createElement("div", { style: { marginBottom: 16 } },
+                React.createElement(TrainTargetSelect, { value: target, onChange: (v) => { sfx.tap(); setTarget(v); } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    if (phase === "done") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 14 } }, "Completa la Palabra"),
+            React.createElement(EntrenamientoResumen, {
+                correct: score.correct, total: score.total,
+                elapsedSec: startTime ? Math.round((Date.now() - startTime) / 1000) : null,
+                onRepeat: start, onConfig: () => setPhase("idle"),
+            }));
+    }
+    if (!round) return React.createElement(LoadingCard, null);
+    const parts = round.rest.split("_");
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Completa la Palabra"),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPhase("idle"), small: true, outline: true }, "← Salir")),
+        React.createElement(Instructions, { adoChildren: "Selecciona la " + (mode === "letra" ? "letra" : "sílaba") + " que completa correctamente la palabra." },
+            "¿Qué ", mode === "letra" ? "letra" : "sílaba", " falta para completar la palabra? Tócala."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 } },
+            React.createElement(Badge, { color: C.primary }, "Aciertos: ", score.correct, "/", score.total),
+            target && React.createElement(Badge, { color: C.accent }, "Objetivo: ", target)),
+        React.createElement("div", { style: { textAlign: "center", padding: "26px 16px", background: `${C.yellow}15`, borderRadius: 16, marginBottom: 16 } },
+            React.createElement("div", { style: { fontSize: 44, fontWeight: 900, color: C.text, letterSpacing: 2, fontFamily: "Georgia, serif" } },
+                parts[0],
+                React.createElement("span", { style: {
+                    display: "inline-block", minWidth: mode === "letra" ? 34 : 56, padding: "0 4px",
+                    color: sel ? (sel === round.hide ? C.primary : "#E63946") : C.accent,
+                    borderBottom: `4px solid ${sel ? (sel === round.hide ? C.primary : "#E63946") : C.accent}`,
+                } }, sel || "?"),
+                parts[1] || "")),
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" } },
+            round.options.map(opt => {
+                const isSel = sel === opt;
+                const isAnswer = opt === round.hide;
+                const bg = !sel ? "#fff" : isAnswer ? C.success : (isSel ? C.error : "#fff");
+                return React.createElement("button", { key: opt, onClick: () => choose(opt), disabled: !!sel, style: {
+                    padding: "14px 22px", borderRadius: 14, fontSize: 26, fontWeight: 800,
+                    cursor: sel ? "default" : "pointer", fontFamily: "Georgia, serif",
+                    background: bg, color: (sel && (isAnswer || isSel)) ? "#fff" : C.text,
+                    border: `3px solid ${sel && isAnswer ? C.primary : C.border}`,
+                } }, opt);
+            })),
+        sel && React.createElement(Feedback, { success: sel === round.hide, reward: sel === round.hide },
+            sel === round.hide ? `¡Bien! La palabra es ${round.w}` : `La palabra correcta es ${round.w}`));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SOCIAL COGNITION (TEA) — shared scenario-quiz component
+// Used by the theory-of-mind, emotion-in-context and figurative-language
+// activities: present a scenario, a question, options, explanatory feedback.
+// ═══════════════════════════════════════════════════════════════
+function SocialQuiz({ patient, title, instructions, adoInstructions, bank, ctxLabel }) {
+    const [order, setOrder] = useState(() => shuffle(bank.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+
+    const item = bank[order[pos]];
+    const next = () => {
+        let no = order, np = pos + 1;
+        if (np >= order.length) { no = shuffle(bank.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const correct = i === item.ans;
+        setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
+        if (correct) {
+            sfx.success();
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        } else {
+            sfx.fail();
+            if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); }
+        }
+        setTimeout(next, 2600);
+    };
+
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, title),
+        React.createElement(Instructions, { adoChildren: adoInstructions }, instructions),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+            React.createElement(Badge, { color: C.primary }, "Aciertos: ", score.correct, "/", score.total)),
+        React.createElement("div", { style: { padding: "16px 18px", background: `${C.purple}0E`, borderRadius: 14, marginBottom: 12, borderLeft: `4px solid ${C.purple}` } },
+            ctxLabel && React.createElement("div", { style: { fontSize: 10.5, fontWeight: 800, color: C.purple, textTransform: "uppercase", marginBottom: 4 } }, ctxLabel),
+            React.createElement("div", { style: { fontSize: 15, lineHeight: 1.6, color: C.text } }, item.ctx)),
+        React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 10, textAlign: "center" } }, item.q),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+            item.opts.map((opt, i) => {
+                const isSel = sel === i;
+                const isAns = i === item.ans;
+                const bg = sel === null ? "#fff" : isAns ? C.success : (isSel ? C.error : "#fff");
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null, style: {
+                    padding: "13px 16px", borderRadius: 12, fontSize: 14, fontWeight: 700,
+                    cursor: sel === null ? "pointer" : "default", textAlign: "left",
+                    background: bg, color: (sel !== null && (isAns || isSel)) ? "#fff" : C.text,
+                    border: `2px solid ${sel !== null && isAns ? C.primary : C.border}`, fontFamily: "inherit",
+                    transition: "all 0.15s",
+                } }, opt);
+            })),
+        sel !== null && React.createElement("div", { style: {
+            marginTop: 12, padding: 13, borderRadius: 12, fontSize: 13, lineHeight: 1.55,
+            background: sel === item.ans ? C.success : C.warm,
+            borderLeft: `4px solid ${sel === item.ans ? C.primary : C.accent}`,
+        } },
+            React.createElement("strong", null, sel === item.ans ? "¡Correcto! " : "Fíjate: "),
+            item.exp));
+}
+
+function QueEstaPensando({ patient }) {
+    // Theory of mind: false belief, knowledge inference, intention, desire.
+    const BANK = [
+        { ctx: "Marta guarda su pelota en la caja roja y se va a merendar. Mientras no está, su hermano la cambia a la caja azul.", q: "Cuando Marta vuelva, ¿dónde buscará su pelota?", opts: ["En la caja roja", "En la caja azul"], ans: 0, exp: "Marta no vio el cambio, así que ella sigue creyendo que su pelota está en la caja roja. Buscará donde ella cree que está, no donde está de verdad." },
+        { ctx: "Hay una caja de galletas en la mesa. Pero por dentro, en realidad, está llena de lápices. Llega Luis, que nunca ha abierto esa caja.", q: "¿Qué pensará Luis que hay dentro de la caja?", opts: ["Lápices", "Galletas"], ans: 1, exp: "Luis no ha visto el interior. Por la imagen de la caja, pensará que hay galletas, aunque nosotros sepamos que hay lápices." },
+        { ctx: "Estaban contando el final de una película. Ana llegó tarde y se lo perdió.", q: "¿Sabe Ana cómo termina la película?", opts: ["Sí", "No"], ans: 1, exp: "Ana no estaba cuando lo contaron. Si no estuvo presente, no puede saberlo." },
+        { ctx: "Tom deja su bici en el jardín y entra a casa. Su padre, sin decirle nada, la guarda en el garaje.", q: "¿Dónde irá Tom a buscar su bici?", opts: ["Al jardín", "Al garaje"], ans: 0, exp: "Tom no sabe que su padre la movió. Buscará en el jardín, que es donde él cree que la dejó." },
+        { ctx: "Lucía mira el reloj una y otra vez, ya tiene la mochila puesta y está junto a la puerta.", q: "¿Qué quiere Lucía?", opts: ["Quedarse en casa", "Irse, está esperando la hora de salir"], ans: 1, exp: "Sus acciones (mirar el reloj, mochila puesta, junto a la puerta) nos dicen que tiene ganas de marcharse." },
+        { ctx: "A Juan le han preparado una fiesta sorpresa. Él no sabe nada y entra en casa pensando que no hay nadie.", q: "¿Cómo se sentirá Juan al entrar y ver a todos?", opts: ["Sorprendido", "Aburrido"], ans: 0, exp: "Como él creía que la casa estaba vacía, encontrarse a todos le va a pillar por sorpresa." },
+        { ctx: "María le susurra un secreto a Ana al oído. Luis está en la misma sala pero un poco lejos y no oye nada.", q: "¿Sabe Luis cuál es el secreto?", opts: ["Sí", "No"], ans: 1, exp: "Aunque Luis estaba en la sala, no oyó el susurro. Estar cerca no es lo mismo que enterarse." },
+        { ctx: "Carlos busca sus gafas por toda la casa, nervioso. En realidad las lleva puestas.", q: "¿Por qué no encuentra Carlos sus gafas?", opts: ["No se da cuenta de que las lleva puestas", "Alguien se las ha escondido"], ans: 0, exp: "A veces creemos algo que no encaja con la realidad. Carlos no es consciente de que ya las tiene puestas." },
+        { ctx: "Le dijeron a Sara que el examen sería el viernes. Pero lo han adelantado al miércoles y nadie se lo ha contado.", q: "Hoy es martes. ¿Está Sara preocupada por el examen?", opts: ["No, ella cree que aún le queda tiempo", "Sí, sabe que es mañana"], ans: 0, exp: "Sara actúa según lo que ella cree (viernes). No puede preocuparse por algo que no sabe." },
+        { ctx: "Pedro se acerca a su amigo con los brazos abiertos y una gran sonrisa.", q: "¿Qué va a hacer Pedro?", opts: ["Darle un abrazo", "Enfadarse con él"], ans: 0, exp: "Los brazos abiertos y la sonrisa son señales de que quiere saludar con cariño, no de enfado." },
+        { ctx: "Ana mira por la ventana, ve el cielo lleno de nubes negras y coge el paraguas antes de salir.", q: "¿Qué está pensando Ana?", opts: ["Que va a llover", "Que hace calor"], ans: 0, exp: "Por sus acciones deducimos su pensamiento: coge el paraguas porque cree que lloverá." },
+        { ctx: "Sabes que hay una araña de juguete escondida en el cajón. Tu amigo no lo sabe y va a abrirlo.", q: "¿Cómo crees que reaccionará tu amigo?", opts: ["Se asustará o se sorprenderá", "No sentirá nada"], ans: 0, exp: "Tú tienes una información que tu amigo no tiene. Como él no se lo espera, la araña le sorprenderá." },
+        { ctx: "Un niño esconde algo detrás de su espalda, sonríe mucho y le dice a su hermana: '¡Cierra los ojos!'", q: "¿Qué va a hacer el niño?", opts: ["Darle una sorpresa o un regalo", "Reñir a su hermana"], ans: 0, exp: "Esconder algo, sonreír y pedir que cierre los ojos son señales de que prepara una sorpresa agradable." },
+        { ctx: "Elena cree que su amiga Rosa está enfadada con ella, pero en realidad Rosa solo está cansada y callada.", q: "¿Por qué piensa Elena que Rosa está enfadada?", opts: ["Ha interpretado su silencio como enfado", "Rosa le ha dicho que está enfadada"], ans: 0, exp: "El mismo gesto puede tener varias causas. Elena ha supuesto enfado, pero el silencio de Rosa era cansancio." },
+    ];
+    return React.createElement(SocialQuiz, {
+        patient, title: "¿Qué Está Pensando?",
+        instructions: "Las personas actúan según lo que ellas creen y saben, aunque a veces se equivoquen. Lee cada situación e intenta ponerte en la mente del personaje.",
+        adoInstructions: "Cada situación requiere inferir lo que otra persona cree, sabe o pretende. Ten en cuenta que puede no coincidir con lo que tú sabes.",
+        bank: BANK, ctxLabel: "Situación",
+    });
+}
+
+function ComoSeSiente({ patient }) {
+    // Emotion in context — infer emotion from the situation, not a face.
+    const BANK = [
+        { ctx: "A Lucía le regalan justo el libro que llevaba meses queriendo leer.", q: "¿Cómo se siente Lucía?", opts: ["Ilusionada y contenta", "Aburrida", "Asustada"], ans: 0, exp: "Recibir algo muy deseado produce alegría e ilusión." },
+        { ctx: "Mario ha perdido el peluche con el que duerme desde pequeño.", q: "¿Cómo se siente Mario?", opts: ["Triste", "Orgulloso", "Sorprendido"], ans: 0, exp: "Perder algo querido produce tristeza, sobre todo si tiene valor sentimental." },
+        { ctx: "La profesora pide a Sara que salga a leer delante de toda la clase, y ella no se lo esperaba.", q: "¿Cómo se siente Sara?", opts: ["Nerviosa", "Contenta", "Enfadada"], ans: 0, exp: "Tener que hacer algo en público y sin previo aviso suele generar nervios." },
+        { ctx: "Diego ha estudiado mucho toda la semana y ha sacado muy buena nota en el examen.", q: "¿Cómo se siente Diego?", opts: ["Orgulloso de su esfuerzo", "Avergonzado", "Triste"], ans: 0, exp: "Conseguir algo gracias al propio esfuerzo produce orgullo y satisfacción." },
+        { ctx: "Sin querer, Elena ha roto el juguete que su amigo le había dejado.", q: "¿Cómo se siente Elena?", opts: ["Culpable y apurada", "Divertida", "Tranquila"], ans: 0, exp: "Cuando hacemos daño sin querer a alguien, solemos sentirnos mal y queremos arreglarlo." },
+        { ctx: "Pablo esperaba que le eligieran para el equipo, pero han elegido a otro compañero.", q: "¿Cómo se siente Pablo?", opts: ["Decepcionado", "Aliviado", "Sorprendido"], ans: 0, exp: "Cuando algo que esperábamos no ocurre, sentimos decepción." },
+        { ctx: "Marcos contó una pequeña mentira y temía que le pillaran, pero al final nadie se dio cuenta.", q: "¿Cómo se siente Marcos?", opts: ["Aliviado", "Orgulloso", "Enfadado"], ans: 0, exp: "El alivio aparece cuando algo que temíamos finalmente no pasa." },
+        { ctx: "Ana se tropieza y se cae en mitad del patio, delante de muchos compañeros.", q: "¿Cómo se siente Ana?", opts: ["Avergonzada", "Contenta", "Aburrida"], ans: 0, exp: "Sentirse observado en un momento incómodo produce vergüenza." },
+        { ctx: "A Hugo le toca jugar solo en el recreo porque sus amigos se han ido con otro grupo sin avisarle.", q: "¿Cómo se siente Hugo?", opts: ["Triste y excluido", "Orgulloso", "Tranquilo"], ans: 0, exp: "Quedarse fuera de un grupo de amigos genera tristeza y sensación de exclusión." },
+        { ctx: "Tras intentarlo muchas veces, Clara por fin consigue montar en bici sin ruedines.", q: "¿Cómo se siente Clara?", opts: ["Satisfecha y orgullosa", "Asustada", "Enfadada"], ans: 0, exp: "Lograr algo difícil después de esforzarse produce una gran satisfacción." },
+        { ctx: "Es el primer día de Leo en un colegio nuevo y no conoce absolutamente a nadie.", q: "¿Cómo se siente Leo probablemente?", opts: ["Inseguro y nervioso", "Aburrido", "Orgulloso"], ans: 0, exp: "Las situaciones nuevas y desconocidas suelen generar inseguridad y nervios." },
+        { ctx: "Un compañero le ha gritado a Iván sin ningún motivo y delante de los demás.", q: "¿Cómo se siente Iván?", opts: ["Enfadado y dolido", "Contento", "Tranquilo"], ans: 0, exp: "Recibir un trato injusto produce enfado, y hacerlo en público también duele." },
+        { ctx: "A Noa le han organizado una merienda sorpresa con todos sus amigos por su cumpleaños.", q: "¿Cómo se siente Noa?", opts: ["Sorprendida y feliz", "Aburrida", "Asustada"], ans: 0, exp: "Una sorpresa agradable rodeada de amigos produce alegría." },
+        { ctx: "Sergio ve que su hermano pequeño recibe muchos regalos y a él casi nadie le hace caso ese día.", q: "¿Cómo se siente Sergio?", opts: ["Celoso", "Aliviado", "Orgulloso"], ans: 0, exp: "Cuando alguien recibe más atención que nosotros, podemos sentir celos." },
+    ];
+    return React.createElement(SocialQuiz, {
+        patient, title: "¿Cómo se Siente?",
+        instructions: "No siempre vemos la cara de la persona, pero podemos saber cómo se siente fijándonos en lo que le pasa. Lee la situación y piensa qué emoción encaja.",
+        adoInstructions: "Infiere la emoción del protagonista a partir del contexto de la situación, no de su expresión facial.",
+        bank: BANK, ctxLabel: "Situación",
+    });
+}
+
+function DobleSentido({ patient }) {
+    // Figurative language & irony — pragmatic difficulty typical of ASD.
+    const BANK = [
+        { ctx: "\"Después del partido, estoy hecho polvo.\"", q: "¿Qué quiere decir de verdad?", opts: ["Que está muy cansado", "Que se ha convertido en polvo"], ans: 0, exp: "\"Estar hecho polvo\" es una frase hecha: significa estar muy cansado. No hay que entenderla al pie de la letra." },
+        { ctx: "\"Cuando vi el pastel, se me hizo la boca agua.\"", q: "¿Qué significa esa expresión?", opts: ["Que le apetecía mucho comerlo", "Que se le mojó la boca de verdad"], ans: 0, exp: "\"Hacerse la boca agua\" significa que algo te apetece muchísimo. Es una expresión, no algo literal." },
+        { ctx: "\"Esa bici me ha costado un ojo de la cara.\"", q: "¿Qué quiere decir?", opts: ["Que era muy cara", "Que perdió un ojo al comprarla"], ans: 0, exp: "\"Costar un ojo de la cara\" significa que algo es muy caro." },
+        { ctx: "Después de fallar muchas veces, Ana dice: \"No voy a tirar la toalla.\"", q: "¿Qué significa?", opts: ["Que no va a rendirse", "Que va a lavar la toalla"], ans: 0, exp: "\"Tirar la toalla\" significa rendirse. Ana dice que va a seguir intentándolo." },
+        { ctx: "La profesora le dice a Marcos: \"Estás en las nubes.\"", q: "¿Qué le quiere decir?", opts: ["Que está distraído", "Que está volando"], ans: 0, exp: "\"Estar en las nubes\" significa estar distraído, con la mente en otro sitio." },
+        { ctx: "\"El examen ha sido pan comido.\"", q: "¿Qué significa?", opts: ["Que ha sido muy fácil", "Que se comió un pan en el examen"], ans: 0, exp: "\"Ser pan comido\" significa que algo resulta muy fácil." },
+        { ctx: "Un amigo te dice riéndose: \"Te estoy tomando el pelo.\"", q: "¿Qué quiere decir?", opts: ["Que está bromeando contigo", "Que te está cogiendo el pelo con la mano"], ans: 0, exp: "\"Tomar el pelo\" significa bromear o gastar una broma, no algo físico." },
+        { ctx: "Marcos suspende mates y su madre, con cara seria, le dice: \"¡Qué bien, enhorabuena!\"", q: "¿Su madre está contenta de verdad?", opts: ["No, lo dice con ironía: en realidad no le parece bien", "Sí, está muy contenta"], ans: 0, exp: "Esto es ironía: dice lo contrario de lo que piensa. Su cara seria es la pista de que no está contenta de verdad." },
+        { ctx: "Lucía tropieza y se le cae todo. Un compañero dice en tono burlón: \"Muy elegante.\"", q: "¿Le está haciendo un cumplido?", opts: ["No, se burla con ironía", "Sí, le dice que ha sido elegante"], ans: 0, exp: "El tono burlón indica ironía: dice \"elegante\" justo cuando ha pasado lo contrario, para burlarse." },
+        { ctx: "\"Anoche no pegué ojo.\"", q: "¿Qué quiere decir?", opts: ["Que no pudo dormir", "Que se golpeó el ojo"], ans: 0, exp: "\"No pegar ojo\" significa no conseguir dormir." },
+        { ctx: "Tu amigo te dice: \"¿Me echas una mano con esto?\"", q: "¿Qué te está pidiendo?", opts: ["Que le ayudes", "Que le lances una mano"], ans: 0, exp: "\"Echar una mano\" significa ayudar. Es una forma habitual de pedir ayuda." },
+        { ctx: "\"Cuando me lo contaron, me quedé de piedra.\"", q: "¿Qué significa?", opts: ["Que se quedó muy sorprendido", "Que se convirtió en una piedra"], ans: 0, exp: "\"Quedarse de piedra\" significa quedarse muy sorprendido o impactado por algo." },
+        { ctx: "El entrenador dice: \"Hoy habéis dado el cien por cien.\"", q: "¿Qué quiere decir?", opts: ["Que se han esforzado al máximo", "Que han contado hasta cien"], ans: 0, exp: "\"Dar el cien por cien\" significa esforzarse todo lo posible." },
+        { ctx: "Se me había olvidado por completo: se me fue el santo al cielo.", q: "¿Qué significa esa expresión?", opts: ["Que se despistó y lo olvidó", "Que vio un santo en el cielo"], ans: 0, exp: "\"Irse el santo al cielo\" significa despistarse y olvidar lo que se iba a hacer." },
+    ];
+    return React.createElement(SocialQuiz, {
+        patient, title: "Doble Sentido",
+        instructions: "A veces las palabras no significan exactamente lo que dicen: hay frases hechas y bromas. Lee con atención y piensa qué se quiere decir de verdad.",
+        adoInstructions: "Interpreta el significado real de cada expresión figurada o irónica, más allá de su sentido literal.",
+        bank: BANK, ctxLabel: "Lee esto",
+    });
 }
 
 function Rimas({ patient }) {
@@ -26998,6 +28000,7 @@ const AREA_ACTIVITIES = {
     ],
     emocional: [
         { id: "identifica", label: "Identifica Emoción", desc: "¿Qué emoción sentirías?", comp: IdentificaEmocion, hasAI: true },
+        { id: "como_se_siente", label: "¿Cómo se Siente?", desc: "Deduce la emoción a partir de la situación", comp: ComoSeSiente },
         { id: "termometro", label: "Termómetro Emocional", desc: "Mide cómo te sientes", comp: Termometro },
         { id: "respiracion", label: "Respiración Guiada", desc: "3 técnicas", comp: Respiracion },
         { id: "semaforo", label: "Semáforo Emocional", desc: "Para, piensa, actúa", comp: Semaforo },
@@ -27016,6 +28019,8 @@ const AREA_ACTIVITIES = {
         { id: "historia", label: "Historia Social", desc: "100% generada por IA", comp: HistoriaSocial, hasAI: true },
         { id: "conflictos", label: "Resolución de Conflictos", desc: "Asertividad y consecuencias", comp: ResolucionConflictos, hasAI: true },
         { id: "roleplay", label: "Role-Play Conversacional", desc: "Practica conversaciones difíciles con IA", comp: RolePlayConversacional, hasAI: true, complex: true },
+        { id: "que_piensa", label: "¿Qué Está Pensando?", desc: "Teoría de la mente: deduce qué cree o sabe otra persona", comp: QueEstaPensando },
+        { id: "doble_sentido", label: "Doble Sentido", desc: "Interpreta frases hechas, bromas e ironía", comp: DobleSentido },
     ],
     lectoescritura: [
         { id: "forma", label: "Forma Palabras", desc: "Une sílabas", comp: FormaPalabras, hasAI: true },
@@ -27027,6 +28032,14 @@ const AREA_ACTIVITIES = {
         { id: "dictado", label: "Dictado Adaptativo", desc: "Dictado con análisis de errores", comp: DictadoAdaptativo, hasAI: true, complex: true },
         { id: "construye", label: "Construye Oraciones", desc: "Ordena las palabras", comp: ConstruyeOraciones, hasAI: true, complex: true },
         { id: "sintactico", label: "Análisis Sintáctico", desc: "Clasifica palabras (sustantivo, verbo...)", comp: AnalisisSintactico, hasAI: true, complex: true },
+    ],
+    dislexia: [
+        { id: "letras_espejo", label: "Letras Espejo", desc: "Discrimina letras que se confunden (b/d/p/q)", comp: LetrasEspejo },
+        { id: "cazador_sonidos", label: "Cazador de Sonidos", desc: "Conciencia fonémica: identifica y manipula sonidos", comp: CazadorSonidos },
+        { id: "palabra_correcta", label: "Palabra Correcta", desc: "Detecta la palabra bien escrita entre errores típicos", comp: PalabraCorrecta },
+        { id: "completa_palabra", label: "Completa la Palabra", desc: "Elige la letra o sílaba que falta", comp: CompletaPalabra },
+        { id: "silaba_silaba", label: "Sílaba a Sílaba", desc: "Compón palabras eligiendo las sílabas en orden", comp: SilabaASilaba },
+        { id: "nombra_rapido", label: "Nombra Rápido", desc: "Velocidad de denominación (RAN), cronometrada", comp: NombraRapido },
         { id: "rimas", label: "Rimas", desc: "Conciencia fonológica: identifica palabras que riman", comp: Rimas },
         { id: "silabas", label: "Cuenta Sílabas", desc: "Conciencia fonológica: segmentación silábica", comp: Silabas },
         { id: "fluidez", label: "Fluidez Verbal", desc: "Evoca palabras por letra inicial (tipo FAS)", comp: FluidezVerbal },
@@ -27061,6 +28074,68 @@ const AREA_ACTIVITIES = {
         { id: "carta_futuro", label: "Carta a mi yo de 25 años", desc: "Escribe a tu futuro y gana perspectiva", comp: CartaYoFuturo, adolescentOnly: true },
     ],
 };
+// ── Diagnosis tags ──
+// Mark which clinical profiles each activity is most useful for, shown in
+// the activity menu so the professional can pick at a glance.
+const DX_TAGS = {
+    tdah: { label: "TDAH", color: "#4A90D9" },
+    tea: { label: "TEA", color: "#9B59B6" },
+    dislexia: { label: "Dislexia", color: "#E07A5F" },
+    discalculia: { label: "Discalculia", color: "#2A9D8F" },
+    ansiedad: { label: "Ansiedad", color: "#E9A23B" },
+};
+const ACTIVITY_DX = {
+    // Atención
+    busca: ["tdah"], diferencias: ["tdah"], patron: ["tdah"], intruso: ["tdah"],
+    laberinto: ["tdah"], stroop: ["tdah"], hanoi: ["tdah"], sopa_num: ["tdah", "discalculia"],
+    cancelacion: ["tdah", "dislexia"],
+    // Memoria
+    simon: ["tdah"], parejas: ["tdah"], secuencia: ["tdah"], cambio: ["tdah"],
+    categoriza: ["tdah", "tea"], temporal: ["tdah", "tea"], nback: ["tdah"], rutas: ["tdah"],
+    cara_nombre: ["tdah", "tea"], lista_compra: ["tdah"],
+    // Reg. Emocional
+    identifica: ["tea", "ansiedad"], termometro: ["ansiedad", "tea", "tdah"], respiracion: ["ansiedad"],
+    como_se_siente: ["tea", "ansiedad"],
+    semaforo: ["tdah", "ansiedad"], preocupaciones: ["ansiedad"], diario: ["ansiedad", "tea"],
+    mindfulness: ["ansiedad", "tdah"], escalera_frustracion: ["tdah", "tea", "ansiedad"],
+    guia_interior: ["tdah"], detective_pensamientos: ["ansiedad", "tdah"], diario_personal: ["ansiedad"],
+    // Hab. Sociales
+    escenarios: ["tea", "ansiedad"], dialogos: ["tea", "ansiedad"], expresiones: ["tea"],
+    historia: ["tea"], conflictos: ["tea", "tdah"], roleplay: ["tea", "ansiedad"],
+    que_piensa: ["tea"], doble_sentido: ["tea"],
+    // Lectoescritura
+    forma: ["dislexia"], desorden: ["dislexia"], completa: ["dislexia"], sopa: ["dislexia", "tdah"],
+    comprension: ["dislexia"], velocimetro: ["dislexia"], dictado: ["dislexia"],
+    construye: ["dislexia"], sintactico: ["dislexia"],
+    // Dislexia
+    letras_espejo: ["dislexia"], cazador_sonidos: ["dislexia"], palabra_correcta: ["dislexia"],
+    completa_palabra: ["dislexia"], silaba_silaba: ["dislexia"], nombra_rapido: ["dislexia"],
+    rimas: ["dislexia"], silabas: ["dislexia"], fluidez: ["dislexia"],
+    // Instrumentales
+    caligrafia: ["dislexia"], dislexia: ["dislexia"], calculo: ["discalculia"],
+    calculo_mental: ["discalculia"], tablas: ["discalculia"], problemas: ["discalculia"],
+    // Razonamiento
+    series: ["tdah", "discalculia"], acertijos: ["tdah"], planificacion: ["tdah"],
+    cuatroenraya: ["tdah"], buscaminas: ["tdah", "discalculia"], othello: ["tdah"],
+    decision: ["tdah", "ansiedad"],
+    // Autoestima
+    pizarra: ["ansiedad"], arbol: ["ansiedad"], frasco: ["ansiedad"], gratitud: ["ansiedad"],
+    carta: ["ansiedad"], mapa: ["ansiedad"], linea_vida: ["ansiedad"], espejo: ["ansiedad"],
+    mis_valores: ["ansiedad"], carta_futuro: ["ansiedad"],
+};
+// Activities used in the patient's most recent session day — shown in the
+// menu so the professional can pick up where they left off.
+const getLastSessionActivities = (patientId) => {
+    if (!patientId) return { dayLabel: null, ids: new Set() };
+    const sessions = (typeof getSessions === "function" ? getSessions(patientId) : []) || [];
+    if (!sessions.length) return { dayLabel: null, ids: new Set() };
+    const dayOf = (ts) => new Date(ts).toISOString().slice(0, 10);
+    const days = {};
+    sessions.forEach(s => { const d = dayOf(s.ts); (days[d] = days[d] || []).push(s); });
+    const sortedDays = Object.keys(days).sort().reverse();
+    const lastDay = sortedDays[0];
+    return { dayLabel: lastDay, ids: new Set(days[lastDay].map(s => s.activity)) };
+};
 // ═══════════════════════════════════════════════════════════════
 // ACHIEVEMENTS PANEL — shows unlocked + locked badges for patient
 // ═══════════════════════════════════════════════════════════════
@@ -27073,7 +28148,7 @@ function AchievementsPanel({ patientId, refreshKey }) {
     // Group achievements
     const AREA_LABELS = {
         atencion: "Atención", memoria: "Memoria", emocional: "Reg. Emocional",
-        social: "Hab. Sociales", lectoescritura: "Lectoescritura",
+        social: "Hab. Sociales", lectoescritura: "Lectoescritura", dislexia: "Dislexia",
         instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima",
     };
     const groups = { generales: [] };
@@ -27268,6 +28343,92 @@ function AchievementToast({ achievementId, onDismiss }) {
 // ═══════════════════════════════════════════════════════════════
 // CLINICAL TRACKING — therapeutic goals + session notes per patient
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// CLINICAL GUIDE — Dyslexia. In-app orientation for the professional:
+// what dyslexia is, what each exercise trains, how to plan a session.
+// ═══════════════════════════════════════════════════════════════
+function GuiaDislexia({ onClose }) {
+    const [tab, setTab] = useState("intro");
+    const SectionTitle = (t) => React.createElement("div", { style: { fontSize: 14, fontWeight: 800, margin: "14px 0 6px", color: "#E07A5F" } }, t);
+    const P = (children) => React.createElement("div", { style: { fontSize: 13, lineHeight: 1.6, color: C.text, marginBottom: 8 } }, children);
+
+    const EJERCICIOS = [
+        { n: "Conciencia fonológica y fonémica", color: C.primary,
+          items: [
+            ["Rimas", "Nivel más sencillo: reconocer que dos palabras comparten sonido final. Buen punto de entrada."],
+            ["Cuenta Sílabas", "Segmentación silábica. Paso intermedio entre la rima y el fonema."],
+            ["Cazador de Sonidos", "Conciencia fonémica: aislar el sonido inicial y omitir sonidos. Es el nivel más exigente y el más decisivo en dislexia."],
+            ["Fluidez Verbal", "Acceso al léxico: evocar palabras por una letra. Trabaja la recuperación rápida de vocabulario."],
+          ] },
+        { n: "Letras, ortografía y decodificación", color: C.blue,
+          items: [
+            ["Letras Espejo", "Discriminación de grafemas que se confunden (b/d/p/q). Trabaja la vía visual."],
+            ["Completa la Palabra", "Correspondencia letra-sonido: elegir la grafía que falta."],
+            ["Sílaba a Sílaba", "Decodificación activa: componer la palabra ensamblando sílabas en orden. Entrena la ruta fonológica de lectura."],
+            ["Palabra Correcta", "Representación ortográfica: distinguir la escritura correcta de errores típicos."],
+          ] },
+        { n: "Velocidad de denominación", color: C.purple,
+          items: [
+            ["Nombra Rápido", "Velocidad para nombrar estímulos familiares. Es, junto a la conciencia fonológica, uno de los dos pilares de la dislexia (teoría del doble déficit). Repítelo cada pocas semanas para ver si la automatización mejora."],
+          ] },
+    ];
+
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 20, overflowY: "auto" } },
+        React.createElement("div", { style: { background: C.bg, borderRadius: 20, padding: 24, maxWidth: 680, width: "100%", marginTop: 20, marginBottom: 20 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 8 } },
+                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "📖 Guía de Dislexia"),
+                React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar")),
+            React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 14, lineHeight: 1.5 } },
+                "Orientación práctica para trabajar la dislexia con la app. No sustituye la formación especializada ni la coordinación con logopedia o psicopedagogía."),
+            React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" } },
+                [{ id: "intro", l: "Qué es" }, { id: "ejercicios", l: "Los ejercicios" }, { id: "sesion", l: "Planificar la sesión" }].map(t =>
+                    React.createElement("button", { key: t.id, onClick: () => { sfx.tap(); setTab(t.id); }, style: {
+                        flex: "1 1 auto", padding: "9px 12px", borderRadius: 12, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                        background: tab === t.id ? "#E07A5F" : "#fff", color: tab === t.id ? "#fff" : C.text,
+                        border: `2px solid ${tab === t.id ? "#E07A5F" : C.border}`, fontFamily: "inherit",
+                    } }, t.l))),
+            tab === "intro" && React.createElement("div", null,
+                SectionTitle("Qué es la dislexia"),
+                P("La dislexia es un trastorno específico del aprendizaje de la lectura, de base neurobiológica. No tiene que ver con la inteligencia ni con la falta de esfuerzo: el niño puede ser muy capaz y aun así costarle leer con precisión y fluidez."),
+                SectionTitle("Dónde está la dificultad"),
+                P("El núcleo es el procesamiento fonológico: la habilidad para percibir y manipular los sonidos del lenguaje. A muchos niños con dislexia les cuesta, además, la velocidad de denominación (nombrar rápido cosas conocidas). Cuando aparecen las dos dificultades se habla de doble déficit, y suele implicar un perfil más marcado."),
+                SectionTitle("Qué funciona en la intervención"),
+                P("La evidencia es consistente: instrucción explícita, sistemática y muy estructurada. Trabajo directo de la conciencia fonológica, enseñanza explícita de la correspondencia entre letras y sonidos, práctica de decodificación y trabajo de fluidez. Sesiones cortas y frecuentes rinden más que sesiones largas y esporádicas."),
+                React.createElement("div", { style: { padding: 12, background: "#FFF4EF", borderRadius: 10, fontSize: 12.5, lineHeight: 1.55, marginTop: 8, borderLeft: "3px solid #E07A5F" } },
+                    "Idea clave: con la dislexia no se trata de leer más, sino de entrenar de forma específica los procesos que fallan, paso a paso y con mucha repetición.")),
+            tab === "ejercicios" && React.createElement("div", null,
+                P("Los ejercicios del área se agrupan en tres bloques. Conocer qué entrena cada uno te ayuda a elegir según el perfil del paciente."),
+                EJERCICIOS.map((bloque, bi) => React.createElement("div", { key: bi, style: { marginBottom: 12 } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: bloque.color, marginBottom: 6 } }, bloque.n),
+                    bloque.items.map((it, ii) => React.createElement("div", { key: ii, style: { padding: "8px 11px", marginBottom: 5, background: "#fff", borderRadius: 10, borderLeft: `3px solid ${bloque.color}` } },
+                        React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800 } }, it[0]),
+                        React.createElement("div", { style: { fontSize: 12, color: C.textL, lineHeight: 1.5, marginTop: 2 } }, it[1])))))),
+            tab === "sesion" && React.createElement("div", null,
+                SectionTitle("Una progresión sensata"),
+                P("La conciencia fonológica tiene niveles, de más fácil a más difícil: primero la rima, luego la sílaba, y por último el fonema (el sonido individual). Empieza por donde el niño responda con soltura y sube cuando lo domine. En lo ortográfico, ve de la letra aislada a la palabra completa."),
+                SectionTitle("Estructura de una sesión tipo (30-40 min)"),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 } },
+                    [
+                        ["1. Calentamiento fonológico (5 min)", "Rimas o Cuenta Sílabas. Algo accesible que arranque la sesión con éxito."],
+                        ["2. Trabajo fonémico (10 min)", "Cazador de Sonidos. El bloque más exigente, cuando está más fresco."],
+                        ["3. Letras y decodificación (10 min)", "Letras Espejo, Completa la Palabra o Sílaba a Sílaba, según objetivo."],
+                        ["4. Velocidad (5 min)", "Nombra Rápido. Una tanda; registra el tiempo para seguir la evolución."],
+                        ["5. Cierre", "Una ronda corta de algo que el niño haga bien, para terminar en positivo."],
+                    ].map((s, i) => React.createElement("div", { key: i, style: { padding: "8px 11px", background: "#fff", borderRadius: 10, borderLeft: "3px solid #E07A5F" } },
+                        React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800 } }, s[0]),
+                        React.createElement("div", { style: { fontSize: 12, color: C.textL, lineHeight: 1.5, marginTop: 2 } }, s[1])))),
+                SectionTitle("Consejos prácticos"),
+                React.createElement("ul", { style: { margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7, color: C.text } },
+                    React.createElement("li", null, "Usa el modo entrenamiento (tandas de 10-20) para que la práctica sea medible y repetible."),
+                    React.createElement("li", null, "Mejor sesiones cortas y frecuentes que una larga y aislada."),
+                    React.createElement("li", null, "Define 2-3 objetivos en Seguimiento y revísalos cada pocas semanas."),
+                    React.createElement("li", null, "Repite Nombra Rápido periódicamente: es tu medida objetiva de progreso."),
+                    React.createElement("li", null, "Refuerza el esfuerzo y la constancia, no solo el acierto."),
+                    React.createElement("li", null, "Coordínate con el logopeda o el centro escolar si los hay.")),
+                React.createElement("div", { style: { padding: 12, background: "#FFF4EF", borderRadius: 10, fontSize: 12, lineHeight: 1.55, marginTop: 10, borderLeft: "3px solid #E07A5F" } },
+                    "Genera un Informe de sesión al terminar (alcance \"Sesión de hoy\") para que la familia vea el trabajo concreto del día."))));
+}
+
 function SeguimientoClinico({ patient, onClose }) {
     const [tab, setTab] = useState("objetivos"); // objetivos | notas
     const [objetivos, setObjetivos] = useState(() => storeLoad("objetivos:" + patient.id) || []);
@@ -27957,7 +29118,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v19.9</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v20.5</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -28007,7 +29168,7 @@ ${sections.resumen ? `
   <table class="print-table" style="max-width:100%">
     <tr><td style="font-weight:700;width:160pt">Total de ejercicios realizados</td><td>${sessionsCount}</td></tr>
     <tr><td style="font-weight:700">Días con actividad</td><td>${days.length}</td></tr>
-    <tr><td style="font-weight:700">Áreas trabajadas</td><td>${Object.keys(workByArea).length} de 8</td></tr>
+    <tr><td style="font-weight:700">Áreas trabajadas</td><td>${Object.keys(workByArea).length} de ${AREAS.length}</td></tr>
     <tr><td style="font-weight:700">Rendimiento global</td><td>${accuracy}% de aciertos</td></tr>
     ${firstSessionDate ? `<tr><td style="font-weight:700">Primera sesión</td><td>${firstSessionDate.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</td></tr>` : ''}
     ${lastSessionDate ? `<tr><td style="font-weight:700">Última sesión</td><td>${lastSessionDate.toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" })}</td></tr>` : ''}
@@ -28106,7 +29267,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v19.9</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v20.5</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -28148,7 +29309,7 @@ ${(sections.linea && lineaHTML) ? `
     };
     const AREA_LABELS = {
         atencion: "Atención", memoria: "Memoria", emocional: "Reg. Emocional",
-        social: "Hab. Sociales", lectoescritura: "Lectoescritura",
+        social: "Hab. Sociales", lectoescritura: "Lectoescritura", dislexia: "Dislexia",
         instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima",
     };
     return (React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }, className: "no-print" },
@@ -28742,6 +29903,7 @@ function TerapiAppInner() {
     const [showSettings, setShowSettings] = useState(false);
     const [reportPatient, setReportPatient] = useState(null);
     const [trackingPatient, setTrackingPatient] = useState(null);
+    const [showGuiaDislexia, setShowGuiaDislexia] = useState(false);
     const [area, setArea] = useState(null);
     const [activity, setActivity] = useState(null);
     const [mascotState, setMascotState] = useState("idle");
@@ -29033,6 +30195,7 @@ function TerapiAppInner() {
             showRegistry && (React.createElement(PatientRegistry, { patients: patients, setPatients: setPatients, activePatient: activePatient, setActivePatient: setActivePatient, onClose: () => setShowRegistry(false), onShowReport: (p) => { setShowRegistry(false); setReportPatient(p); }, onShowTracking: (p) => { setShowRegistry(false); setTrackingPatient(p); } })),
             reportPatient && React.createElement(SessionReport, { patient: reportPatient, onClose: () => setReportPatient(null) }),
             trackingPatient && React.createElement(SeguimientoClinico, { patient: trackingPatient, onClose: () => setTrackingPatient(null) }),
+            showGuiaDislexia && React.createElement(GuiaDislexia, { onClose: () => setShowGuiaDislexia(false) }),
             showPlanner && React.createElement(SessionPlanner, {
                 onClose: () => setShowPlanner(false),
                 onLaunch: (areaId, activityId) => { setShowPlanner(false); nav(areaId, activityId); },
@@ -29216,7 +30379,7 @@ function TerapiAppInner() {
                                 React.createElement("div", { style: { fontSize: 22, fontWeight: 900, color: C.primary } }, "📅 ", days),
                                 React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Días activos")),
                             React.createElement("div", { style: { padding: 12, background: "#fff", borderRadius: 12, textAlign: "center" } },
-                                React.createElement("div", { style: { fontSize: 22, fontWeight: 900, color: C.purple } }, "🎯 ", areasUsed, "/7"),
+                                React.createElement("div", { style: { fontSize: 22, fontWeight: 900, color: C.purple } }, "🎯 ", areasUsed, "/", AREAS.length),
                                 React.createElement("div", { style: { fontSize: 10, color: C.textL, fontWeight: 700, marginTop: 2 } }, "Áreas exploradas")),
                             React.createElement("div", { style: { padding: 12, background: "#fff", borderRadius: 12, textAlign: "center" } },
                                 React.createElement("div", { style: { fontSize: 22, fontWeight: 900, color: C.blue } }, "🏆 ", totalUnlocked),
@@ -29224,19 +30387,25 @@ function TerapiAppInner() {
                 })(),
                 activePatient && (React.createElement(AchievementsPanel, { patientId: activePatient.id, refreshKey: scoreRefresh })))),
             !showRegistry && area && !activity && (React.createElement("div", null,
-                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, marginBottom: 14, display: "flex", alignItems: "center", gap: 10 } },
-                    React.createElement(Ico, { name: areaData.illo, size: 36 }),
-                    areaData.label),
-                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } }, AREA_ACTIVITIES[area].filter(it => {
-                        // adolescentOnly activities show only in adolescent mode;
-                        // childOnly activities hide in adolescent mode.
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 } },
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 } },
+                        React.createElement(Ico, { name: areaData.illo, size: 36 }),
+                        areaData.label),
+                    area === "dislexia" && React.createElement(Btn, { color: "#E07A5F", small: true, onClick: () => { sfx.tap(); setShowGuiaDislexia(true); } }, "📖 Guía para el profesional")),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } }, (() => {
+                    const lastSession = getLastSessionActivities(activePatient && activePatient.id);
+                    return AREA_ACTIVITIES[area].filter(it => {
                         const ado = isAdolescentMode(activePatient);
                         if (it.adolescentOnly && !ado) return false;
                         if (it.childOnly && ado) return false;
                         return true;
-                    }).map(it => (React.createElement("div", { key: it.id, onClick: () => nav(area, it.id), style: {
+                    }).map(it => {
+                    const dxList = ACTIVITY_DX[it.id] || [];
+                    const usedLast = lastSession.ids.has(it.id);
+                    return (React.createElement("div", { key: it.id, onClick: () => nav(area, it.id), style: {
                         background: C.card, borderRadius: 14, padding: 16, cursor: "pointer",
-                        boxShadow: "0 3px 12px rgba(0,0,0,0.05)", borderLeft: `4px solid ${areaData.color}`,
+                        boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
+                        borderLeft: `4px solid ${usedLast ? C.primary : areaData.color}`,
                         transition: "all 0.2s",
                     }, onMouseEnter: e => e.currentTarget.style.transform = "translateY(-2px)", onMouseLeave: e => e.currentTarget.style.transform = "translateY(0)" },
                     React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 } },
@@ -29255,7 +30424,22 @@ function TerapiAppInner() {
                                 padding: "0 2px", fontFamily: "inherit", lineHeight: 1,
                                 color: isFavorite(area, it.id) ? "#E9C46A" : "#ccc",
                             } }, isFavorite(area, it.id) ? "★" : "☆"))),
-                    React.createElement("div", { style: { fontSize: 11, color: C.textL } }, it.desc))))))),
+                    React.createElement("div", { style: { fontSize: 11, color: C.textL, marginBottom: (dxList.length || usedLast) ? 8 : 0 } }, it.desc),
+                    (dxList.length > 0 || usedLast) && React.createElement("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" } },
+                        usedLast && React.createElement("span", { style: {
+                            display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9.5, fontWeight: 800,
+                            padding: "3px 7px", borderRadius: 8, background: C.primary, color: "#fff",
+                        } }, "↻ Última sesión"),
+                        dxList.map(dx => {
+                            const tag = DX_TAGS[dx];
+                            if (!tag) return null;
+                            return React.createElement("span", { key: dx, title: "Útil en " + tag.label, style: {
+                                fontSize: 9.5, fontWeight: 800, padding: "3px 7px", borderRadius: 8,
+                                background: tag.color + "22", color: tag.color, border: `1px solid ${tag.color}44`,
+                            } }, tag.label);
+                        }))));
+                    });
+                })()))),
             !showRegistry && area && activity && ActComp && (React.createElement("div", { style: { background: C.card, borderRadius: 18, padding: "22px 18px", boxShadow: "0 4px 20px rgba(0,0,0,0.06)" } },
                 React.createElement(ActComp, { patient: activePatient })))),
         React.createElement("div", { style: { textAlign: "center", padding: "20px 16px 24px", fontSize: 11, color: C.textL, borderTop: `1px solid ${C.border}`, marginTop: 20 } },
@@ -29265,7 +30449,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v19.9"),
+                "© 2026 Todos los derechos reservados · TerapiApp v20.5"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
