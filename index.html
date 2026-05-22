@@ -20867,7 +20867,19 @@ La respuesta debe ser obvia por contexto.`;
             source === "ai" && React.createElement(AIBadge, null)),
         React.createElement(Instructions, null, "Lee la frase y elige la palabra que falta."),
         loading ? React.createElement(LoadingCard, null) : sent && (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { background: C.warm, borderRadius: 14, padding: 20, textAlign: "center", marginBottom: 16, fontSize: 18, fontWeight: 700, lineHeight: 1.6 } }, sent.text.replace("___", sel || "___")),
+            React.createElement("div", { style: { background: C.warm, borderRadius: 14, padding: 20, textAlign: "center", marginBottom: 16, fontSize: 18, fontWeight: 700, lineHeight: 1.6 } },
+                (() => {
+                    const parts = sent.text.split("___");
+                    return React.createElement(React.Fragment, null,
+                        parts[0],
+                        React.createElement("span", { style: {
+                            display: "inline-block", minWidth: 110, padding: "0 6px",
+                            color: sel ? C.primary : C.textL,
+                            borderBottom: `2px solid ${sel ? C.primary : C.textL}`,
+                            textAlign: "center",
+                        } }, sel || "___"),
+                        parts[1] || "");
+                })()),
             React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } }, shuffledOpts.map(opt => {
                 const right = opt === sent.answer;
                 const fb = sel !== null;
@@ -20897,21 +20909,36 @@ function SopaLetras({ patient }) {
     const [source, setSource] = useState("local");
     const buildFromWord = (w) => {
         const word = w.toUpperCase();
-        if (word.length > GRID_SIZE)
-            return;
-        const g = Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[randInt(0, 25)]));
-        const row = randInt(0, GRID_SIZE - 1);
-        const col = randInt(0, GRID_SIZE - word.length);
+        if (word.length > GRID_SIZE) return;
+        const ALPH = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ";
+        const g = Array.from({ length: GRID_SIZE }, () => Array.from({ length: GRID_SIZE }, () => ALPH[randInt(0, ALPH.length - 1)]));
+        // Pick a direction that fits the word inside the grid.
+        const DIRS = [
+            { dr: 0, dc: 1 },   // →
+            { dr: 1, dc: 0 },   // ↓
+            { dr: 1, dc: 1 },   // ↘
+            { dr: -1, dc: 1 },  // ↗
+        ];
+        const valid = DIRS.filter(d => {
+            const maxR = d.dr > 0 ? GRID_SIZE - word.length : (d.dr < 0 ? word.length - 1 : GRID_SIZE - 1);
+            const minR = d.dr < 0 ? word.length - 1 : 0;
+            const maxC = d.dc > 0 ? GRID_SIZE - word.length : GRID_SIZE - 1;
+            return maxR >= minR && maxC >= 0;
+        });
+        const dir = valid[randInt(0, valid.length - 1)];
+        const rowMin = dir.dr < 0 ? word.length - 1 : 0;
+        const rowMax = dir.dr > 0 ? GRID_SIZE - word.length : (dir.dr < 0 ? GRID_SIZE - 1 : GRID_SIZE - 1);
+        const colMax = dir.dc > 0 ? GRID_SIZE - word.length : GRID_SIZE - 1;
+        const startRow = randInt(rowMin, rowMax);
+        const startCol = randInt(0, colMax);
         const cells = [];
         for (let i = 0; i < word.length; i++) {
-            g[row][col + i] = word[i];
-            cells.push(`${row}-${col + i}`);
+            const rr = startRow + dir.dr * i;
+            const cc = startCol + dir.dc * i;
+            g[rr][cc] = word[i];
+            cells.push(`${rr}-${cc}`);
         }
-        setGrid(g);
-        setTarget(word);
-        setAnswerCells(cells);
-        setSelCells([]);
-        setDone(false);
+        setGrid(g); setTarget(word); setAnswerCells(cells); setSelCells([]); setDone(false);
     };
     const genLocal = useCallback(() => {
         buildFromWord(WORDS_EASY[randInt(0, WORDS_EASY.length - 1)]);
@@ -22210,16 +22237,25 @@ function Calculo({ patient }) {
     return React.createElement(PiramideLogica, { onSwitchMode: setMode });
 }
 function Subitizacion({ onSwitchMode }) {
-    const [phase, setPhase] = useState("ready"); // ready | flash | answer | result
+    const [phase, setPhase] = useState("ready");
     const [count, setCount] = useState(0);
+    const [options, setOptions] = useState([]);
     const [guess, setGuess] = useState(null);
     const [score, setScore] = useState(0);
     const [rounds, setRounds] = useState(0);
     const [diff, setDiff] = useState("medio");
+    const [lastCount, setLastCount] = useState(null);
     const start = () => {
-        const range = { "fácil": [3, 6], "medio": [4, 8], "difícil": [5, 12] }[diff];
-        const n = randInt(range[0], range[1]);
+        const range = { "fácil": [2, 5], "medio": [3, 9], "difícil": [6, 15] }[diff];
+        let n = randInt(range[0], range[1]);
+        let tries = 0;
+        while (n === lastCount && range[1] > range[0] && tries < 8) { n = randInt(range[0], range[1]); tries++; }
+        setLastCount(n);
         setCount(n);
+        // Generate options ONCE per round so they don't reshuffle on selection.
+        const set = new Set([n]);
+        while (set.size < 4) set.add(randInt(Math.max(1, n - 3), n + 3));
+        setOptions(shuffle(Array.from(set)));
         setGuess(null);
         setPhase("flash");
         setTimeout(() => setPhase("answer"), 1000);
@@ -22248,14 +22284,7 @@ function Subitizacion({ onSwitchMode }) {
         }
         return placed;
     }, [phase, count]);
-    const options = React.useMemo(() => {
-        if (phase !== "answer" && phase !== "result")
-            return [];
-        const set = new Set([count]);
-        while (set.size < 4)
-            set.add(randInt(Math.max(1, count - 3), count + 3));
-        return shuffle(Array.from(set));
-    }, [phase, count]);
+    // options is now state, set inside start()
     return (React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Subitizaci\u00F3n"),
@@ -23134,10 +23163,18 @@ function ResolucionConflictos({ patient }) {
     const [loading, setLoading] = useState(false);
     const [step, setStep] = useState(0); // 0: scenario, 1: chosen response, 2: outcome
     const [chosenIdx, setChosenIdx] = useState(null);
+    const [diff, setDiff] = useState("medio");
     const generate = async () => {
         setLoading(true); setStep(0); setChosenIdx(null);
+        const diffPrompt = {
+            "fácil": "Una situación cotidiana sencilla: por ejemplo, un compañero le quita el lápiz, alguien le pisa sin querer, un hermano cambia de canal. Las tres respuestas deben ser bastante claras y distinguibles.",
+            "medio": "Una situación cotidiana realista pero no trivial: por ejemplo, le copian los deberes, un amigo le critica delante de otros, no le invitan a una fiesta. Las respuestas deben mostrar matices.",
+            "difícil": "Un dilema social complejo y sutil: presión de grupo para hacer algo que no quiere, lealtad versus honestidad (cubrir a un amigo que ha hecho algo mal), conflicto con una figura de autoridad, justicia social. La respuesta asertiva NO debe ser obvia y debe haber tensión entre valores. Las tres opciones deben ser todas plausibles."
+        }[diff];
         const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
-Genera un dilema social realista para un niño/adolescente. Una situación de conflicto que requiera una decisión ética o emocional. Después da 3 posibles respuestas: una asertiva, una pasiva, una agresiva (sin etiquetar cuál es cuál). Para cada una explica las consecuencias probables.
+Genera un dilema social para un niño/adolescente. ${diffPrompt}
+
+Después da 3 posibles respuestas: una asertiva, una pasiva, una agresiva (sin etiquetar cuál es cuál). Para cada una explica las consecuencias probables.
 
 Formato JSON:
 {
@@ -23180,9 +23217,11 @@ Formato JSON:
     const COLORS = { asertiva: C.success, pasiva: C.warning, agresiva: C.error };
     const LABELS = { asertiva: "Respuesta asertiva", pasiva: "Respuesta pasiva", agresiva: "Respuesta agresiva" };
     return React.createElement("div", null,
-        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
-            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Resolución de Conflictos"),
-            React.createElement(AIBadge, null)),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Resolución de Conflictos"),
+                React.createElement(AIBadge, null)),
+            React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
         React.createElement(Instructions, null, "Lee la situación y elige cómo responderías. Veremos las consecuencias y aprenderemos sobre estilos de comunicación."),
         !data && !loading && React.createElement("div", { style: { textAlign: "center", padding: 30 } },
             React.createElement(Btn, { color: C.purple, onClick: generate }, "✨ Generar escenario")),
@@ -24543,18 +24582,20 @@ function TablasMultiplicar({ patient }) {
                     background: tabla === null ? C.primary : "#f9f9f9", color: tabla === null ? "#fff" : C.text,
                     border: `2px solid ${tabla === null ? C.primary : C.border}`, fontFamily: "inherit",
                 } }, "🎲 Mezcladas"),
-                ...[2, 3, 4, 5, 6, 7, 8, 9].map(t => React.createElement("button", { key: t, onClick: () => { sfx.tap(); setTabla(t); }, style: {
+                ...[2, 3, 4, 5, 6, 7, 8, 9].map(t => React.createElement("button", { key: t, onClick: () => { sfx.tap(); setTabla(t); if (target > 30) setTarget(30); }, style: {
                     padding: "10px 16px", borderRadius: 14, fontSize: 14, fontWeight: 800, cursor: "pointer",
                     background: tabla === t ? C.primary : "#f9f9f9", color: tabla === t ? "#fff" : C.text,
                     border: `2px solid ${tabla === t ? C.primary : C.border}`, fontFamily: "inherit",
                 } }, "× ", t))),
             React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 8, textAlign: "center" } }, "Cuántas operaciones:"),
-            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginBottom: 16 } },
-                [10, 25, 50, 100].map(n => React.createElement("button", { key: n, onClick: () => { sfx.tap(); setTarget(n); }, style: {
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginBottom: 6 } },
+                (tabla !== null ? [10, 20, 30] : [10, 25, 50, 100]).map(n => React.createElement("button", { key: n, onClick: () => { sfx.tap(); setTarget(n); }, style: {
                     padding: "8px 16px", borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: "pointer",
                     background: target === n ? C.accent : "#fff", color: target === n ? "#fff" : C.text,
                     border: `2px solid ${target === n ? C.accent : C.border}`, fontFamily: "inherit",
                 } }, n))),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginBottom: 16, fontStyle: "italic" } },
+                tabla !== null ? "Con una tabla concreta hay 10 multiplicaciones distintas; con más de 30 se repetirían demasiado." : "El modo mixto usa 80 multiplicaciones distintas."),
             React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
                 React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar (", target, " preguntas)"))),
         phase === "playing" && rounds[idx] && React.createElement("div", { style: { textAlign: "center" } },
@@ -25640,6 +25681,372 @@ Los pasos deben tener un orden lógico inequívoco basado en dependencias reales
 // ═══════════════════════════════════════════════════════════════
 // REASONING — 4 en raya (planificación, anticipación) — minimax + alpha-beta
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// REASONING — Hundir la Flota (Battleship)
+// Visuospatial planning, deduction, attention. Two boards: yours visible
+// with the AI's shots, the enemy's hidden where you shoot.
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// REASONING — Mastermind (deductive reasoning, attention, planning)
+// Guess the secret combination of colors. After each attempt the player
+// receives black pegs (right color in right position) and white pegs
+// (right color, wrong position) and must deduce the answer.
+// ═══════════════════════════════════════════════════════════════
+function Mastermind({ patient }) {
+    const COLORS_PALETTE = ["#E63946", "#F4A261", "#E9C46A", "#2A9D8F", "#457B9D", "#9B59B6", "#2D6A4F", "#8B5A3C"];
+    const COLOR_NAMES = ["rojo", "naranja", "amarillo", "verde azulado", "azul", "morado", "verde", "marrón"];
+    const [diff, setDiff] = useState("medio");
+    const config = {
+        "fácil":   { positions: 4, palette: 4, repeats: false, maxAttempts: 10 },
+        "medio":   { positions: 4, palette: 6, repeats: false, maxAttempts: 10 },
+        "difícil": { positions: 4, palette: 6, repeats: true,  maxAttempts: 10 },
+    }[diff];
+    const [secret, setSecret] = useState([]);
+    const [attempts, setAttempts] = useState([]); // [{guess:[], black, white}]
+    const [current, setCurrent] = useState([]); // working row
+    const [status, setStatus] = useState("playing"); // playing | won | lost
+    const [reveal, setReveal] = useState(false);
+
+    const makeSecret = (cfg) => {
+        const pool = Array.from({ length: cfg.palette }, (_, i) => i);
+        if (cfg.repeats) {
+            return Array.from({ length: cfg.positions }, () => pool[randInt(0, pool.length - 1)]);
+        }
+        return shuffle(pool).slice(0, cfg.positions);
+    };
+    const reset = () => {
+        setSecret(makeSecret(config));
+        setAttempts([]); setCurrent([]); setStatus("playing"); setReveal(false);
+    };
+    useEffect(() => { reset(); }, [diff]);
+
+    // Evaluate a guess: black = right color+position; white = right color, wrong position.
+    const evaluate = (guess) => {
+        let black = 0;
+        const sCopy = [...secret], gCopy = [...guess];
+        for (let i = 0; i < sCopy.length; i++) {
+            if (gCopy[i] === sCopy[i]) { black++; sCopy[i] = -1; gCopy[i] = -2; }
+        }
+        let white = 0;
+        for (let i = 0; i < gCopy.length; i++) {
+            if (gCopy[i] === -2) continue;
+            const idx = sCopy.indexOf(gCopy[i]);
+            if (idx >= 0) { white++; sCopy[idx] = -1; }
+        }
+        return { black, white };
+    };
+
+    const addColor = (colorIdx) => {
+        if (status !== "playing") return;
+        if (current.length >= config.positions) return;
+        sfx.tap();
+        setCurrent([...current, colorIdx]);
+    };
+    const removeLast = () => {
+        if (current.length === 0 || status !== "playing") return;
+        sfx.tap();
+        setCurrent(current.slice(0, -1));
+    };
+    const submit = () => {
+        if (current.length !== config.positions || status !== "playing") return;
+        const r = evaluate(current);
+        const newAttempts = [...attempts, { guess: current, ...r }];
+        setAttempts(newAttempts);
+        setCurrent([]);
+        if (r.black === config.positions) {
+            sfx.success();
+            setStatus("won"); setReveal(true);
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+            setTimeout(() => fireConfetti(true), 200);
+        } else if (newAttempts.length >= config.maxAttempts) {
+            sfx.fail();
+            setStatus("lost"); setReveal(true);
+            if (_activePatientId) logCurrentResult(false);
+        }
+    };
+
+    const Peg = ({ idx, size = 28 }) => idx == null
+        ? React.createElement("div", { style: {
+            width: size, height: size, borderRadius: "50%",
+            background: "#fff", border: "2px dashed #ccc", boxSizing: "border-box",
+        } })
+        : React.createElement("div", { style: {
+            width: size, height: size, borderRadius: "50%",
+            background: `radial-gradient(circle at 30% 30%, #fff5, ${COLORS_PALETTE[idx]} 70%)`,
+            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.2)",
+        } });
+
+    const HintPegs = ({ black, white }) => {
+        // Render small pegs in a 2x2 grid: black first, then white, then empty.
+        const total = black + white;
+        const empty = config.positions - total;
+        const pegs = [...Array(black).fill("b"), ...Array(white).fill("w"), ...Array(empty).fill("e")];
+        return React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 2, padding: 2 } },
+            pegs.slice(0, 4).map((t, i) => React.createElement("div", { key: i, style: {
+                width: 10, height: 10, borderRadius: "50%",
+                background: t === "b" ? "#1D1D1D" : t === "w" ? "#fff" : "transparent",
+                border: t === "w" ? "1px solid #888" : "none",
+            } })));
+    };
+
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Mastermind"),
+            React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
+        React.createElement(Instructions, { adoChildren: "He elegido una combinación secreta de " + config.positions + " colores. Tras cada intento, las clavijas negras indican color y posición correctos; las blancas, color correcto en posición incorrecta. Deduce la combinación." },
+            "Tengo una combinación secreta de ", config.positions, " colores. Elige los tuyos y comprueba: clavija negra = color y sitio correctos; clavija blanca = color correcto pero en otro sitio. ¡Adivínala!"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+            React.createElement(Badge, { color: C.primary }, "Intentos: ", attempts.length, "/", config.maxAttempts),
+            diff === "difícil" && React.createElement(Badge, { color: C.accent }, "Puede haber colores repetidos")),
+        // Secret row (revealed at end)
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 6, padding: "8px 12px", background: reveal ? `${C.primary}22` : "#222", borderRadius: 10, marginBottom: 14, alignItems: "center" } },
+            React.createElement("span", { style: { fontSize: 11, fontWeight: 800, color: reveal ? C.primary : "#888", marginRight: 4 } }, reveal ? "Solución:" : "Secreto:"),
+            secret.map((c, i) => React.createElement("div", { key: i, style: { width: 22, height: 22, borderRadius: "50%",
+                background: reveal ? `radial-gradient(circle at 30% 30%, #fff5, ${COLORS_PALETTE[c]} 70%)` : "#444",
+                boxShadow: reveal ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
+            } }))),
+        // Attempt rows (most recent at bottom)
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4, marginBottom: 14, maxWidth: 360, margin: "0 auto 14px" } },
+            attempts.map((a, ai) => React.createElement("div", { key: ai, style: { display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", background: "#FAFAF7", borderRadius: 8 } },
+                React.createElement("span", { style: { fontSize: 11, color: C.textL, fontWeight: 700, width: 20 } }, ai + 1),
+                React.createElement("div", { style: { display: "flex", gap: 5, flex: 1, justifyContent: "center" } },
+                    a.guess.map((c, i) => React.createElement(Peg, { key: i, idx: c, size: 24 }))),
+                React.createElement(HintPegs, { black: a.black, white: a.white }))),
+            // Current working row
+            status === "playing" && React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: `${C.yellow}22`, borderRadius: 8, border: `2px solid ${C.accent}` } },
+                React.createElement("span", { style: { fontSize: 11, color: C.accent, fontWeight: 800, width: 20 } }, attempts.length + 1),
+                React.createElement("div", { style: { display: "flex", gap: 5, flex: 1, justifyContent: "center" } },
+                    Array.from({ length: config.positions }, (_, i) => React.createElement(Peg, { key: i, idx: current[i], size: 26 }))),
+                React.createElement("div", { style: { width: 22 } }))),
+        // Color palette (only when playing)
+        status === "playing" && React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginBottom: 6, fontWeight: 700 } }, "Elige los colores"),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+                Array.from({ length: config.palette }, (_, i) => React.createElement("button", {
+                    key: i, onClick: () => addColor(i), title: COLOR_NAMES[i],
+                    style: {
+                        width: 38, height: 38, borderRadius: "50%", border: "none", cursor: "pointer",
+                        background: `radial-gradient(circle at 30% 30%, #fff5, ${COLORS_PALETTE[i]} 70%)`,
+                        boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.25), 0 2px 5px rgba(0,0,0,0.2)",
+                    },
+                }))),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center" } },
+                React.createElement(Btn, { color: C.textL, onClick: removeLast, small: true, outline: true, disabled: current.length === 0 }, "← Borrar"),
+                React.createElement(Btn, { color: C.primary, onClick: submit, small: true, disabled: current.length !== config.positions }, "✓ Comprobar"))),
+        status !== "playing" && React.createElement("div", { style: { textAlign: "center" } },
+            React.createElement(Feedback, { success: status === "won", reward: status === "won" },
+                status === "won" ? `🎉 ¡Adivinada en ${attempts.length} intento${attempts.length === 1 ? "" : "s"}!` : "Sin intentos. La combinación era la de arriba."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 10 } },
+                React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Nueva partida"))));
+}
+
+function HundirLaFlota({ patient }) {
+    const SIZE = 7;
+    const FLEET_SIZES = [3, 2, 2, 1, 1]; // total 9 cells
+    const [diff, setDiff] = useState("medio");
+    const [playerShips, setPlayerShips] = useState(null);
+    const [aiShips, setAiShips] = useState(null);
+    const [playerShots, setPlayerShots] = useState({}); // key "r-c" -> "hit"|"miss"
+    const [aiShots, setAiShots] = useState({});
+    const [turn, setTurn] = useState("player");
+    const [status, setStatus] = useState("playing");
+    const [message, setMessage] = useState("Elige una casilla del tablero enemigo");
+    // AI memory: queue of adjacent cells to try after a hit
+    const aiTargets = useRef([]);
+    const aiLastHit = useRef(null);
+
+    const placeFleet = () => {
+        const cells = {}; // "r-c" -> shipIdx
+        const ships = FLEET_SIZES.map(() => ({ cells: [], hits: 0, sunk: false }));
+        for (let i = 0; i < FLEET_SIZES.length; i++) {
+            const size = FLEET_SIZES[i];
+            let placed = false, attempts = 0;
+            while (!placed && attempts < 200) {
+                attempts++;
+                const horiz = Math.random() < 0.5;
+                const r = randInt(0, horiz ? SIZE - 1 : SIZE - size);
+                const c = randInt(0, horiz ? SIZE - size : SIZE - 1);
+                const tryCells = [];
+                let ok = true;
+                for (let k = 0; k < size; k++) {
+                    const rr = r + (horiz ? 0 : k);
+                    const cc = c + (horiz ? k : 0);
+                    if (cells[`${rr}-${cc}`] != null) { ok = false; break; }
+                    // also keep one-cell buffer around existing ships
+                    for (let dr = -1; dr <= 1 && ok; dr++) for (let dc = -1; dc <= 1 && ok; dc++) {
+                        if (cells[`${rr + dr}-${cc + dc}`] != null) ok = false;
+                    }
+                    tryCells.push({ r: rr, c: cc });
+                }
+                if (ok) {
+                    tryCells.forEach(cell => { cells[`${cell.r}-${cell.c}`] = i; ships[i].cells.push(cell); });
+                    placed = true;
+                }
+            }
+        }
+        return ships;
+    };
+
+    const reset = () => {
+        setPlayerShips(placeFleet());
+        setAiShips(placeFleet());
+        setPlayerShots({}); setAiShots({});
+        setTurn("player"); setStatus("playing");
+        setMessage("Elige una casilla del tablero enemigo");
+        aiTargets.current = []; aiLastHit.current = null;
+    };
+    useEffect(() => { reset(); }, []);
+
+    const checkAllSunk = (ships) => ships.every(s => s.sunk);
+    const cellShipIdx = (ships, r, c) => ships.findIndex(s => s.cells.some(x => x.r === r && x.c === c));
+
+    const playerShoot = (r, c) => {
+        if (status !== "playing" || turn !== "player") return;
+        const key = `${r}-${c}`;
+        if (playerShots[key]) return;
+        const idx = cellShipIdx(aiShips, r, c);
+        const newShots = { ...playerShots };
+        if (idx >= 0) {
+            newShots[key] = "hit";
+            sfx.success();
+            const newShips = aiShips.map((s, i) => i === idx ? { ...s, hits: s.hits + 1, sunk: s.hits + 1 >= s.cells.length } : s);
+            setAiShips(newShips);
+            const justSunk = newShips[idx].sunk;
+            if (checkAllSunk(newShips)) {
+                setPlayerShots(newShots); setStatus("won"); setMessage("🎉 ¡Has hundido toda la flota enemiga!");
+                if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+                setTimeout(() => fireConfetti(true), 200);
+                return;
+            }
+            setMessage(justSunk ? `💥 ¡Hundido! Sigue tu turno.` : "🎯 ¡Tocado! Sigue tu turno.");
+            setPlayerShots(newShots);
+            return; // hit: player keeps the turn
+        }
+        newShots[key] = "miss";
+        sfx.tap();
+        setPlayerShots(newShots);
+        setMessage("Agua. Turno de la IA.");
+        setTurn("ai");
+    };
+
+    // AI turn
+    useEffect(() => {
+        if (turn !== "ai" || status !== "playing") return;
+        const t = setTimeout(() => {
+            // Choose a target
+            const tried = new Set(Object.keys(aiShots));
+            let cell = null;
+            // Drain target queue first
+            while (aiTargets.current.length > 0 && !cell) {
+                const cand = aiTargets.current.shift();
+                if (cand.r >= 0 && cand.r < SIZE && cand.c >= 0 && cand.c < SIZE && !tried.has(`${cand.r}-${cand.c}`)) {
+                    cell = cand;
+                }
+            }
+            if (!cell) {
+                // Hunt mode: random for easy, checkerboard pattern for medium/hard
+                const candidates = [];
+                for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+                    if (tried.has(`${r}-${c}`)) continue;
+                    if (diff !== "fácil" && (r + c) % 2 !== 0) continue;
+                    candidates.push({ r, c });
+                }
+                if (candidates.length === 0) {
+                    for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+                        if (!tried.has(`${r}-${c}`)) candidates.push({ r, c });
+                    }
+                }
+                cell = candidates[randInt(0, candidates.length - 1)];
+            }
+            const key = `${cell.r}-${cell.c}`;
+            const idx = cellShipIdx(playerShips, cell.r, cell.c);
+            const newShots = { ...aiShots };
+            if (idx >= 0) {
+                newShots[key] = "hit";
+                sfx.fail();
+                const newShips = playerShips.map((s, i) => i === idx ? { ...s, hits: s.hits + 1, sunk: s.hits + 1 >= s.cells.length } : s);
+                setPlayerShips(newShips);
+                const justSunk = newShips[idx].sunk;
+                if (checkAllSunk(newShips)) {
+                    setAiShots(newShots); setStatus("lost"); setMessage("La IA ha hundido tu flota.");
+                    if (_activePatientId) logCurrentResult(false);
+                    return;
+                }
+                // queue adjacent cells unless ship just sunk
+                if (!justSunk && diff !== "fácil") {
+                    aiTargets.current.push({ r: cell.r - 1, c: cell.c });
+                    aiTargets.current.push({ r: cell.r + 1, c: cell.c });
+                    aiTargets.current.push({ r: cell.r, c: cell.c - 1 });
+                    aiTargets.current.push({ r: cell.r, c: cell.c + 1 });
+                }
+                if (justSunk) aiTargets.current = []; // clear queue after sinking
+                setMessage(justSunk ? "💥 La IA ha hundido un barco tuyo." : "🎯 La IA ha acertado. Sigue su turno.");
+                setAiShots(newShots);
+                return; // AI keeps the turn on a hit
+            }
+            newShots[key] = "miss";
+            sfx.tap();
+            setAiShots(newShots);
+            setMessage("La IA falla. Tu turno.");
+            setTurn("player");
+        }, diff === "fácil" ? 700 : 900);
+        return () => clearTimeout(t);
+    }, [turn, aiShots, status]);
+
+    if (!playerShips || !aiShips) return React.createElement(LoadingCard, null);
+
+    const renderBoard = (ships, shots, isEnemy) => React.createElement("div", { style: {
+        display: "grid", gridTemplateColumns: `repeat(${SIZE}, 1fr)`, gap: 3,
+        background: "#457B9D", padding: 6, borderRadius: 10, width: 260, height: 260, boxSizing: "border-box",
+    } }, Array.from({ length: SIZE * SIZE }, (_, i) => {
+        const r = Math.floor(i / SIZE), c = i % SIZE;
+        const key = `${r}-${c}`;
+        const shot = shots[key];
+        const shipIdx = cellShipIdx(ships, r, c);
+        const showShip = !isEnemy && shipIdx >= 0;
+        const sunk = shipIdx >= 0 && ships[shipIdx].sunk;
+        let bg = "#E0EFFA";
+        if (shot === "hit") bg = sunk ? "#5C2F2F" : "#E63946";
+        else if (shot === "miss") bg = "#A8B8C5";
+        else if (showShip) bg = "#2C3E50";
+        const clickable = isEnemy && status === "playing" && turn === "player" && !shot;
+        return React.createElement("div", {
+            key,
+            onClick: clickable ? () => playerShoot(r, c) : undefined,
+            style: {
+                aspectRatio: "1", borderRadius: 4, background: bg,
+                cursor: clickable ? "pointer" : "default",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, color: "#fff", fontWeight: 800,
+                boxShadow: shot ? "inset 0 0 0 1px rgba(0,0,0,0.2)" : "none",
+            },
+        }, shot === "hit" ? "✕" : shot === "miss" ? "·" : "");
+    }));
+
+    const remainingMine = playerShips.filter(s => !s.sunk).length;
+    const remainingEnemy = aiShips.filter(s => !s.sunk).length;
+
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Hundir la Flota"),
+            React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); setTimeout(reset, 50); } })),
+        React.createElement(Instructions, { adoChildren: "Localiza y hunde la flota enemiga acertando todas las casillas de cada barco. Cada acierto te da otro turno; si fallas, dispara la IA. Trabaja planificación, atención y razonamiento espacial." },
+            "Hay 5 barcos enemigos escondidos. Toca una casilla del mar enemigo para disparar. Si aciertas (✕), repites turno; si fallas (·), dispara la IA. ¡Hunde toda su flota antes de que ella hunda la tuya!"),
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+            React.createElement(Badge, { color: C.primary }, "Tu flota: ", remainingMine, "/5"),
+            React.createElement(Badge, { color: "#E63946" }, "Flota enemiga: ", remainingEnemy, "/5")),
+        React.createElement("div", { style: { textAlign: "center", padding: "8px 12px", background: turn === "player" ? `${C.primary}22` : "#FFE0E0", borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 700 } }, message),
+        React.createElement("div", { style: { display: "flex", gap: 18, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 800, marginBottom: 6, textAlign: "center", color: "#E63946" } }, "Mar enemigo (dispara aquí)"),
+                renderBoard(aiShips, playerShots, true)),
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 800, marginBottom: 6, textAlign: "center", color: C.primary } }, "Tu flota"),
+                renderBoard(playerShips, aiShots, false))),
+        status !== "playing" && React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8 } },
+            React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Nueva partida")));
+}
+
 function CuatroEnRaya({ patient }) {
     const ROWS = 6, COLS = 7;
     const [diff, setDiff] = useState("medio");
@@ -25800,29 +26207,22 @@ function CuatroEnRaya({ patient }) {
             React.createElement(Badge, { color: C.primary }, "Tú: ", stats.p),
             React.createElement(Badge, { color: "#E63946" }, "IA: ", stats.a),
             React.createElement(Badge, { color: C.textL }, "Empates: ", stats.d)),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 4, maxWidth: 480, margin: "0 auto 4px" } },
-            Array.from({ length: COLS }, (_, c) => React.createElement("button", {
-                key: "drop-" + c,
-                onClick: () => playerDrop(c),
-                disabled: !!winner || turn !== "p" || thinking || board[0][c] !== 0,
-                style: {
-                    aspectRatio: "1", border: "none", background: "transparent", fontSize: 22,
-                    cursor: (!winner && turn === "p" && !thinking && board[0][c] === 0) ? "pointer" : "default",
-                    color: (turn === "p" && !winner && !thinking && board[0][c] === 0) ? C.primary : "transparent",
-                    fontFamily: "inherit",
-                },
-            }, "▼"))),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 4, maxWidth: 480, margin: "0 auto 12px", padding: 8, background: "#457B9D", borderRadius: 10 } },
-            board.flatMap((row, r) => row.map((cell, c) => React.createElement("div", {
-                key: `${r}-${c}`,
-                style: {
-                    aspectRatio: "1", borderRadius: "50%",
-                    background: cell === 'p' ? C.primary : cell === 'a' ? "#E63946" : "#fff",
-                    border: isWinCell(r, c) ? "3px solid #FFD700" : "none",
-                    boxShadow: cell ? "inset 0 -3px 6px rgba(0,0,0,0.2)" : "inset 0 2px 4px rgba(0,0,0,0.1)",
-                    transition: "all 0.2s",
-                },
-            })))),
+            board.flatMap((row, r) => row.map((cell, c) => {
+                const playable = !winner && turn === "p" && !thinking && board[0][c] === 0;
+                return React.createElement("div", {
+                    key: `${r}-${c}`,
+                    onClick: playable ? () => playerDrop(c) : undefined,
+                    style: {
+                        aspectRatio: "1", borderRadius: "50%",
+                        background: cell === 'p' ? C.primary : cell === 'a' ? "#E63946" : "#fff",
+                        border: isWinCell(r, c) ? "3px solid #FFD700" : "none",
+                        boxShadow: cell ? "inset 0 -3px 6px rgba(0,0,0,0.2)" : "inset 0 2px 4px rgba(0,0,0,0.1)",
+                        transition: "all 0.2s",
+                        cursor: playable ? "pointer" : "default",
+                    },
+                });
+            }))),
         thinking && React.createElement("div", { style: { textAlign: "center", color: C.textL, fontSize: 12, marginBottom: 8 } }, "🤔 IA pensando..."),
         winner && React.createElement(React.Fragment, null,
             React.createElement(Feedback, { success: winner === 'p', reward: false },
@@ -26160,7 +26560,7 @@ const AREAS = [
     { id: "social", label: "Hab. Sociales", color: C.purple, desc: "Empatía y resolución", illo: "casa" },
     { id: "lectoescritura", label: "Lectoescritura", color: C.yellow, desc: "Lectura y escritura", illo: "libro" },
     { id: "dislexia", label: "Dislexia", color: "#E07A5F", desc: "Discriminación de letras, conciencia fonémica y ortografía", illo: "libro" },
-    { id: "instrumentales", label: "Instrumentales", color: "#A8DADC", desc: "Caligrafía, dislexia, cálculo", illo: "libro" },
+    { id: "instrumentales", label: "Instrumentales", color: "#A8DADC", desc: "Caligrafía y cálculo", illo: "libro" },
     { id: "razonamiento", label: "Razonamiento", color: "#5A4FCF", desc: "Lógica y planificación", illo: "libro" },
     { id: "autoestima", label: "Autoestima", color: C.accentL, desc: "Fortalezas y logros", illo: "sol" },
 ];
@@ -27255,16 +27655,23 @@ function CompletaPalabra({ patient }) {
 // Used by the theory-of-mind, emotion-in-context and figurative-language
 // activities: present a scenario, a question, options, explanatory feedback.
 // ═══════════════════════════════════════════════════════════════
-function SocialQuiz({ patient, title, instructions, adoInstructions, bank, ctxLabel }) {
-    const [order, setOrder] = useState(() => shuffle(bank.map((_, i) => i)));
+function SocialQuiz({ patient, title, instructions, adoInstructions, bank, bankByDiff, ctxLabel }) {
+    const [diff, setDiff] = useState("normal");
+    const activeBank = bankByDiff ? (bankByDiff[diff] || bankByDiff.normal || bank || []) : (bank || []);
+    const [order, setOrder] = useState(() => shuffle(activeBank.map((_, i) => i)));
     const [pos, setPos] = useState(0);
     const [sel, setSel] = useState(null);
     const [score, setScore] = useState({ correct: 0, total: 0 });
+    // When difficulty changes, reset the rotation onto the new bank.
+    useEffect(() => {
+        setOrder(shuffle(activeBank.map((_, i) => i)));
+        setPos(0); setSel(null); setScore({ correct: 0, total: 0 });
+    }, [diff]);
 
-    const item = bank[order[pos]];
+    const item = activeBank[order[pos]];
     const next = () => {
         let no = order, np = pos + 1;
-        if (np >= order.length) { no = shuffle(bank.map((_, i) => i)); np = 0; setOrder(no); }
+        if (np >= order.length) { no = shuffle(activeBank.map((_, i) => i)); np = 0; setOrder(no); }
         setPos(np); setSel(null);
     };
     const choose = (i) => {
@@ -27282,8 +27689,17 @@ function SocialQuiz({ patient, title, instructions, adoInstructions, bank, ctxLa
         setTimeout(next, 2600);
     };
 
+    if (!item) return React.createElement(LoadingCard, null);
     return React.createElement("div", null,
-        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, title),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, title),
+            bankByDiff && React.createElement("div", { style: { display: "flex", gap: 4 } },
+                [{ id: "normal", l: "Normal" }, { id: "difícil", l: "Difícil" }].map(d =>
+                    React.createElement("button", { key: d.id, onClick: () => { sfx.tap(); setDiff(d.id); }, style: {
+                        padding: "5px 10px", borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                        background: diff === d.id ? C.primary : "#fff", color: diff === d.id ? "#fff" : C.text,
+                        border: `2px solid ${diff === d.id ? C.primary : C.border}`, fontFamily: "inherit",
+                    } }, d.l)))),
         React.createElement(Instructions, { adoChildren: adoInstructions }, instructions),
         React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
             React.createElement(Badge, { color: C.primary }, "Aciertos: ", score.correct, "/", score.total)),
@@ -27335,9 +27751,21 @@ function QueEstaPensando({ patient }) {
         patient, title: "¿Qué Está Pensando?",
         instructions: "Las personas actúan según lo que ellas creen y saben, aunque a veces se equivoquen. Lee cada situación e intenta ponerte en la mente del personaje.",
         adoInstructions: "Cada situación requiere inferir lo que otra persona cree, sabe o pretende. Ten en cuenta que puede no coincidir con lo que tú sabes.",
-        bank: BANK, ctxLabel: "Situación",
+        bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL_TOM },
+        ctxLabel: "Situación",
     });
 }
+
+const BANK_DIFICIL_TOM = [
+    { ctx: "Marta esconde un caramelo en la caja roja. Luis la ve hacerlo desde la puerta, pero Marta no sabe que Luis la vio.", q: "Si le preguntan a Marta '¿Luis sabe dónde está el caramelo?', ¿qué responderá?", opts: ["No, no lo sabe", "Sí, lo sabe"], ans: 0, exp: "Marta cree que Luis no la vio, así que en su mente Luis no lo sabe. Pensamos siempre desde lo que sabe el personaje, no desde lo que sabemos nosotros." },
+    { ctx: "Lucía felicita a Marta diciendo: 'Qué guay que sea tu cumpleaños hoy.' Pero el cumpleaños es de Ana, no de Marta. Marta nota que Lucía se ha equivocado.", q: "¿Qué hará probablemente Marta?", opts: ["No corregirla en ese momento para no avergonzar a Lucía", "Reírse de Lucía delante de todos"], ans: 0, exp: "Esto es un faux pas: alguien dice algo sin querer que puede avergonzar. Lo socialmente esperado es no señalarlo en público, para no incomodar." },
+    { ctx: "Juan llega tarde a un examen y dice: 'Bueno, llego con tiempo de sobra.'", q: "¿Qué quiere decir realmente?", opts: ["Está usando ironía: en realidad llega muy justo o tarde", "Está contento porque tiene mucho tiempo"], ans: 0, exp: "La ironía consiste en decir lo contrario de lo que se piensa. El contexto (llegar tarde) nos da la pista de que no lo dice en serio." },
+    { ctx: "A Sara le regalan un libro por su cumpleaños, pero ella esperaba un balón. Sonríe y dice 'gracias, me encanta'.", q: "¿Cómo se siente Sara realmente?", opts: ["Decepcionada pero lo oculta para no ofender a quien le ha regalado", "Genuinamente contenta con el libro"], ans: 0, exp: "A veces ocultamos lo que sentimos por no herir a los demás. La diferencia entre lo que decimos y lo que sentimos es una habilidad social compleja." },
+    { ctx: "Tomás esconde galletas debajo de la cama. Sin que él sepa, su hermano lo ha visto desde fuera. Tomás tampoco sabe que su hermano lo vio.", q: "¿Dónde irá su hermano a buscar las galletas?", opts: ["Debajo de la cama (donde las vio esconder)", "En otro sitio porque cree que Tomás las cambió"], ans: 0, exp: "Aquí cada uno tiene una información distinta. El hermano sabe el escondite porque lo vio, así que irá allí directamente." },
+    { ctx: "Ana ve el jersey nuevo de Pablo y dice en tono cansado: 'Vaya, qué original.'", q: "¿Le gusta el jersey?", opts: ["No, lo dice con ironía o crítica", "Sí, le parece bonito"], ans: 0, exp: "El tono y las palabras 'vaya' al inicio sugieren ironía. Cuando alguien dice 'qué original' con ese tono, suele ser una crítica disimulada." },
+    { ctx: "Luis prometió ayudar a su amigo con un trabajo pero se le olvidó por completo. Su amigo se enfada mucho con él.", q: "¿Luis es mala persona por eso?", opts: ["No: olvidar no es lo mismo que faltar a propósito; la intención importa", "Sí: ha roto su promesa así que es mala persona"], ans: 0, exp: "La intención cambia el significado moral de una acción. Olvidar sin querer no es lo mismo que decidir no cumplir; los dos amigos pueden hablarlo." },
+    { ctx: "A Marta le hacen una fiesta sorpresa, pero su prima se lo había contado dos días antes. El día de la fiesta, Marta finge estar muy sorprendida.", q: "¿Por qué finge?", opts: ["Para no estropear la ilusión de los que han organizado la fiesta", "Porque está realmente sorprendida"], ans: 0, exp: "Cuidar de los demás a veces incluye ocultar lo que sabemos. Marta valora más la ilusión de los demás que demostrar que ella ya lo sabía." },
+];
 
 function ComoSeSiente({ patient }) {
     // Emotion in context — infer emotion from the situation, not a face.
@@ -27387,9 +27815,23 @@ function DobleSentido({ patient }) {
         patient, title: "Doble Sentido",
         instructions: "A veces las palabras no significan exactamente lo que dicen: hay frases hechas y bromas. Lee con atención y piensa qué se quiere decir de verdad.",
         adoInstructions: "Interpreta el significado real de cada expresión figurada o irónica, más allá de su sentido literal.",
-        bank: BANK, ctxLabel: "Lee esto",
+        bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL_DS },
+        ctxLabel: "Lee esto",
     });
 }
+
+const BANK_DIFICIL_DS = [
+    { ctx: "\"Después de esa charla, se me han abierto los ojos.\"", q: "¿Qué significa?", opts: ["Que ha entendido algo nuevo que antes no veía", "Que se le abrieron los párpados de verdad"], ans: 0, exp: "\"Abrírsele los ojos\" es una metáfora: significa comprender algo que antes no se entendía. Sus ojos físicos no han cambiado." },
+    { ctx: "Estás con el móvil y tu madre dice: \"¿No tendrías que estar haciendo deberes?\"", q: "¿Qué te está diciendo realmente?", opts: ["Que dejes el móvil y vayas a estudiar", "Te está preguntando por curiosidad si tienes deberes"], ans: 0, exp: "Es una indirecta. En forma de pregunta, en realidad está dando una orden suave. El contexto (estar con el móvil) deja claro el mensaje." },
+    { ctx: "\"Llevo varios días con el agua al cuello.\"", q: "¿Qué quiere decir?", opts: ["Que está agobiado con muchos problemas a la vez", "Que ha estado nadando varios días"], ans: 0, exp: "\"Estar con el agua al cuello\" es una expresión: sentirse desbordado por muchos problemas o muy estresado." },
+    { ctx: "Tu amigo llega dos horas tarde a la cita. Tú le dices: \"Puntual como siempre.\"", q: "¿Qué estás haciendo?", opts: ["Usar ironía: en realidad le estás reprochando que llega tarde", "Felicitarle por ser puntual"], ans: 0, exp: "La ironía dice lo contrario de lo que se piensa. Llega tarde, así que decir \"puntual como siempre\" es un reproche disfrazado." },
+    { ctx: "Sobre alguien que se equivoca a menudo, alguien comenta: \"No es muy listo que digamos.\"", q: "¿Qué quiere decir?", opts: ["Que en realidad no es listo, pero lo dice de forma suave", "Que es listo pero no demasiado"], ans: 0, exp: "Esto es un eufemismo: una forma suave y educada de decir algo negativo. \"No es muy listo que digamos\" suaviza un juicio que en realidad es bastante crítico." },
+    { ctx: "Estáis en una habitación con mucho calor. Tu amigo, sentado junto al ventilador apagado, dice: \"Qué calor hace aquí, ¿no?\"", q: "¿Qué pretende?", opts: ["Que enciendas el ventilador que tiene al lado", "Solo está comentando la temperatura"], ans: 0, exp: "Es una indirecta para pedir algo. En vez de decir directamente \"enciende el ventilador\", lo sugiere mencionando el problema." },
+    { ctx: "\"Mi hermano siempre tiene que sacarme las castañas del fuego.\"", q: "¿Qué significa?", opts: ["Que su hermano siempre le saca de los problemas", "Que su hermano cocina castañas para él"], ans: 0, exp: "\"Sacar las castañas del fuego\" significa resolver un problema o un apuro que otro ha provocado." },
+    { ctx: "Pierdes una final 5-0. Alguien dice: \"Vaya partidazo habéis jugado.\"", q: "¿Lo dice en serio?", opts: ["No, es ironía: en realidad jugasteis muy mal", "Sí, está elogiando vuestro juego"], ans: 0, exp: "El resultado tan malo (5-0) muestra que la frase es irónica. La ironía suele necesitar el contexto para entenderse." },
+    { ctx: "\"Hoy estás en la luna de Valencia.\"", q: "¿Qué te están diciendo?", opts: ["Que estás muy despistado y no te enteras de nada", "Que estás en Valencia mirando la luna"], ans: 0, exp: "\"Estar en la luna de Valencia\" es una expresión que significa estar muy despistado o ausente, sin enterarse de lo que pasa." },
+    { ctx: "Llegas a casa y tu madre, con cara seria, dice: \"Qué pronto vienes hoy.\" Son las 10 de la noche y habíais quedado a las 8.", q: "¿Está contenta de que llegues pronto?", opts: ["No, está usando ironía para mostrar enfado por la tardanza", "Sí, te felicita por la puntualidad"], ans: 0, exp: "La cara seria y el contexto (dos horas tarde) indican ironía. Es una forma de mostrar enfado sin gritar directamente." },
+];
 
 function Rimas({ patient }) {
     // Words grouped by rhyming ending. Each group rhymes internally.
@@ -28057,6 +28499,8 @@ const AREA_ACTIVITIES = {
         { id: "acertijos", label: "Acertijos Lógicos", desc: "Razonamiento deductivo con IA", comp: AcertijosLogicos, hasAI: true, complex: true },
         { id: "planificacion", label: "Planificación de Tareas", desc: "Ordena los pasos para lograr un objetivo", comp: PlanificacionTareas, hasAI: true, complex: true },
         { id: "cuatroenraya", label: "4 en raya", desc: "Estrategia y anticipación contra la IA", comp: CuatroEnRaya, complex: true },
+        { id: "hundir_flota", label: "Hundir la Flota", desc: "Deducción, atención visual y planificación", comp: HundirLaFlota, complex: true },
+        { id: "mastermind", label: "Mastermind", desc: "Adivina la combinación secreta razonando las pistas", comp: Mastermind, complex: true },
         { id: "buscaminas", label: "Buscaminas", desc: "Razonamiento deductivo bajo incertidumbre", comp: Buscaminas, complex: true },
         { id: "othello", label: "Reversi (Othello)", desc: "Visión estratégica y captura territorial", comp: OthelloMini, complex: true },
         { id: "decision", label: "Tomar una Decisión", desc: "Analiza pros y contras de una decisión real", comp: TomaDecision, adolescentOnly: true, complex: true },
@@ -28117,6 +28561,8 @@ const ACTIVITY_DX = {
     // Razonamiento
     series: ["tdah", "discalculia"], acertijos: ["tdah"], planificacion: ["tdah"],
     cuatroenraya: ["tdah"], buscaminas: ["tdah", "discalculia"], othello: ["tdah"],
+    hundir_flota: ["tdah"],
+    mastermind: ["tdah"],
     decision: ["tdah", "ansiedad"],
     // Autoestima
     pizarra: ["ansiedad"], arbol: ["ansiedad"], frasco: ["ansiedad"], gratitud: ["ansiedad"],
@@ -29118,7 +29564,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v20.5</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v20.8</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -29267,7 +29713,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v20.5</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v20.8</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -30449,7 +30895,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v20.5"),
+                "© 2026 Todos los derechos reservados · TerapiApp v20.8"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
