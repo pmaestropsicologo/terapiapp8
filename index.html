@@ -20358,6 +20358,17 @@ function EscenariosSociales({ patient }) {
         { situation: "Tu amigo rompe tu juguete favorito sin querer.", options: ["Le gritas muy enfadado", "Le dices que te dolió pero entiendes que fue sin querer", "No le hablas más"], best: 1 },
         { situation: "Un compañero no entiende un ejercicio.", options: ["Te ríes", "Le ofreces ayuda", "Le ignoras"], best: 1 },
     ];
+    const FALLBACK_ADULTO = [
+        { situation: "En tu primer día de prácticas, no te han presentado al equipo. La pausa del café es en 10 minutos.", options: ["Sales a tomar café tú solo, ya conocerás a la gente con el tiempo", "Te acercas a alguien en la pausa y te presentas tú mismo", "Esperas a que alguien venga a presentarte"], best: 1 },
+        { situation: "Un compañero/a de máster te pide los apuntes de una clase a la que no fue. Es la tercera vez este mes.", options: ["Se los das sin decir nada y luego te quejas con otro", "Le dices que esta vez sí pero que prefieres no convertirlo en costumbre", "Le dices que no, sin más explicación"], best: 1 },
+        { situation: "En el trabajo, tu jefe te ha asignado una tarea que no entiendes bien y se ha ido a una reunión.", options: ["Esperas a que vuelva sin hacer nada para preguntar", "Empiezas algo aunque no estés seguro/a, así parece que avanzas", "Le mandas un mensaje breve preguntando lo concreto que no entiendes"], best: 2 },
+        { situation: "Sales con un grupo del trabajo y todos piden cerveza. Tú no bebes.", options: ["Pides una cerveza y la dejas casi entera para que no pregunten", "Pides un refresco con normalidad", "Inventas que estás tomando medicación"], best: 1 },
+        { situation: "Un compañero de piso entra a tu habitación sin llamar mientras estás trabajando.", options: ["Le gritas que salga", "Le dices con calma que prefieres que llame antes", "No dices nada esta vez pero te molestas"], best: 1 },
+        { situation: "En una entrevista de trabajo te preguntan tu mayor debilidad.", options: ["Dices que no tienes ninguna", "Dices algo que en realidad es una fortaleza disfrazada (\"soy demasiado perfeccionista\")", "Mencionas una debilidad real con qué estás haciendo para mejorarla"], best: 2 },
+        { situation: "Un vecino te saluda por el pasillo todos los días pero nunca habláis. Hoy te pregunta cómo estás.", options: ["Dices \"bien, gracias\" y sigues sin parar", "Te paras un momento, contestas, le devuelves la pregunta", "Le ignoras porque te incomoda"], best: 1 },
+        { situation: "En el trabajo, un compañero hace un chiste a tu costa delante de otros. No es muy hiriente pero te incomoda.", options: ["Te ríes con todos para no hacer drama", "Dices en el momento, con tono tranquilo, que ese tipo de bromas no te hacen gracia", "Lo guardas y desde entonces evitas a esa persona"], best: 1 },
+    ];
+    const [contextMode, setContextMode] = useState("escolar"); // "escolar" | "adulto"
     const [scene, setScene] = useState(null);
     const [sel, setSel] = useState(null);
     const [score, setScore] = useState(0);
@@ -20365,15 +20376,19 @@ function EscenariosSociales({ patient }) {
     const [loading, setLoading] = useState(false);
     const [source, setSource] = useState("local");
     const genLocal = useCallback(() => {
-        setScene(FALLBACK[randInt(0, FALLBACK.length - 1)]);
+        const bank = contextMode === "adulto" ? FALLBACK_ADULTO : FALLBACK;
+        setScene(bank[randInt(0, bank.length - 1)]);
         setSel(null);
         setN(x => x + 1);
         setSource("local");
-    }, []);
+    }, [contextMode]);
     const genAI = useCallback(async () => {
         setLoading(true);
+        const audiencia = contextMode === "adulto"
+            ? "un adulto joven (16-25 años) con TEA en proceso de transición a la vida adulta. Contextos: universidad, trabajo, vida independiente, relaciones adultas. Lenguaje y dilemas propios de esa etapa, no escolares"
+            : "terapia infantil o adolescente. Contexto cotidiano variado (colegio, casa, parque, transporte público, cumpleaños, deporte, etc.)";
         const prompt = `${PatientContext(patient)}
-Genera UN escenario social realista y apropiado para terapia infantil, CLARAMENTE DIFERENTE de escenarios genéricos.
+Genera UN escenario social realista y apropiado para ${audiencia}, CLARAMENTE DIFERENTE de escenarios genéricos.
 
 Formato JSON:
 {
@@ -20382,7 +20397,7 @@ Formato JSON:
   "best": 0
 }
 
-"best" es el índice (0, 1 o 2) de la opción más prosocial. Las 3 opciones deben ser claramente distintas: una buena, una regular, una mala. Contexto cotidiano variado (colegio, casa, parque, transporte público, cumpleaños, deporte, etc.).`;
+"best" es el índice (0, 1 o 2) de la opción más prosocial. Las 3 opciones deben ser claramente distintas: una buena, una regular, una mala.`;
         const result = await callClaude(prompt, "escenarios_sociales");
         setLoading(false);
         if (result && result.__noKey) {
@@ -20408,13 +20423,21 @@ Formato JSON:
         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Escenarios Sociales"),
             source === "ai" && React.createElement(AIBadge, null)),
-        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 12 } },
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
             React.createElement(Badge, { color: C.purple },
                 "Situaci\u00F3n ",
                 n),
             React.createElement(Badge, { color: C.primary },
                 "Aciertos: ",
                 score)),
+        React.createElement("div", { style: { display: "flex", gap: 4, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+            [{ id: "escolar", l: "Escolar / Familiar" }, { id: "adulto", l: "Adulto joven" }].map(m =>
+                React.createElement("button", { key: m.id, onClick: () => { sfx.tap(); setContextMode(m.id); }, style: {
+                    padding: "5px 11px", borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: contextMode === m.id ? C.accent : "#fff",
+                    color: contextMode === m.id ? "#fff" : C.text,
+                    border: `2px solid ${contextMode === m.id ? C.accent : C.border}`, fontFamily: "inherit",
+                } }, m.l))),
         loading ? React.createElement(LoadingCard, null) : scene && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: { background: `${C.purpleL}33`, borderRadius: 16, padding: 18, textAlign: "center", marginBottom: 16 } },
                 React.createElement("div", { style: { fontSize: 16, fontWeight: 700, lineHeight: 1.5 } }, scene.situation)),
@@ -21337,7 +21360,7 @@ const formatDiagnosticos = (p) => {
     if (d.length === 0) return "Sin diagnóstico";
     return d.join(" · ");
 };
-function PatientRegistry({ patients, setPatients, activePatient, setActivePatient, onClose, onShowReport, onShowTracking }) {
+function PatientRegistry({ patients, setPatients, activePatient, setActivePatient, onClose, onShowReport, onShowTracking, onShowFeedbackAdmin }) {
     const [mode, setMode] = useState("list");
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
@@ -21383,8 +21406,9 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
         return (React.createElement("div", { style: { background: C.card, borderRadius: 20, padding: 22, maxWidth: 700, margin: "0 auto" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
                 React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, "Mis Pacientes"),
-                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
                     React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setMode("new"); }, small: true }, "+ Nuevo"),
+                    onShowFeedbackAdmin && React.createElement(Btn, { color: C.accent, onClick: () => { sfx.click(); onShowFeedbackAdmin(); }, small: true, outline: true }, "💬 Mensajes"),
                     React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
             patients.length === 0 ? (React.createElement("div", { style: { textAlign: "center", padding: 36, color: C.textL } },
                 React.createElement("div", { style: { fontSize: 14, marginBottom: 12 } }, "No hay pacientes registrados"),
@@ -22028,6 +22052,359 @@ Los pasos deben ser cortos, en infinitivo o presente, y el orden debe ser claram
 // High-resolution canvas with letter templates and stroke guides
 // ═══════════════════════════════════════════════════════════════
 const CALLIGRAPHY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".split("");
+// ═══════════════════════════════════════════════════════════════
+// GRAPHOMOTOR — Tracing, dot-to-dot and shape copy. Foundational
+// motor-control activities that complement Caligrafía for younger
+// children and writing difficulties. Touch-friendly SVG-based.
+// ═══════════════════════════════════════════════════════════════
+
+// Helper: distance from point P to segment AB
+const distPointSeg = (p, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+};
+
+// ── Trazos: trace along a guide path ──
+function Trazos({ patient }) {
+    const PATHS = [
+        { id: "linea", label: "Línea recta", emoji: "━", svg: "M 40 200 L 360 200" },
+        { id: "onda", label: "Ondas", emoji: "〰️", svg: "M 40 200 Q 90 130, 140 200 T 240 200 T 340 200" },
+        { id: "zigzag", label: "Zigzag", emoji: "⚡", svg: "M 40 230 L 100 150 L 160 230 L 220 150 L 280 230 L 340 150 L 360 200" },
+        { id: "espiral", label: "Espiral", emoji: "🌀", svg: "M 200 200 m -10 0 a 10 10 0 1 1 20 0 a 30 30 0 1 1 -60 0 a 50 50 0 1 1 100 0 a 70 70 0 1 1 -140 0 a 90 90 0 1 1 180 0" },
+        { id: "bucle", label: "Bucles", emoji: "➰", svg: "M 40 200 q 0 -60 60 0 t 60 0 t 60 0 t 60 0 t 60 0" },
+        { id: "circulo", label: "Círculo", emoji: "○", svg: "M 200 120 a 80 80 0 1 1 -0.1 0" },
+    ];
+    const [pathId, setPathId] = useState(null);
+    const [strokes, setStrokes] = useState([]); // array of arrays of {x,y}
+    const [currentStroke, setCurrentStroke] = useState(null);
+    const [score, setScore] = useState(null); // {coverage, deviation}
+    const svgRef = useRef(null);
+    const path = PATHS.find(p => p.id === pathId);
+    // Sample points along the SVG path for scoring (after path is selected)
+    const [guideSamples, setGuideSamples] = useState([]);
+    useEffect(() => {
+        if (!path || !svgRef.current) return;
+        // Use a hidden path element to compute samples
+        const ns = "http://www.w3.org/2000/svg";
+        const tempPath = document.createElementNS(ns, "path");
+        tempPath.setAttribute("d", path.svg);
+        const len = tempPath.getTotalLength();
+        const samples = [];
+        const N = Math.max(40, Math.floor(len / 6));
+        for (let i = 0; i <= N; i++) {
+            const pt = tempPath.getPointAtLength((i / N) * len);
+            samples.push({ x: pt.x, y: pt.y });
+        }
+        setGuideSamples(samples);
+        setStrokes([]); setCurrentStroke(null); setScore(null);
+    }, [pathId]);
+    const getPoint = (e) => {
+        const rect = svgRef.current.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = ((clientX - rect.left) / rect.width) * 400;
+        const y = ((clientY - rect.top) / rect.height) * 280;
+        return { x, y };
+    };
+    const onDown = (e) => { e.preventDefault(); if (score) return; setCurrentStroke([getPoint(e)]); };
+    const onMove = (e) => { e.preventDefault(); if (!currentStroke || score) return; setCurrentStroke(cs => [...cs, getPoint(e)]); };
+    const onUp = () => {
+        if (!currentStroke || score) return;
+        if (currentStroke.length > 1) setStrokes(s => [...s, currentStroke]);
+        setCurrentStroke(null);
+    };
+    const clear = () => { setStrokes([]); setCurrentStroke(null); setScore(null); };
+    const finish = () => {
+        if (strokes.length === 0 || guideSamples.length === 0) return;
+        // Score: % of guide samples that have at least one user point within 24 px
+        const allUserPts = strokes.flat();
+        let covered = 0;
+        let totalDev = 0, devCount = 0;
+        guideSamples.forEach(g => {
+            let minD = Infinity;
+            for (let i = 0; i < allUserPts.length; i++) {
+                const d = Math.hypot(allUserPts[i].x - g.x, allUserPts[i].y - g.y);
+                if (d < minD) minD = d;
+            }
+            if (minD < 24) covered++;
+            if (minD < 60) { totalDev += minD; devCount++; }
+        });
+        const coverage = Math.round((covered / guideSamples.length) * 100);
+        const meanDev = devCount ? Math.round(totalDev / devCount) : 0;
+        setScore({ coverage, deviation: meanDev });
+        const ok = coverage >= 75 && meanDev <= 14;
+        sfx.success();
+        if (_activePatientId) {
+            addStar(_activePatientId, _activeAreaId, ok);
+            saveBest(_activePatientId, "trazo_" + pathId, coverage);
+            logCurrentResult(coverage >= 60);
+        }
+    };
+    if (!pathId) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Trazos Básicos"),
+            React.createElement(Instructions, { adoChildren: "Trazo de patrones grafomotrices básicos. La cobertura y la desviación dan idea del control motor fino. Útil en niños pequeños y disgrafías." },
+                "Elige un patrón. Tienes que trazar por encima de la línea con el dedo. Después te diré cuánto cubriste y lo cerca que estuviste."),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 } },
+                PATHS.map(p => React.createElement("div", { key: p.id, onClick: () => { sfx.tap(); setPathId(p.id); }, style: {
+                    padding: 14, background: "#fff", borderRadius: 14, cursor: "pointer", textAlign: "center",
+                    border: `2px solid ${C.border}`,
+                } },
+                    React.createElement("div", { style: { fontSize: 36, marginBottom: 4 } }, p.emoji),
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800 } }, p.label)))));
+    }
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "Trazos · ", path.label),
+            React.createElement(Btn, { color: C.textL, onClick: () => setPathId(null), small: true, outline: true }, "← Otros patrones")),
+        React.createElement(Instructions, null, "Sigue la línea gris con el dedo. Cuando termines, pulsa ✓."),
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 6, marginBottom: 10 } },
+            React.createElement("svg", {
+                ref: svgRef, viewBox: "0 0 400 280", style: { width: "100%", height: "auto", touchAction: "none", display: "block" },
+                onMouseDown: onDown, onMouseMove: onMove, onMouseUp: onUp, onMouseLeave: onUp,
+                onTouchStart: onDown, onTouchMove: onMove, onTouchEnd: onUp,
+            },
+                // Guide path
+                React.createElement("path", { d: path.svg, stroke: "#D5D5C7", strokeWidth: 18, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" }),
+                React.createElement("path", { d: path.svg, stroke: "#A6A687", strokeWidth: 2, fill: "none", strokeDasharray: "4 4" }),
+                // User strokes
+                strokes.map((s, i) => React.createElement("polyline", {
+                    key: i, points: s.map(p => `${p.x},${p.y}`).join(" "),
+                    stroke: C.primary, strokeWidth: 5, fill: "none", strokeLinecap: "round", strokeLinejoin: "round",
+                })),
+                currentStroke && React.createElement("polyline", {
+                    points: currentStroke.map(p => `${p.x},${p.y}`).join(" "),
+                    stroke: C.primary, strokeWidth: 5, fill: "none", strokeLinecap: "round", strokeLinejoin: "round",
+                }))),
+        score && React.createElement("div", { style: { padding: 12, background: score.coverage >= 75 ? `${C.success}15` : `${C.accent}15`, borderRadius: 10, marginBottom: 10, textAlign: "center" } },
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: score.coverage >= 75 ? C.success : C.accent } },
+                "Cobertura: ", score.coverage, "% · Desviación media: ", score.deviation, " px")),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.textL, onClick: clear, small: true, outline: true }, "🗑 Limpiar"),
+            !score && React.createElement(Btn, { color: C.primary, onClick: finish, small: true, disabled: strokes.length === 0 }, "✓ He terminado"),
+            score && React.createElement(Btn, { color: C.primary, onClick: clear, small: true }, "↻ Otra vez")));
+}
+
+// ── Dot-to-Dot ──
+function ConectaPuntos({ patient }) {
+    const [diff, setDiff] = useState("medio");
+    const cfg = { "fácil": 8, "medio": 12, "difícil": 18 }[diff];
+    const [phase, setPhase] = useState("idle");
+    const [points, setPoints] = useState([]); // {x, y, n}
+    const [hit, setHit] = useState([]); // ordered list of indices touched
+    const [pos, setPos] = useState(null); // current pointer position
+    const [errors, setErrors] = useState(0);
+    const [startTime, setStartTime] = useState(0);
+    const [endTime, setEndTime] = useState(0);
+    const svgRef = useRef(null);
+    const genPoints = () => {
+        const pts = [];
+        const cells = []; // grid-based to avoid overlap
+        const cols = 4, rows = Math.ceil(cfg / cols);
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push({ r, c });
+        shuffle(cells);
+        for (let i = 0; i < cfg; i++) {
+            const cell = cells[i];
+            const x = 50 + cell.c * 90 + randInt(-20, 20);
+            const y = 50 + cell.r * 70 + randInt(-15, 15);
+            pts.push({ x, y, n: i + 1 });
+        }
+        // Now shuffle the numbers so they appear in random visual positions
+        const labels = pts.map(p => p.n);
+        shuffle(labels);
+        pts.forEach((p, i) => { p.n = labels[i]; });
+        return pts;
+    };
+    const start = () => {
+        setPoints(genPoints()); setHit([]); setErrors(0); setEndTime(0);
+        setStartTime(Date.now()); setPhase("playing");
+    };
+    const getPoint = (e) => {
+        const rect = svgRef.current.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = ((clientX - rect.left) / rect.width) * 400;
+        const y = ((clientY - rect.top) / rect.height) * 380;
+        return { x, y };
+    };
+    const onMove = (e) => {
+        if (phase !== "playing") return;
+        e.preventDefault();
+        const p = getPoint(e);
+        setPos(p);
+        // Find nearest point not yet hit; if within 22 px and is next-in-order, register it
+        const next = hit.length + 1;
+        const idx = points.findIndex(pt => pt.n === next);
+        if (idx === -1) return;
+        const pt = points[idx];
+        if (Math.hypot(pt.x - p.x, pt.y - p.y) < 24) {
+            sfx.tap();
+            const newHit = [...hit, idx];
+            setHit(newHit);
+            if (newHit.length === cfg) {
+                const t = Date.now();
+                setEndTime(t); setPhase("done");
+                sfx.success();
+                if (_activePatientId) {
+                    addStar(_activePatientId, _activeAreaId, errors <= 1);
+                    saveBest(_activePatientId, "puntos_" + diff, Math.round((t - startTime) / 1000));
+                    logCurrentResult(errors <= 2);
+                }
+            }
+        } else {
+            // Check if user is hovering a wrong point
+            for (let i = 0; i < points.length; i++) {
+                if (hit.includes(i)) continue;
+                if (points[i].n === next) continue;
+                if (Math.hypot(points[i].x - p.x, points[i].y - p.y) < 22) {
+                    // Wrong target — but only count once per session per wrong dot
+                    setErrors(e => e + 1);
+                    sfx.fail();
+                    break;
+                }
+            }
+        }
+    };
+    const onUp = () => { setPos(null); };
+    const seconds = endTime ? Math.round((endTime - startTime) / 1000) : 0;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Conecta los Puntos"),
+            phase === "idle" && React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
+        React.createElement(Instructions, { adoChildren: "Conexión de puntos numerados sin levantar el dedo. Combina seguimiento visual, planificación motora y conteo. Apropiado desde 5-6 años." },
+            "Pasa el dedo por los puntos en orden: 1, 2, 3... sin levantarlo. Si tocas un número que no toca, cuenta como error."),
+        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        phase === "playing" && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 10 } },
+                React.createElement(Badge, { color: C.primary }, "Próximo: ", hit.length + 1, "/", cfg),
+                React.createElement(Badge, { color: C.error }, "Errores: ", errors)),
+            React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 6 } },
+                React.createElement("svg", {
+                    ref: svgRef, viewBox: "0 0 400 380", style: { width: "100%", height: "auto", touchAction: "none", display: "block" },
+                    onMouseMove: onMove, onMouseLeave: onUp, onTouchMove: onMove, onTouchEnd: onUp,
+                },
+                    // path connecting hit points
+                    hit.length > 0 && React.createElement("polyline", {
+                        points: hit.map(i => `${points[i].x},${points[i].y}`).join(" ") + (pos ? ` ${pos.x},${pos.y}` : ""),
+                        stroke: C.primary, strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round",
+                    }),
+                    points.map((p, i) => {
+                        const isHit = hit.includes(i);
+                        const isNext = p.n === hit.length + 1;
+                        return React.createElement("g", { key: i },
+                            React.createElement("circle", { cx: p.x, cy: p.y, r: 20,
+                                fill: isHit ? C.success : isNext ? C.accent + "33" : "#fff",
+                                stroke: isHit ? C.success : isNext ? C.accent : C.border,
+                                strokeWidth: isNext ? 3 : 2,
+                            }),
+                            React.createElement("text", { x: p.x, y: p.y + 5, textAnchor: "middle",
+                                fontSize: 16, fontWeight: 800, fill: isHit ? "#fff" : C.text,
+                            }, p.n));
+                    })))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: errors <= 1 }, `${cfg} puntos en ${seconds}s · ${errors} errores`),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"))));
+}
+
+// ── Shape Copy ──
+// Show a target shape, user copies it on a blank canvas. No automatic
+// scoring — saved as PNG for the therapist to review later.
+function CopiaFormas({ patient }) {
+    const SHAPES = [
+        { id: "cuadrado", label: "Cuadrado", svg: "M 100 100 L 300 100 L 300 240 L 100 240 Z" },
+        { id: "circulo", label: "Círculo", svg: "M 200 100 a 70 70 0 1 1 -0.1 0" },
+        { id: "triangulo", label: "Triángulo", svg: "M 200 90 L 310 250 L 90 250 Z" },
+        { id: "cruz", label: "Cruz", svg: "M 200 90 L 200 250 M 120 170 L 280 170" },
+        { id: "rombo", label: "Rombo", svg: "M 200 80 L 290 170 L 200 260 L 110 170 Z" },
+        { id: "estrella", label: "Estrella", svg: "M 200 80 L 220 150 L 295 150 L 235 195 L 257 265 L 200 222 L 143 265 L 165 195 L 105 150 L 180 150 Z" },
+        { id: "casa", label: "Casa", svg: "M 110 240 L 110 160 L 200 100 L 290 160 L 290 240 Z M 175 240 L 175 195 L 225 195 L 225 240" },
+        { id: "lazada", label: "Lazada", svg: "M 130 170 q -20 -50 30 -50 q 50 0 30 50 q -20 50 30 50 q 50 0 30 -50 q -20 -50 30 -50" },
+    ];
+    const [shapeId, setShapeId] = useState(null);
+    const [strokes, setStrokes] = useState([]);
+    const [currentStroke, setCurrentStroke] = useState(null);
+    const [saved, setSaved] = useState(false);
+    const svgRef = useRef(null);
+    const shape = SHAPES.find(s => s.id === shapeId);
+    const getPoint = (e) => {
+        const rect = svgRef.current.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = ((clientX - rect.left) / rect.width) * 400;
+        const y = ((clientY - rect.top) / rect.height) * 320;
+        return { x, y };
+    };
+    const onDown = (e) => { e.preventDefault(); setCurrentStroke([getPoint(e)]); setSaved(false); };
+    const onMove = (e) => { e.preventDefault(); if (!currentStroke) return; setCurrentStroke(cs => [...cs, getPoint(e)]); };
+    const onUp = () => { if (!currentStroke) return; if (currentStroke.length > 1) setStrokes(s => [...s, currentStroke]); setCurrentStroke(null); };
+    const clear = () => { setStrokes([]); setCurrentStroke(null); setSaved(false); };
+    const finish = () => {
+        if (strokes.length === 0) return;
+        sfx.success();
+        setSaved(true);
+        // Save thumbnail (svg string) for the therapist
+        if (_activePatientId) {
+            const key = "formas:" + _activePatientId;
+            const existing = storeLoad(key) || [];
+            const polylines = strokes.map(s => `<polyline points="${s.map(p => p.x + "," + p.y).join(" ")}" stroke="#1A2E40" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join("");
+            const svgStr = `<svg viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg"><rect width="400" height="320" fill="#fff"/>${polylines}</svg>`;
+            existing.push({ id: uid(), ts: Date.now(), shapeId, svgStr });
+            storeSave(key, existing.slice(-30)); // keep last 30
+            addStar(_activePatientId, _activeAreaId, true);
+            logCurrentResult(true);
+        }
+    };
+    if (!shapeId) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Copia de Formas"),
+            React.createElement(Instructions, { adoChildren: "Copia clínica de formas, similar a Bender/VMI. La precisión de la copia es indicador clásico de integración visomotora. Las copias se guardan por paciente para que las revises clínicamente — no hay puntuación automática." },
+                "Elige una forma. Cuando la veas, dibújala lo más parecida que puedas en el espacio en blanco. El terapeuta puede revisar tu copia más adelante."),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 } },
+                SHAPES.map(s => React.createElement("div", { key: s.id, onClick: () => { sfx.tap(); setShapeId(s.id); }, style: {
+                    padding: 12, background: "#fff", borderRadius: 14, cursor: "pointer", textAlign: "center",
+                    border: `2px solid ${C.border}`,
+                } },
+                    React.createElement("svg", { viewBox: "0 0 400 320", style: { width: "100%", height: 80 } },
+                        React.createElement("path", { d: s.svg, stroke: C.text, strokeWidth: 6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" })),
+                    React.createElement("div", { style: { fontSize: 12, fontWeight: 800, marginTop: 4 } }, s.label)))));
+    }
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "Copia · ", shape.label),
+            React.createElement(Btn, { color: C.textL, onClick: () => { setShapeId(null); clear(); }, small: true, outline: true }, "← Otras formas")),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 } },
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, textAlign: "center", marginBottom: 4, textTransform: "uppercase" } }, "MODELO"),
+                React.createElement("div", { style: { background: "#fff", borderRadius: 12, padding: 6, border: `2px solid ${C.border}` } },
+                    React.createElement("svg", { viewBox: "0 0 400 320", style: { width: "100%", display: "block" } },
+                        React.createElement("path", { d: shape.svg, stroke: C.text, strokeWidth: 6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" })))),
+            React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.primary, textAlign: "center", marginBottom: 4, textTransform: "uppercase" } }, "TU COPIA"),
+                React.createElement("div", { style: { background: "#fff", borderRadius: 12, padding: 6, border: `2px solid ${C.primary}` } },
+                    React.createElement("svg", {
+                        ref: svgRef, viewBox: "0 0 400 320", style: { width: "100%", touchAction: "none", display: "block" },
+                        onMouseDown: onDown, onMouseMove: onMove, onMouseUp: onUp, onMouseLeave: onUp,
+                        onTouchStart: onDown, onTouchMove: onMove, onTouchEnd: onUp,
+                    },
+                        strokes.map((s, i) => React.createElement("polyline", {
+                            key: i, points: s.map(p => `${p.x},${p.y}`).join(" "),
+                            stroke: C.primary, strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round",
+                        })),
+                        currentStroke && React.createElement("polyline", {
+                            points: currentStroke.map(p => `${p.x},${p.y}`).join(" "),
+                            stroke: C.primary, strokeWidth: 4, fill: "none", strokeLinecap: "round", strokeLinejoin: "round",
+                        }))))),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.textL, onClick: clear, small: true, outline: true }, "🗑 Limpiar"),
+            React.createElement(Btn, { color: C.primary, onClick: finish, small: true, disabled: strokes.length === 0 || saved }, saved ? "✓ Guardado" : "✓ Guardar copia")));
+}
+
 function Caligrafia({ patient }) {
     const canvasRef = useRef(null);
     const isDrawing = useRef(false);
@@ -22837,6 +23214,175 @@ function SopaNumeros({ patient }) {
 // ═══════════════════════════════════════════════════════════════
 // NEW v12: NBack (Memoria) — N-back working memory task
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MEMORY — Digit Span (forward & backward)
+// Classic WISC/WAIS subtest. Sequential digit presentation, recall in
+// same or reverse order. Stops at 2 consecutive failures at same level.
+// Age presets adjust starting span and presentation pace.
+// References: Wechsler digit span; Conway et al. (2005) WM measures.
+// ═══════════════════════════════════════════════════════════════
+function SpanDigitos({ patient }) {
+    const [mode, setMode] = useState("directo"); // directo | inverso
+    const [ageGroup, setAgeGroup] = useState("ninos"); // ninos (6-9) | medianos (10-13) | adolescentes (14+)
+    const AGE_CONFIG = {
+        ninos: { label: "Niños (6-9)", startSpan: 2, isi: 1000, digitSize: 110 },
+        medianos: { label: "10-13 años", startSpan: 3, isi: 800, digitSize: 90 },
+        adolescentes: { label: "14+ años", startSpan: 4, isi: 600, digitSize: 80 },
+    };
+    const cfg = AGE_CONFIG[ageGroup];
+    const [phase, setPhase] = useState("idle"); // idle | present | input | feedback | done
+    const [span, setSpan] = useState(cfg.startSpan);
+    const [attempt, setAttempt] = useState(1); // 1 or 2 trials per level
+    const [sequence, setSequence] = useState([]);
+    const [showIdx, setShowIdx] = useState(-1);
+    const [userInput, setUserInput] = useState([]);
+    const [maxSpan, setMaxSpan] = useState(0);
+    const [history, setHistory] = useState([]); // [{span, attempt, success}]
+    const [lastResult, setLastResult] = useState(null);
+    const gen = (len) => Array.from({ length: len }, () => randInt(0, 9));
+    const start = () => {
+        setSpan(cfg.startSpan); setAttempt(1); setMaxSpan(0); setHistory([]); setUserInput([]);
+        beginTrial(cfg.startSpan);
+    };
+    const beginTrial = (s) => {
+        const seq = gen(s);
+        setSequence(seq); setUserInput([]); setShowIdx(-1); setLastResult(null);
+        setPhase("present");
+    };
+    // Sequential presentation
+    useEffect(() => {
+        if (phase !== "present" || sequence.length === 0) return;
+        let i = -1;
+        const tick = () => {
+            i++;
+            if (i >= sequence.length) {
+                setShowIdx(-1);
+                setTimeout(() => setPhase("input"), 400);
+                return;
+            }
+            setShowIdx(i);
+            // brief blank between digits
+            setTimeout(() => { if (i + 1 < sequence.length) setShowIdx(-2); }, cfg.isi - 200);
+            setTimeout(tick, cfg.isi);
+        };
+        tick();
+    }, [phase, sequence]);
+    const tapDigit = (d) => {
+        if (phase !== "input") return;
+        if (userInput.length >= sequence.length) return;
+        sfx.tap();
+        setUserInput([...userInput, d]);
+    };
+    const erase = () => { sfx.tap(); setUserInput(userInput.slice(0, -1)); };
+    const validate = () => {
+        // Compare with expected order
+        const expected = mode === "directo" ? sequence : [...sequence].reverse();
+        const ok = userInput.length === expected.length && userInput.every((d, i) => d === expected[i]);
+        const newHistory = [...history, { span, attempt, success: ok, expected, given: [...userInput] }];
+        setHistory(newHistory);
+        setLastResult({ ok, expected });
+        setPhase("feedback");
+        if (ok) sfx.success(); else sfx.fail();
+        setTimeout(() => {
+            // Decision tree for next trial
+            if (ok) {
+                // Move to next span level (reset attempt)
+                if (span > maxSpan) setMaxSpan(span);
+                setSpan(span + 1); setAttempt(1);
+                beginTrial(span + 1);
+            } else {
+                if (attempt === 1) {
+                    // Second attempt at same span
+                    setAttempt(2);
+                    beginTrial(span);
+                } else {
+                    // Two failures → end. Max span is maxSpan (last successful).
+                    setPhase("done");
+                    if (_activePatientId) {
+                        addStar(_activePatientId, _activeAreaId, maxSpan >= 5);
+                        saveBest(_activePatientId, "span_" + mode + "_" + ageGroup, maxSpan);
+                        logCurrentResult(maxSpan >= cfg.startSpan + 2);
+                    }
+                }
+            }
+        }, 1600);
+    };
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Span de Dígitos"),
+            React.createElement(Instructions, { adoChildren: "Subtest clásico de memoria de trabajo (WISC/WAIS). Modo directo evalúa span de memoria simple; modo inverso añade manipulación mental, propiamente memoria operativa (Conway et al., 2005)." },
+                "Verás números aparecer uno a uno. Tu tarea: ", React.createElement("strong", null, mode === "directo" ? "repetirlos en el mismo orden" : "repetirlos AL REVÉS"), ". La secuencia se va haciendo más larga cada vez que aciertas."),
+            React.createElement("div", { style: { marginBottom: 10, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, marginBottom: 6, textTransform: "uppercase" } }, "Modo"),
+                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    ["directo", "inverso"].map(m =>
+                        React.createElement("button", { key: m, onClick: () => { sfx.tap(); setMode(m); }, style: {
+                            flex: 1, padding: "8px 10px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                            background: mode === m ? C.primary : "#fff", color: mode === m ? "#fff" : C.text,
+                            border: `2px solid ${mode === m ? C.primary : C.border}`, fontFamily: "inherit",
+                        } }, m === "directo" ? "▶ Directo" : "◀ Inverso")))),
+            React.createElement("div", { style: { marginBottom: 14, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, marginBottom: 6, textTransform: "uppercase" } }, "Edad"),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                    Object.keys(AGE_CONFIG).map(g =>
+                        React.createElement("button", { key: g, onClick: () => { sfx.tap(); setAgeGroup(g); setSpan(AGE_CONFIG[g].startSpan); }, style: {
+                            flex: "1 1 auto", minWidth: 100, padding: "8px 10px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700,
+                            background: ageGroup === g ? C.accent : "#fff", color: ageGroup === g ? "#fff" : C.text,
+                            border: `2px solid ${ageGroup === g ? C.accent : C.border}`, fontFamily: "inherit",
+                        } }, AGE_CONFIG[g].label)))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    if (phase === "present" || phase === "input" || phase === "feedback") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "Span de Dígitos · ", mode === "directo" ? "Directo" : "Inverso"),
+                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    React.createElement(Badge, { color: C.primary }, "Span ", span),
+                    React.createElement(Badge, { color: C.accent }, "Intento ", attempt, "/2"))),
+            // Presentation panel
+            React.createElement("div", { style: { background: "#1A1F2E", borderRadius: 18, padding: 24, marginBottom: 14, minHeight: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
+                phase === "present" && React.createElement("div", { style: { fontSize: cfg.digitSize, fontWeight: 900, color: "#fff", fontFamily: "monospace", lineHeight: 1 } }, showIdx >= 0 ? sequence[showIdx] : ""),
+                phase === "input" && React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { fontSize: 12, color: "#8FA6BB", marginBottom: 12, fontWeight: 700 } }, mode === "directo" ? "REPITE EN EL MISMO ORDEN" : "REPITE AL REVÉS"),
+                    React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center", minHeight: 56 } },
+                        Array.from({ length: sequence.length }, (_, i) => React.createElement("div", { key: i, style: {
+                            width: 50, height: 50, borderRadius: 10,
+                            background: userInput[i] !== undefined ? "#fff" : "rgba(255,255,255,0.1)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 24, fontWeight: 800, color: "#1A1F2E", fontFamily: "monospace",
+                            border: userInput.length === i ? "2px solid #fff" : "2px solid transparent",
+                        } }, userInput[i] !== undefined ? userInput[i] : "")))),
+                phase === "feedback" && lastResult && React.createElement("div", { style: { textAlign: "center" } },
+                    React.createElement("div", { style: { fontSize: 60, marginBottom: 6 } }, lastResult.ok ? "✓" : "✗"),
+                    React.createElement("div", { style: { fontSize: 14, color: "#8FA6BB", marginBottom: 6, fontWeight: 700 } }, "ESPERADO:"),
+                    React.createElement("div", { style: { fontSize: 30, color: "#fff", fontFamily: "monospace", fontWeight: 800, letterSpacing: 6 } }, lastResult.expected.join(" ")))),
+            // Input keypad
+            phase === "input" && React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6, marginBottom: 8 } },
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(d => React.createElement("button", {
+                        key: d, onClick: () => tapDigit(d), disabled: userInput.length >= sequence.length,
+                        style: {
+                            padding: "16px 0", borderRadius: 12, fontSize: 22, fontWeight: 800,
+                            background: "#fff", border: `2px solid ${C.border}`, cursor: "pointer", fontFamily: "monospace",
+                            color: userInput.length >= sequence.length ? C.textL : C.text,
+                        },
+                    }, d))),
+                React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center" } },
+                    React.createElement(Btn, { color: C.textL, onClick: erase, small: true, outline: true, disabled: userInput.length === 0 }, "← Borrar"),
+                    React.createElement(Btn, { color: C.primary, onClick: validate, small: true, disabled: userInput.length !== sequence.length }, "✓ Validar"))));
+    }
+    // done
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Resultado"),
+        React.createElement(Feedback, { success: maxSpan >= cfg.startSpan + 2 },
+            `Span máximo: ${maxSpan} dígitos · Modo ${mode === "directo" ? "directo" : "inverso"} · ${AGE_CONFIG[ageGroup].label}`),
+        React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic", lineHeight: 1.5 } },
+            "Referencia orientativa WISC-V: 6-7 años ≈ 4-5 directo / 2-3 inverso · 8-10 años ≈ 5-6 directo / 3-4 inverso · 11-13 años ≈ 6-7 directo / 4-5 inverso · Adolescentes ≈ 6-8 directo / 5-6 inverso. Son valores aproximados, no clínicos."),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+            React.createElement(Btn, { color: C.primary, onClick: () => setPhase("idle"), small: true }, "↻ Nueva ronda")));
+}
+
 function NBack({ patient }) {
     const [n, setN] = useState(1);
     const [totalRounds, setTotalRounds] = useState(12);
@@ -23344,6 +23890,124 @@ Formato JSON:
 // ═══════════════════════════════════════════════════════════════
 // NEW v12: CalculoMental (Instrumentales) — timed mental math
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// DISCALCULIA — Three foundational number-sense tasks (Butterworth,
+// Dehaene, Siegler). Targets the core numerical magnitude system that
+// developmental dyscalculia compromises.
+// ═══════════════════════════════════════════════════════════════
+
+// ── Subitization ──
+// Briefly flash N dots (1-9). User reports count. Subitizing range is
+// 1-4; counting takes over after that. Slower/inaccurate subitization
+// is a core marker of dyscalculia.
+function Subitizacion({ patient }) {
+    const [diff, setDiff] = useState("medio");
+    const cfg = {
+        "fácil": { max: 5, flashMs: 1000, trials: 12 },
+        "medio": { max: 7, flashMs: 800, trials: 16 },
+        "difícil": { max: 9, flashMs: 600, trials: 20 },
+    }[diff];
+    const [phase, setPhase] = useState("idle");
+    const [trial, setTrial] = useState(0);
+    const [count, setCount] = useState(0);
+    const [dots, setDots] = useState([]);
+    const [showing, setShowing] = useState(false);
+    const [responded, setResponded] = useState(false);
+    const [stats, setStats] = useState({ correct: 0, total: 0, rtByRange: { sub: [], count: [] } });
+    const startTimeRef = useRef(0);
+    const genDots = () => {
+        const n = randInt(1, cfg.max);
+        // Place n dots in random non-overlapping positions in a 280x280 area
+        const placed = [];
+        let tries = 0;
+        while (placed.length < n && tries < 100) {
+            const x = randInt(15, 265), y = randInt(15, 265);
+            if (placed.every(p => Math.hypot(p.x - x, p.y - y) > 36)) placed.push({ x, y });
+            tries++;
+        }
+        return { n, positions: placed };
+    };
+    const nextTrial = () => {
+        if (trial >= cfg.trials) {
+            setPhase("done");
+            const acc = stats.total > 0 ? stats.correct / stats.total : 0;
+            sfx.success();
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, acc >= 0.85);
+                saveBest(_activePatientId, "subitizacion_" + diff, Math.round(acc * 100));
+                logCurrentResult(acc >= 0.75);
+            }
+            return;
+        }
+        const d = genDots();
+        setDots(d.positions); setCount(d.n); setResponded(false);
+        setShowing(true); setPhase("present");
+        setTimeout(() => { setShowing(false); setPhase("input"); startTimeRef.current = Date.now(); }, cfg.flashMs);
+    };
+    const start = () => {
+        setStats({ correct: 0, total: 0, rtByRange: { sub: [], count: [] } });
+        setTrial(0);
+        setTimeout(nextTrial, 100);
+    };
+    useEffect(() => { if (phase === "input" || phase === "present") {} }, [phase]);
+    const choose = (n) => {
+        if (responded || phase !== "input") return;
+        setResponded(true);
+        const rt = Date.now() - startTimeRef.current;
+        const ok = n === count;
+        const isSub = count <= 4;
+        setStats(s => ({
+            correct: s.correct + (ok ? 1 : 0),
+            total: s.total + 1,
+            rtByRange: {
+                sub: isSub ? [...s.rtByRange.sub, rt] : s.rtByRange.sub,
+                count: !isSub ? [...s.rtByRange.count, rt] : s.rtByRange.count,
+            },
+        }));
+        if (ok) sfx.success(); else sfx.fail();
+        setTrial(t => t + 1);
+        setTimeout(nextTrial, 700);
+    };
+    const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Subitización"),
+            phase === "idle" && React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
+        React.createElement(Instructions, { adoChildren: "Subitización es el reconocimiento súbito de cantidad pequeña (1-4) sin contar. Por encima de 4 entra el conteo. Lentitud o errores aquí son un marcador nuclear de discalculia (Butterworth, 2005)." },
+            "Vas a ver puntos que aparecen muy rápido. Tienes que decir ", React.createElement("strong", null, "CUÁNTOS HAY"),
+            ", sin tiempo para contarlos. Confía en tu primera impresión."),
+        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        (phase === "present" || phase === "input") && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+                React.createElement(Badge, { color: C.primary }, "Ensayo: ", trial + 1, "/", cfg.trials),
+                React.createElement(Badge, { color: C.success }, "Aciertos: ", stats.correct)),
+            React.createElement("div", { style: { background: "#1A1F2E", borderRadius: 18, padding: 8, marginBottom: 14, display: "flex", justifyContent: "center" } },
+                React.createElement("div", { style: { position: "relative", width: 280, height: 280 } },
+                    showing && dots.map((d, i) => React.createElement("div", { key: i, style: {
+                        position: "absolute", left: d.x - 12, top: d.y - 12,
+                        width: 24, height: 24, borderRadius: "50%", background: "#fff",
+                    } })))),
+            phase === "input" && React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, textAlign: "center", marginBottom: 8 } }, "¿Cuántos puntos había?"),
+                React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+                    Array.from({ length: cfg.max }, (_, i) => i + 1).map(n => React.createElement("button", {
+                        key: n, onClick: () => choose(n), disabled: responded,
+                        style: {
+                            width: 52, height: 52, borderRadius: 12, border: `2px solid ${C.border}`,
+                            background: "#fff", fontSize: 22, fontWeight: 800, cursor: responded ? "default" : "pointer",
+                            fontFamily: "inherit",
+                        },
+                    }, n))))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: stats.correct >= cfg.trials * 0.85 },
+                `${stats.correct}/${cfg.trials} aciertos · TR subitización (≤4): ${avg(stats.rtByRange.sub)}ms · TR conteo (≥5): ${avg(stats.rtByRange.count)}ms`),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic", lineHeight: 1.5 } },
+                "TR similar para ambos rangos sugiere que cuenta también en el rango pequeño (signo de discalculia). Diferencia clara entre rangos = subitización preservada."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"))));
+}
+
 function CalculoMental({ patient }) {
     const [diff, setDiff] = useState("medio");
     const [running, setRunning] = useState(false);
@@ -23435,15 +24099,22 @@ function ResolucionConflictos({ patient }) {
     const [step, setStep] = useState(0); // 0: scenario, 1: chosen response, 2: outcome
     const [chosenIdx, setChosenIdx] = useState(null);
     const [diff, setDiff] = useState("medio");
+    const [contextMode, setContextMode] = useState("escolar"); // "escolar" | "adulto"
     const generate = async () => {
         setLoading(true); setStep(0); setChosenIdx(null);
-        const diffPrompt = {
+        const diffPromptByContext = contextMode === "adulto" ? {
+            "fácil": "Una situación cotidiana de adulto joven: un compañero/a de piso deja platos sucios, en el trabajo alguien se cuela en la fila del café, un compañero de máster te pide los apuntes a última hora.",
+            "medio": "Una situación realista de transición a la vida adulta: te asignan trabajo extra fuera de horario, un compañero de grupo no aporta, un familiar insiste con planes que no quieres, un casero no responde a un problema.",
+            "difícil": "Un dilema sutil del mundo adulto: lealtad profesional versus honestidad (encubrir un error de un compañero), pedir ajustes razonables sin ser percibido como difícil, conflicto entre límites personales y expectativas familiares de un joven adulto, asertividad ante un jefe injusto sin perder el empleo. La respuesta asertiva NO debe ser obvia y debe haber tensión entre valores."
+        }[diff] : {
             "fácil": "Una situación cotidiana sencilla: por ejemplo, un compañero le quita el lápiz, alguien le pisa sin querer, un hermano cambia de canal. Las tres respuestas deben ser bastante claras y distinguibles.",
             "medio": "Una situación cotidiana realista pero no trivial: por ejemplo, le copian los deberes, un amigo le critica delante de otros, no le invitan a una fiesta. Las respuestas deben mostrar matices.",
             "difícil": "Un dilema social complejo y sutil: presión de grupo para hacer algo que no quiere, lealtad versus honestidad (cubrir a un amigo que ha hecho algo mal), conflicto con una figura de autoridad, justicia social. La respuesta asertiva NO debe ser obvia y debe haber tensión entre valores. Las tres opciones deben ser todas plausibles."
-        }[diff];
+        };
+        const diffPrompt = diffPromptByContext;
+        const targetAudience = contextMode === "adulto" ? "un adulto joven (16-25 años) en transición a la vida adulta. Usa registro adulto, no escolar" : "un niño/adolescente";
         const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
-Genera un dilema social para un niño/adolescente. ${diffPrompt}
+Genera un dilema social para ${targetAudience}. ${diffPrompt}
 
 Después da 3 posibles respuestas: una asertiva, una pasiva, una agresiva (sin etiquetar cuál es cuál). Para cada una explica las consecuencias probables.
 
@@ -23494,6 +24165,14 @@ Formato JSON:
                 React.createElement(AIBadge, null)),
             React.createElement(DiffSelect, { value: diff, onChange: (d) => { sfx.tap(); setDiff(d); } })),
         React.createElement(Instructions, null, "Lee la situación y elige cómo responderías. Veremos las consecuencias y aprenderemos sobre estilos de comunicación."),
+        React.createElement("div", { style: { display: "flex", gap: 4, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+            [{ id: "escolar", l: "Escolar / Familiar" }, { id: "adulto", l: "Adulto joven" }].map(m =>
+                React.createElement("button", { key: m.id, onClick: () => { sfx.tap(); setContextMode(m.id); }, style: {
+                    padding: "5px 11px", borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: contextMode === m.id ? C.accent : "#fff",
+                    color: contextMode === m.id ? "#fff" : C.text,
+                    border: `2px solid ${contextMode === m.id ? C.accent : C.border}`, fontFamily: "inherit",
+                } }, m.l))),
         !data && !loading && React.createElement("div", { style: { textAlign: "center", padding: 30 } },
             React.createElement(Btn, { color: C.purple, onClick: generate }, "✨ Generar escenario")),
         loading && React.createElement(LoadingCard, { message: "Generando..." }),
@@ -23765,8 +24444,7 @@ function Mindfulness({ patient }) {
                 textAlign: "center", marginBottom: 14,
             } },
                 React.createElement("div", { style: { fontSize: 90, marginBottom: 12 } }, "🌟"),
-                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, marginBottom: 8 } }, "Sesión completa"),
-                React.createElement("div", { style: { fontSize: 14, opacity: 0.9 } }, "¿Cómo te sientes ahora?")),
+                React.createElement("div", { style: { fontSize: 22, fontWeight: 800, marginBottom: 8 } }, "Sesión completa")),
             React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" } },
                 React.createElement(Btn, { color: script.color, onClick: start, small: true }, "↻ Repetir"),
                 React.createElement(Btn, { color: C.textL, onClick: stop, small: true, outline: true }, "Cambiar visualización"))));
@@ -24049,12 +24727,32 @@ function RolePlayConversacional({ patient }) {
         { id: "profe_injusto", label: "Algo me parece injusto", emoji: "⚖️", desc: "Crees que te han tratado injustamente",
           tip: "Puedes estar en desacuerdo con respeto. Expón los hechos, di por qué te parece injusto y pregunta.",
           personality: "Eres un adulto (profe, monitor, entrenador) que ha tomado una decisión que el paciente siente como injusta (una nota, un castigo, no dejarle participar). No eres malvado, pero estás convencido de tu decisión y al principio te pones a la defensiva. Cedes a reconsiderar SOLO si el paciente expone hechos concretos con respeto, sin faltar ni rendirse." },
+        // ── Adult-young scenarios (16-25, university / work / independent life) ──
+        { id: "jefe_extra", label: "Jefe pide quedarse más", emoji: "💼", desc: "Tu jefe insinúa que te quedes fuera de tu horario", adulto: true,
+          tip: "El subtexto manda. 'Sería estupendo si...' no es opcional. Puedes acceder, negociar o decir que no — pero entendiendo qué te están pidiendo.",
+          personality: "Eres el jefe/a del paciente. Le dices con tono amable pero firme: 'oye, sería estupendo si pudieras quedarte un poco más esta tarde para terminar el informe'. NO es una petición opcional aunque suene así. Si el paciente dice que no sin más, sutilmente lo recriminas ('vaya, pensaba que querías crecer aquí', 'el resto del equipo siempre se queda'). Solo aceptas un no si el paciente lo razona bien (ya tiene un compromiso, propone hacerlo mañana, negocia un cambio). Hablas en registro profesional adulto." },
+        { id: "piso_conflicto", label: "Compañero/a de piso", emoji: "🏠", desc: "Tienes que abordar algo molesto con tu compañero/a de piso", adulto: true,
+          tip: "Sé concreto y directo: qué hecho concreto te molesta, qué necesitas que cambie. Sin sermones.",
+          personality: "Eres el compañero/a de piso del paciente, alguien con quien convives sin ser íntimo. Tienes una mala costumbre (dejas los platos sucios, pones música tarde, traes gente sin avisar). Cuando el paciente lo aborda, primero MINIMIZAS ('venga, tampoco es para tanto'), te defiendes con whataboutism ('tú también...'), o respondes con culpa pasivo-agresiva ('si te molesto, dímelo'). Solo accedes a un acuerdo si el paciente expone un hecho concreto y una petición clara con calma." },
+        { id: "entrevista_inicial", label: "Universidad: dudas con el profe", emoji: "🎓", desc: "Pides aclaración a un profesor universitario", adulto: true,
+          tip: "En la universidad la iniciativa es tuya. Explica brevemente qué entendiste y dónde te perdiste, no esperes que adivinen.",
+          personality: "Eres un profesor universitario al que el paciente acude en tutorías o en clase para preguntar dudas. Eres profesional pero ocupado, hablas en registro adulto. Si el paciente pregunta vagamente ('no entiendo nada'), le pides que sea concreto: '¿qué parte exactamente?'. Si el paciente expone con concreción, eres útil y cercano. Esperas que el paciente lleve la iniciativa." },
+        { id: "feedback_critica", label: "Recibir una crítica laboral", emoji: "📝", desc: "Tu superior te da feedback crítico sobre algo que hiciste", adulto: true,
+          tip: "Una crítica laboral no es un ataque. Escucha, pregunta para entender, no te defiendas en caliente, propón cómo mejorar.",
+          personality: "Eres el supervisor/a del paciente en el trabajo. Le has citado para revisar un trabajo que hizo y tienes que darle feedback crítico (un informe con errores, un email con tono inadecuado a un cliente, un retraso). Eres constructivo pero claro y firme. No suavizas en exceso. Si el paciente se pone defensivo o se justifica, mantienes el feedback. Si reconoce y pregunta cómo mejorar, te abres y propones soluciones." },
+        { id: "compa_grupo", label: "Trabajo en grupo (universidad)", emoji: "👨‍💻", desc: "Un compañero de grupo no está aportando", adulto: true,
+          tip: "Sé claro pero no acusador. Habla del hecho concreto y de la consecuencia para el grupo, no de la persona.",
+          personality: "Eres un compañero/a de máster o universidad del paciente en un trabajo en grupo, y NO estás aportando lo tuyo (no entregas a tiempo, no contestas mensajes, vienes sin preparar). Cuando el paciente te lo dice, primero das excusas ('he tenido mucho lío', 'ya pensaba ponerme'), luego te pones a la defensiva ('vamos, no es para tanto, todavía hay tiempo'). Solo te comprometes si el paciente es firme y concreto con plazos." },
+        { id: "vecino_ruido", label: "Vecino se queja del ruido", emoji: "🔔", desc: "Tu vecino llama a la puerta porque haces ruido", adulto: true,
+          tip: "Reconoce primero. Aunque tengas tu razón, escuchar antes que defenderse cambia el tono de toda la conversación.",
+          personality: "Eres un vecino/a adulto del paciente. Llamas a su puerta porque tienes una queja legítima (música tarde, gente saliendo a las 3 AM, ruido durante el día). Estás molesto pero no agresivo. Si el paciente se pone a la defensiva inmediatamente, mantienes la queja. Si reconoce y propone una solución, te calmas rápido. Esperas un trato adulto." },
     ];
     const INTENSITIES = [
         { id: "suave", label: "Suave", desc: "El personaje cede pronto. Para empezar.", mod: "IMPORTANTE: sé una versión SUAVE de este personaje. Cede con relativa facilidad si el paciente lo hace medianamente bien. Es para alguien que está empezando a practicar." },
         { id: "normal", label: "Normal", desc: "Dificultad equilibrada.", mod: "Mantén una dificultad equilibrada." },
         { id: "intenso", label: "Intenso", desc: "El personaje insiste mucho. Para practicar de verdad.", mod: "IMPORTANTE: sé una versión INTENSA de este personaje. Insiste mucho, no cedas casi nunca, presiona de verdad. Solo cede si el paciente es excelente y muy firme durante varios turnos. Es para alguien con práctica que quiere un reto real." },
     ];
+    const [contextMode, setContextMode] = useState("escolar"); // "escolar" | "adulto"
     const [scenarioId, setScenarioId] = useState(null);
     const [intensity, setIntensity] = useState("normal");
     const [messages, setMessages] = useState([]);
@@ -24227,6 +24925,21 @@ Formato JSON:
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Role-Play Conversacional"),
                 React.createElement(AIBadge, null)),
             React.createElement(Instructions, null, "Practica conversaciones difíciles con la IA. Tienes hasta 8 turnos, pero puedes terminar antes. Puedes pedir pistas durante la conversación. Al final recibes feedback sobre si fuiste asertivo, pasivo o agresivo."),
+            // Context selector (school vs adult-young)
+            React.createElement("div", { style: { marginBottom: 12, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: C.textL, marginBottom: 8, textTransform: "uppercase" } }, "Contexto"),
+                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    [{ id: "escolar", l: "Escolar / Familiar", d: "Para niños y adolescentes" },
+                     { id: "adulto", l: "Adulto joven", d: "Universidad, trabajo, vida independiente" }].map(m =>
+                        React.createElement("button", { key: m.id, onClick: () => { sfx.tap(); setContextMode(m.id); }, style: {
+                            flex: 1, padding: "8px 10px", borderRadius: 10, cursor: "pointer",
+                            background: contextMode === m.id ? C.accent : "#fff",
+                            color: contextMode === m.id ? "#fff" : C.text,
+                            border: `2px solid ${contextMode === m.id ? C.accent : C.border}`, fontFamily: "inherit",
+                            fontSize: 12, fontWeight: 700, textAlign: "center",
+                        } },
+                            React.createElement("div", null, m.l),
+                            React.createElement("div", { style: { fontSize: 9, fontWeight: 500, marginTop: 2, opacity: 0.85 } }, m.d))))),
             // Intensity selector
             React.createElement("div", { style: { marginBottom: 14, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: C.textL, marginBottom: 8, textTransform: "uppercase" } }, "Dificultad del personaje"),
@@ -24241,7 +24954,7 @@ Formato JSON:
                         React.createElement("div", null, it.label),
                         React.createElement("div", { style: { fontSize: 9, fontWeight: 500, marginTop: 2, opacity: 0.85 } }, it.desc)))) ),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 } },
-                SCENARIOS.map(s => React.createElement("div", { key: s.id, onClick: () => startScenario(s.id), style: {
+                SCENARIOS.filter(s => contextMode === "adulto" ? s.adulto : !s.adulto).map(s => React.createElement("div", { key: s.id, onClick: () => startScenario(s.id), style: {
                     padding: 14, background: "#f9f9f9", borderRadius: 14, cursor: "pointer", textAlign: "center",
                     border: `2px solid ${C.border}`, transition: "all 0.2s",
                 } },
@@ -27084,12 +27797,22 @@ function GoNoGo({ patient }) {
         const t = setTimeout(() => { setRound(r => r + 1); }, cfg.isi);
         return () => clearTimeout(t);
     }, [phase, round]);
+    const [lastResp, setLastResp] = useState(null); // "hit" | "fa" | null — last user response result
     const respond = () => {
         if (phase !== "playing" || responded.current || !stim) return;
         responded.current = true;
-        if (stim === "go") { sfx.success(); setScore(s => ({ ...s, hits: s.hits + 1 })); }
-        else { sfx.fail(); setScore(s => ({ ...s, falseAlarms: s.falseAlarms + 1 })); }
+        if (stim === "go") {
+            sfx.success();
+            setScore(s => ({ ...s, hits: s.hits + 1 }));
+            setLastResp("hit");
+        } else {
+            sfx.fail();
+            setScore(s => ({ ...s, falseAlarms: s.falseAlarms + 1 }));
+            setLastResp("fa");
+        }
     };
+    // Clear feedback when new stimulus appears
+    useEffect(() => { if (stim) setLastResp(null); }, [stim]);
     const total = score.hits + score.misses + score.falseAlarms + score.correctRejections;
     const accuracy = total > 0 ? Math.round(((score.hits + score.correctRejections) / total) * 100) : 0;
     return React.createElement("div", null,
@@ -27111,10 +27834,12 @@ function GoNoGo({ patient }) {
                     width: 220, height: 220, borderRadius: "50%",
                     background: stim === "go" ? C.success : stim === "nogo" ? C.error : "#e8e8e8",
                     cursor: "pointer", transition: "background 0.08s",
-                    boxShadow: stim ? "0 8px 20px rgba(0,0,0,0.2)" : "none",
+                    boxShadow: lastResp === "hit" ? `0 0 0 8px ${C.success}, 0 8px 24px ${C.success}88` :
+                        lastResp === "fa" ? `0 0 0 8px ${C.error}, 0 8px 24px ${C.error}88` :
+                        stim ? "0 8px 20px rgba(0,0,0,0.2)" : "none",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 16, color: "#fff", fontWeight: 800,
-                } }, stim === "go" ? "PULSA" : stim === "nogo" ? "STOP" : "")),
+                    fontSize: lastResp ? 80 : 16, color: "#fff", fontWeight: 800,
+                } }, lastResp === "hit" ? "✓" : lastResp === "fa" ? "✗" : stim === "go" ? "PULSA" : stim === "nogo" ? "STOP" : "")),
             React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", fontStyle: "italic" } },
                 "En verde: pulsa el círculo. En rojo: no toques nada y espera al siguiente.")),
         phase === "done" && React.createElement("div", null,
@@ -27270,12 +27995,22 @@ function CambioRegla({ patient }) {
         setTrial(0); setCorrect(0); setTrialsInRule(0); setFeedback(null);
         setPhase("playing");
     };
-    const choose = (target) => {
+    const [chosenIdx, setChosenIdx] = useState(null); // which target the user clicked
+    const [correctIdx, setCorrectIdx] = useState(null); // which target was correct
+    const choose = (target, idx) => {
         if (phase !== "playing" || feedback) return;
         const correctChoice = matchesByRule(current, target, rule);
         setFeedback(correctChoice ? "ok" : "no");
+        setChosenIdx(idx);
+        // If wrong, find which target WAS correct for current rule
+        if (!correctChoice) {
+            let ci = targets.findIndex(t => matchesByRule(current, t, rule));
+            setCorrectIdx(ci);
+        }
         if (correctChoice) { sfx.success(); setCorrect(c => c + 1); }
         else { sfx.fail(); }
+        // Longer delay on wrong answers so user can see the correct one
+        const delay = correctChoice ? 1100 : 1800;
         setTimeout(() => {
             const newTrial = trial + 1;
             const newTrialsInRule = trialsInRule + 1;
@@ -27288,7 +28023,7 @@ function CambioRegla({ patient }) {
                 setTrialsInRule(0);
             } else setTrialsInRule(newTrialsInRule);
             if (newTrial >= totalTrials) {
-                setPhase("done"); setFeedback(null);
+                setPhase("done"); setFeedback(null); setChosenIdx(null); setCorrectIdx(null);
                 if (_activePatientId) {
                     addStar(_activePatientId, _activeAreaId, correct + (correctChoice ? 1 : 0) >= 22);
                     saveBest(_activePatientId, "cambio_regla", correct + (correctChoice ? 1 : 0));
@@ -27296,8 +28031,8 @@ function CambioRegla({ patient }) {
                 }
                 return;
             }
-            setCurrent(newCard()); setFeedback(null); setTrial(newTrial);
-        }, 1100);
+            setCurrent(newCard()); setFeedback(null); setChosenIdx(null); setCorrectIdx(null); setTrial(newTrial);
+        }, delay);
     };
     const Card = ({ data, big, onClick, highlight }) => React.createElement("div", {
         onClick, style: {
@@ -27323,7 +28058,18 @@ function CambioRegla({ patient }) {
                 React.createElement(Badge, { color: C.success }, "Aciertos: ", correct),
                 React.createElement(Badge, { color: C.accent }, "Cambios: ", lastRules.length)),
             React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 18, flexWrap: "wrap" } },
-                targets.map((t, i) => React.createElement(Card, { key: i, data: t, onClick: () => choose(t) }))),
+                targets.map((t, i) => {
+                    // Highlight logic: green on correct target, red on wrong choice
+                    let hl = null;
+                    if (feedback === "ok" && chosenIdx === i) hl = "ok";
+                    else if (feedback === "no") {
+                        if (chosenIdx === i) hl = "no";
+                        if (correctIdx === i) hl = "ok";
+                    }
+                    return React.createElement(Card, { key: i, data: t, onClick: () => choose(t, i), highlight: hl });
+                })),
+            feedback === "no" && React.createElement("div", { style: { textAlign: "center", marginBottom: 12, padding: 8, background: `${C.error}15`, borderRadius: 8, fontSize: 12, fontWeight: 700, color: C.error } },
+                "✗ La carta correcta era la verde · regla actual: ", rule.toUpperCase()),
             React.createElement("div", { style: { textAlign: "center", marginBottom: 10, fontSize: 12, fontWeight: 700, color: C.textL } },
                 "Tu carta:"),
             React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
@@ -29791,6 +30537,323 @@ function TomaTurno({ patient }) {
         sel !== null && item.exp && React.createElement("div", { style: { background: `${C.yellow}22`, padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 1.5 } }, item.exp));
 }
 
+// ═══════════════════════════════════════════════════════════════
+// YOUNG ADULT ASD — Job interview simulator, subtext decoding,
+// autistic identity & self-advocacy. References: Smith et al. VR-JIT
+// (2014, 2015, 2021) on job interview training; Laugeson PEERS for
+// Young Adults; literature on autistic self-advocacy and neurodiversity.
+// ═══════════════════════════════════════════════════════════════
+
+// ── 4. Simulador de Entrevista de Trabajo (AI) ──
+// VR-JIT-inspired: IA plays interviewer. User answers by text. IA evaluates
+// the response and proposes a reformulation. Three job types + a coherent
+// sequence of question phases.
+function EntrevistaTrabajo({ patient }) {
+    const JOB_TYPES = [
+        { id: "entry", label: "Entry-level", desc: "Reponedor, cajero, dependiente, mozo de almacén",
+          context: "Eres entrevistador para un puesto de entrada (cajero, reponedor, dependiente). El candidato no necesita experiencia previa. Buscas actitud, responsabilidad, capacidad de seguir instrucciones y trabajo en equipo." },
+        { id: "customer", label: "Atención al cliente", desc: "Camarero, recepcionista, atención telefónica",
+          context: "Eres entrevistador para un puesto de atención al cliente (camarero, recepcionista, call center). Buscas habilidades comunicativas, paciencia, manejo de quejas, capacidad de mantener la calma con clientes difíciles." },
+        { id: "tech", label: "Técnico / administrativo", desc: "Programador junior, administrativo, soporte IT",
+          context: "Eres entrevistador para un puesto técnico-administrativo (programador junior, soporte IT, administrativo). Buscas competencia técnica, capacidad de aprendizaje, autonomía y trabajo en equipo." },
+    ];
+    const QUESTION_PHASES = [
+        { id: "presentacion", label: "Presentación", q: "Cuéntame un poco sobre ti." },
+        { id: "motivacion", label: "Motivación", q: "¿Por qué te interesa este puesto?" },
+        { id: "fortaleza", label: "Fortaleza", q: "¿Cuál dirías que es tu mayor fortaleza?" },
+        { id: "debilidad", label: "Debilidad", q: "¿Y tu mayor debilidad o algo en lo que estés trabajando?" },
+        { id: "equipo", label: "Trabajo en equipo", q: "Cuéntame de alguna vez que tuviste que trabajar en equipo." },
+        { id: "conflicto", label: "Manejar dificultad", q: "Háblame de una situación difícil que tuviste y cómo la resolviste." },
+        { id: "preguntas", label: "Tus preguntas", q: "Y tú, ¿tienes alguna pregunta para mí sobre el puesto?" },
+    ];
+    const [jobType, setJobType] = useState(null);
+    const [phase, setPhase] = useState(0);
+    const [history, setHistory] = useState([]); // {q, answer, feedback}
+    const [answer, setAnswer] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
+    const [currentFeedback, setCurrentFeedback] = useState(null);
+    const job = JOB_TYPES.find(j => j.id === jobType);
+    const currentQ = QUESTION_PHASES[phase];
+    const start = (jt) => { setJobType(jt); setPhase(0); setHistory([]); setAnswer(""); setShowFeedback(false); };
+    const submit = async () => {
+        if (!answer.trim() || loading) return;
+        setLoading(true);
+        const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
+${job.context}
+
+Estás haciendo una entrevista de trabajo a una persona adulta joven (probablemente con TEA) que está practicando. Esta es la pregunta que le has hecho: "${currentQ.q}"
+
+Su respuesta: "${answer.trim()}"
+
+Evalúa la respuesta de forma constructiva y útil para alguien que está aprendiendo a hacer entrevistas. Devuelve SOLO JSON con esta estructura:
+{
+  "puntuacion": 1-5,
+  "fortalezas": "1-2 cosas que hizo BIEN (ej. estructura, contenido relevante, tono adecuado)",
+  "mejoras": "1-2 cosas concretas para mejorar (ej. añadir un ejemplo, ser más conciso, evitar negativos)",
+  "reformulada": "una versión mejorada de su respuesta, breve y realista (máx 60 palabras), manteniendo el espíritu de lo que dijo pero pulida",
+  "tip": "una pista breve para la próxima pregunta"
+}
+
+Sé honesto pero amable. No le pongas 5 si no es excelente, pero tampoco menos de 2 a no ser que sea muy floja.`;
+        const result = await callClaude(prompt, "entrevista_trabajo");
+        setLoading(false);
+        if (!result || result.__noKey || result.__authError) return;
+        if (!result.puntuacion) return;
+        setCurrentFeedback(result);
+        setShowFeedback(true);
+    };
+    const nextQuestion = () => {
+        const newHistory = [...history, { q: currentQ.q, answer: answer.trim(), feedback: currentFeedback }];
+        setHistory(newHistory);
+        setAnswer(""); setShowFeedback(false); setCurrentFeedback(null);
+        if (phase + 1 >= QUESTION_PHASES.length) {
+            // Interview complete
+            const avg = newHistory.reduce((s, h) => s + (h.feedback ? h.feedback.puntuacion : 3), 0) / newHistory.length;
+            sfx.success();
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, avg >= 3.8);
+                logCurrentResult(avg >= 3);
+            }
+            setPhase(phase + 1);
+        } else setPhase(phase + 1);
+    };
+    const reset = () => { setJobType(null); setPhase(0); setHistory([]); setAnswer(""); setShowFeedback(false); setCurrentFeedback(null); };
+    const finished = jobType && phase >= QUESTION_PHASES.length;
+    if (!jobType) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Simulador de Entrevista"),
+                React.createElement(AIBadge, null)),
+            React.createElement(Instructions, { adoChildren: "Practica entrevistas de trabajo con un entrevistador virtual. Inspirado en VR-JIT (Smith et al., 2014), programa de entrevistas con realidad virtual cuyos efectos se mantienen a 6 meses con mejor empleabilidad real para personas con TEA." },
+                "Vas a practicar una entrevista de trabajo paso a paso. Yo haré las preguntas, tú respondes con calma. Después de cada respuesta te daré feedback concreto y una versión mejorada. Elige el tipo de puesto:"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 } },
+                JOB_TYPES.map(j => React.createElement("div", { key: j.id, onClick: () => { sfx.tap(); start(j.id); }, style: {
+                    padding: 16, background: "#fff", borderRadius: 14, cursor: "pointer", border: `2px solid ${C.border}`,
+                } },
+                    React.createElement("div", { style: { fontSize: 15, fontWeight: 800, marginBottom: 4, color: C.primary } }, j.label),
+                    React.createElement("div", { style: { fontSize: 12, color: C.textL, lineHeight: 1.4 } }, j.desc)))));
+    }
+    if (finished) {
+        const avg = history.reduce((s, h) => s + (h.feedback ? h.feedback.puntuacion : 3), 0) / history.length;
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Entrevista completada"),
+            React.createElement(Feedback, { success: avg >= 3.8, reward: avg >= 4.5 },
+                `Puntuación media: ${avg.toFixed(1)}/5 · ${history.length} preguntas`),
+            React.createElement("div", { style: { marginTop: 16 } },
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 8, color: C.textL } }, "Resumen:"),
+                history.map((h, i) => React.createElement("div", { key: i, style: { padding: 12, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 6 } },
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.primary, marginBottom: 4 } }, QUESTION_PHASES[i].label, " · ", h.feedback ? h.feedback.puntuacion + "/5" : "—"),
+                    h.feedback && React.createElement("div", { style: { fontSize: 12, color: C.text, lineHeight: 1.4 } }, h.feedback.mejoras)))),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginTop: 14 } },
+                React.createElement(Btn, { color: C.primary, onClick: reset, small: true }, "↻ Otra entrevista")));
+    }
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "Entrevista · ", job.label),
+                React.createElement(AIBadge, null)),
+            React.createElement(Badge, { color: C.primary }, "Pregunta ", phase + 1, " / ", QUESTION_PHASES.length)),
+        // Question (the interviewer)
+        React.createElement("div", { style: { background: "#1A2E40", padding: 16, borderRadius: 14, marginBottom: 12, display: "flex", gap: 10, alignItems: "flex-start" } },
+            React.createElement("div", { style: { fontSize: 30, lineHeight: 1 } }, "👔"),
+            React.createElement("div", { style: { flex: 1 } },
+                React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: "#8FA6BB", textTransform: "uppercase", marginBottom: 2 } }, "Entrevistador/a · ", currentQ.label),
+                React.createElement("div", { style: { fontSize: 15, color: "#fff", lineHeight: 1.4 } }, currentQ.q))),
+        // Answer input
+        !showFeedback && React.createElement(React.Fragment, null,
+            React.createElement("textarea", {
+                value: answer, onChange: (e) => setAnswer(e.target.value),
+                placeholder: "Escribe tu respuesta... (tómate el tiempo que necesites)",
+                rows: 4,
+                style: { width: "100%", padding: 12, borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 8, resize: "vertical" },
+            }),
+            React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 8 } },
+                React.createElement(Btn, { color: C.primary, onClick: submit, loading, small: true, disabled: !answer.trim() }, "✓ Enviar respuesta"))),
+        // Feedback
+        showFeedback && currentFeedback && React.createElement("div", null,
+            React.createElement("div", { style: { padding: 14, background: C.warm, borderRadius: 12, marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, marginBottom: 6 } }, "TU RESPUESTA"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.5, fontStyle: "italic" } }, answer)),
+            React.createElement("div", { style: { padding: 14, background: "#fff", border: `2px solid ${C.primary}`, borderRadius: 12, marginBottom: 12 } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.primary } }, "FEEDBACK"),
+                    React.createElement("div", { style: { fontSize: 18, fontWeight: 900, color: currentFeedback.puntuacion >= 4 ? C.success : currentFeedback.puntuacion >= 3 ? C.accent : C.error } }, currentFeedback.puntuacion, "/5")),
+                React.createElement("div", { style: { fontSize: 13, lineHeight: 1.5, marginBottom: 6 } },
+                    React.createElement("strong", { style: { color: C.success } }, "✓ Bien: "), currentFeedback.fortalezas),
+                React.createElement("div", { style: { fontSize: 13, lineHeight: 1.5, marginBottom: 10 } },
+                    React.createElement("strong", { style: { color: C.accent } }, "→ Mejora: "), currentFeedback.mejoras),
+                React.createElement("div", { style: { padding: 10, background: `${C.success}11`, borderRadius: 8, fontSize: 13, lineHeight: 1.5 } },
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.success, marginBottom: 4 } }, "VERSIÓN MEJORADA"),
+                    React.createElement("div", { style: { fontStyle: "italic" } }, currentFeedback.reformulada))),
+            currentFeedback.tip && React.createElement("div", { style: { padding: 10, background: `${C.accent}15`, borderRadius: 8, fontSize: 12, fontStyle: "italic", marginBottom: 12, color: C.text } },
+                "💡 ", currentFeedback.tip),
+            React.createElement("div", { style: { display: "flex", justifyContent: "flex-end" } },
+                React.createElement(Btn, { color: C.primary, onClick: nextQuestion, small: true },
+                    phase + 1 >= QUESTION_PHASES.length ? "✓ Terminar" : "Siguiente pregunta →"))));
+}
+
+// ── 5. Decodifica el Subtexto ──
+// Curated bank of adult communication situations where the spoken words
+// don't match the intent. User chooses between literal vs intended meaning.
+const SUBTEXTO_BANK = [
+    { ctx: "En el trabajo, son las 18:00 (tu hora de salida). Tu jefa, justo cuando pasa por tu mesa, dice:",
+      q: "\"Oye, sería estupendo si pudieras quedarte un poco más esta tarde para terminar el informe.\"",
+      opts: ["Es una pregunta opcional — puedo decir que no sin más", "No es realmente opcional, aunque suene amable: me está pidiendo que me quede", "Quiere saber si tengo tiempo libre esta semana en general"], ans: 1,
+      exp: "El 'sería estupendo si...' es una fórmula educada para una petición real, no una pregunta opcional. Las claves: el tono profesional, el momento (justo a la hora de salida), y la concreción del por qué. Puedes decir que no, pero entendiendo que es una negativa, no un 'no, gracias'." },
+    { ctx: "Te has retrasado en la entrega de un informe. Tu supervisor, en un mensaje:",
+      q: "\"Mira, no es un problema, pero la próxima vez avísame antes si vas con lío.\"",
+      opts: ["Realmente no es un problema, como dice", "Sí es un problema y se está conteniendo. La 'próxima vez' es la información clave", "Está enfadado pero no se atreve a decirlo"], ans: 1,
+      exp: "'No es un problema' suele significar 'esta vez lo dejo pasar'. La frase verdadera está en 'la próxima vez avísame': es una norma futura. No te está castigando ahora, te está marcando una expectativa." },
+    { ctx: "Vas en transporte público con un familiar. Le acabas de explicar con detalle el sistema de transmisión de tu serie favorita. El familiar suspira y dice:",
+      q: "\"Qué interesante todo eso, sí.\"",
+      opts: ["Le está pareciendo interesante, voy a continuar", "Está cansado del tema y quiere cambiar, aunque no me lo diga directo", "Quiere que le explique más detalles técnicos"], ans: 1,
+      exp: "El suspiro + entonación monótona + 'sí' al final son señales de querer terminar el tema. Cuando alguien quiere oír más, hace preguntas concretas o reformula. Si solo asiente cansadamente, suele tocar cambiar de tema o preguntar tú por algo suyo." },
+    { ctx: "Has invitado a alguien a tomar café por segunda vez. Su respuesta:",
+      q: "\"Buf, esta semana voy a tope. A ver si encuentro un hueco y te digo.\"",
+      opts: ["Va a buscar un hueco, esperaré a que me escriba", "Lo más probable es que sea una negativa indirecta. Si no contesta en unos días, no insistir", "Quiere que le proponga yo un día concreto"], ans: 1,
+      exp: "El 'a ver si encuentro un hueco y te digo' que no concreta nada concreto es la fórmula clásica de negativa amable en español. No te dicen que no para no herirte, pero la pelota no la van a coger. Si tras varios días no escribe, es información: respetar y no insistir." },
+    { ctx: "Tu compañero de piso, al verte fregar los platos:",
+      q: "\"Madre mía, qué bien lo dejas todo.\"",
+      opts: ["Es un cumplido sincero", "Puede ser sincero o irónico — depende del tono y de si él suele dejarlos sin fregar", "Es una crítica encubierta"], ans: 1,
+      exp: "Esta frase no se puede decodificar sola: depende del tono (sincero / irónico) y del contexto previo (¿es alguien que friega o no friega?). Si él nunca friega, probablemente es ironía o pasivo-agresividad. Si suele colaborar, es un cumplido. Las pistas extra son la cara, el tono y la historia compartida." },
+    { ctx: "Estás en una reunión de equipo. Propones una idea. Tu jefe responde:",
+      q: "\"Interesante. Es algo en lo que podemos pensar más adelante.\"",
+      opts: ["Le ha gustado y lo va a estudiar pronto", "Probablemente no le interesa, pero no quiere decir 'no' delante de todos", "Quiere que le envíe un documento detallado"], ans: 1,
+      exp: "En entornos profesionales, 'más adelante' sin fecha concreta suele significar 'nunca' o 'no es prioridad'. Si hubiese interés real, pondrían fecha ('lo vemos el lunes', 'pásame un par de párrafos'). No te lo tomes como rechazo personal — es el lenguaje corporativo." },
+    { ctx: "Has tenido una pequeña discusión con tu pareja/amigo. Al rato te dice:",
+      q: "\"Estoy bien, en serio. No pasa nada.\"",
+      opts: ["Está bien, como dice. Sigamos con normalidad", "El 'en serio' y 'no pasa nada' suelen señalar lo contrario: hay algo, pero no quiere o no puede hablarlo ahora", "Está enfadada y quiere que insista hasta que cuente"], ans: 1,
+      exp: "'Estoy bien' con énfasis ('en serio', 'no pasa nada') suele significar lo opuesto: hay algo, pero la persona no está lista para hablarlo. Lo mejor: validar y darle espacio ('vale, si quieres luego hablamos, estoy disponible'). NO insistir agresivamente, NO dejarlo pasar como si nada." },
+    { ctx: "En una entrevista de trabajo te están preguntando. Tras tu respuesta, el entrevistador dice:",
+      q: "\"Vale, vale. Bueno, pasemos al siguiente punto.\"",
+      opts: ["Le ha convencido mi respuesta", "El doble 'vale, vale' + cambio de tema sugiere que mi respuesta no le ha llenado", "Tiene prisa por terminar"], ans: 1,
+      exp: "Cuando algo convence, suelen profundizar ('interesante, y entonces...'). Un cambio rápido de tema, especialmente con 'vale vale' o 'bueno bueno' suele significar 'no nos quedamos aquí, pasemos'. No es una catástrofe, pero es información sobre cómo está yendo." },
+    { ctx: "Estás explicando algo técnico a un amigo no técnico. Al rato te interrumpe:",
+      q: "\"Ah claro, claro. Bueno, ¿y entonces qué pasó?\"",
+      opts: ["Lo ha entendido todo perfectamente", "Probablemente no lo ha entendido, pero no quiere parar de seguir oyendo", "Tiene prisa por terminar la conversación"], ans: 1,
+      exp: "El 'claro claro' rápido + cambio de pregunta a algo más general ('¿y entonces qué pasó?') suele indicar que se perdió pero quiere seguir escuchando la historia. No te ha entendido la parte técnica, pero le interesa la narración. Puedes simplificar o seguir, según interese." },
+    { ctx: "Pides a alguien que te explique algo. Su respuesta:",
+      q: "\"Pues mira, eso ya lo deberías saber a estas alturas.\"",
+      opts: ["Es información útil: que ya debería saberlo", "Es una respuesta evasiva o crítica, no una respuesta real a tu pregunta", "Quiere que yo le explique a mí mismo"], ans: 1,
+      exp: "Esta frase no responde a tu pregunta, simplemente desplaza la conversación a tu supuesta deficiencia. Es una forma de evitar contestar (porque no sabe, no quiere, o le molesta la pregunta). Lo más útil: insistir con calma ('puede ser, pero me gustaría que me lo explicaras igual') o buscar respuesta en otro sitio." },
+];
+function DecodificaSubtexto({ patient }) {
+    const bank = SUBTEXTO_BANK;
+    const [order, setOrder] = useState(() => shuffle(bank.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = bank[order[pos]];
+    const next = () => {
+        let no = order, np = pos + 1;
+        if (np >= order.length) { no = shuffle(bank.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = i === item.ans;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 4200);
+    };
+    if (!item) return React.createElement(LoadingCard, null);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Decodifica el Subtexto"),
+        React.createElement(Instructions, { adoChildren: "Mucho de lo que dicen los adultos en el trabajo, en la calle o en relaciones no es literal. Hay un subtexto: lo que las palabras esconden bajo formas educadas. Identificar el subtexto es clave para navegar el mundo adulto, especialmente en entornos profesionales." },
+            "En el mundo adulto, las palabras y la intención muchas veces no coinciden. Lee cada situación y elige qué cree la persona realmente."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+            React.createElement(Badge, { color: C.primary }, score.correct, " / ", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 16, borderRadius: 14, marginBottom: 12 } },
+            React.createElement("div", { style: { fontSize: 13, lineHeight: 1.6, color: C.text, marginBottom: 10 } }, item.ctx),
+            React.createElement("div", { style: { fontSize: 15, fontWeight: 700, fontStyle: "italic", color: C.primary, lineHeight: 1.5, padding: 10, background: "#fff", borderRadius: 10, borderLeft: `4px solid ${C.primary}` } }, item.q)),
+        React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, marginBottom: 6 } }, "¿Qué cree que está pasando realmente?"),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 } },
+            item.opts.map((opt, i) => {
+                const isCorrect = i === item.ans;
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (isCorrect) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (sel === i) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", {
+                    key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: {
+                        padding: "12px 16px", borderRadius: 12, fontSize: 14, fontWeight: 600, textAlign: "left",
+                        background: bg, border: `2px solid ${border}`, color,
+                        cursor: sel === null ? "pointer" : "default", fontFamily: "inherit", lineHeight: 1.4,
+                    },
+                }, opt);
+            })),
+        sel !== null && item.exp && React.createElement("div", { style: { background: `${C.yellow}22`, padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 1.55 } }, item.exp));
+}
+
+// ── 6. Mi Identidad Autista y Autoabogacía ──
+// Reflective activity, similar to Mis Valores. Six guided prompts about
+// identity, disclosure, accommodation, what works/doesn't. Stored per patient.
+function MiIdentidadAutista({ patient }) {
+    const PROMPTS = [
+        { id: "que_significa", title: "¿Qué significa para mí ser autista?",
+          help: "No hay una respuesta única. Algunas personas lo viven como una identidad, otras como un diagnóstico médico, otras lo separan de quién son. Lo importante es lo que tú piensas, no lo que se espera." },
+        { id: "fortalezas", title: "¿Qué cosas vienen con esto que considero fortalezas?",
+          help: "Pueden ser muy concretas: capacidad de concentración profunda, honestidad, conocimiento exhaustivo de un tema, atención al detalle, lealtad, pensamiento original, sentido de la justicia..." },
+        { id: "desafios", title: "¿Qué desafíos me da más trabajo y cómo los manejo?",
+          help: "Identificar dónde te cuesta más (entornos ruidosos, cambios de plan, conversaciones grupales, lectura de intenciones, etc.) y qué estrategias YA usas o quieres probar." },
+        { id: "ajustes", title: "¿Qué ajustes razonables necesito o podría pedir?",
+          help: "Un ajuste razonable es algo que te permite funcionar bien sin esfuerzo extraordinario. Ejemplos: instrucciones por escrito en el trabajo, evitar reuniones largas sin pausas, espacio sensorial, plazo flexible, etc." },
+        { id: "a_quien", title: "¿A quién le he contado mi diagnóstico y por qué?",
+          help: "Compartirlo no es obligación. Tampoco hay una respuesta correcta. Algunas personas lo cuentan a todo el mundo, otras solo a círculo íntimo, otras solo cuando es estrictamente necesario. Tu elección informada cuenta." },
+        { id: "no_contar", title: "¿Hay sitios donde decido NO contarlo? ¿Por qué?",
+          help: "Es legítimo decidir no compartirlo en según qué contextos (entrevistas iniciales, vecindario, ciertas amistades). La decisión informada — sabiendo qué riesgo asumo y qué quiero proteger — es lo importante." },
+    ];
+    const pid = _activePatientId || "anon";
+    const STORE_KEY = "identidad:" + pid;
+    const [data, setData] = useState(() => storeLoad(STORE_KEY) || {});
+    const [editing, setEditing] = useState(null);
+    const [draft, setDraft] = useState("");
+    const update = (id, text) => {
+        const nd = { ...data, [id]: { text, ts: Date.now() } };
+        setData(nd); storeSave(STORE_KEY, nd);
+        sfx.success();
+        if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+    };
+    const startEdit = (p) => { setEditing(p.id); setDraft(data[p.id] ? data[p.id].text : ""); };
+    const save = () => { if (editing && draft.trim()) update(editing, draft.trim()); setEditing(null); setDraft(""); };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Mi Identidad y Autoabogacía"),
+        React.createElement(Instructions, { adoChildren: "Reflexionar sobre la propia experiencia autista y cómo gestionarla en el mundo es una parte clave del trabajo terapéutico en adulto joven. No hay respuestas correctas. Lo que escribas se guarda y puedes volver cuando quieras." },
+            "Vamos a reflexionar sobre tu manera de ser y cómo la vives en el mundo. No hay respuestas correctas. Lo que escribas se guarda y puedes volver cuando quieras."),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+            PROMPTS.map(p => {
+                const saved = data[p.id];
+                const isEditing = editing === p.id;
+                return React.createElement("div", { key: p.id, style: {
+                    padding: 14, background: saved ? "#fff" : "#fafafa",
+                    border: `2px solid ${saved ? C.primary + "55" : C.border}`,
+                    borderRadius: 12,
+                } },
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 4 } }, p.title),
+                    !isEditing && !saved && React.createElement("div", { style: { fontSize: 12, color: C.textL, fontStyle: "italic", lineHeight: 1.5, marginBottom: 8 } }, p.help),
+                    !isEditing && saved && React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.6, padding: 10, background: `${C.primary}0f`, borderRadius: 8, marginBottom: 8 } }, saved.text),
+                    isEditing && React.createElement(React.Fragment, null,
+                        React.createElement("div", { style: { fontSize: 11, color: C.textL, fontStyle: "italic", marginBottom: 6 } }, p.help),
+                        React.createElement("textarea", {
+                            value: draft, onChange: (e) => setDraft(e.target.value), autoFocus: true,
+                            rows: 4,
+                            style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 8, resize: "vertical" },
+                        })),
+                    React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "flex-end" } },
+                        isEditing
+                            ? React.createElement(React.Fragment, null,
+                                React.createElement(Btn, { color: C.textL, onClick: () => { setEditing(null); setDraft(""); }, small: true, outline: true }, "Cancelar"),
+                                React.createElement(Btn, { color: C.primary, onClick: save, small: true, disabled: !draft.trim() }, "✓ Guardar"))
+                            : React.createElement(Btn, { color: saved ? C.textL : C.primary, onClick: () => startEdit(p), small: true, outline: !!saved },
+                                saved ? "✎ Editar" : "Escribir")));
+            })));
+}
+
 function DobleSentido({ patient }) {
     // Figurative language & irony — pragmatic difficulty typical of ASD.
     const BANK = [
@@ -30794,6 +31857,7 @@ const AREA_ACTIVITIES = {
         { id: "categoriza", label: "Clasifica por Categorías", desc: "Ordena por tipos", comp: Categorizacion, hasAI: true, complex: true },
         { id: "temporal", label: "Secuencia Temporal", desc: "Ordena los pasos de una actividad", comp: SecuenciaTemporal, hasAI: true, complex: true },
         { id: "nback", label: "N-back", desc: "Memoria de trabajo (1, 2, 3-back)", comp: NBack, complex: true },
+        { id: "span_digitos", label: "Span de Dígitos", desc: "Memoria de trabajo (WISC) directa e inversa", comp: SpanDigitos, complex: true },
         { id: "rutas", label: "Memorización de Rutas", desc: "Memoria espacial visual", comp: MemoriaRutas, complex: true },
         { id: "cara_nombre", label: "Cara-Nombre", desc: "Memoria asociativa de personas", comp: CaraNombre, complex: true },
         { id: "lista_compra", label: "Lista de la Compra", desc: "Memoria episódica verbal", comp: ListaCompra, complex: true },
@@ -30826,6 +31890,9 @@ const AREA_ACTIVITIES = {
         { id: "doble_sentido", label: "Doble Sentido", desc: "Interpreta frases hechas, bromas e ironía", comp: DobleSentido },
         { id: "claves_nv", label: "Claves No Verbales", desc: "Interpreta expresiones faciales, gestos y tono", comp: ClavesNoVerbales },
         { id: "toma_turno", label: "Toma de Turno", desc: "Cuándo hablar, cuándo escuchar, cómo cambiar de tema", comp: TomaTurno },
+        { id: "entrevista_trabajo", label: "Simulador de Entrevista", desc: "Practica entrevistas de trabajo con IA (estilo VR-JIT)", comp: EntrevistaTrabajo, hasAI: true, complex: true, adolescentOnly: true },
+        { id: "subtexto", label: "Decodifica el Subtexto", desc: "Identifica intenciones bajo formas educadas del mundo adulto", comp: DecodificaSubtexto, adolescentOnly: true },
+        { id: "identidad", label: "Mi Identidad y Autoabogacía", desc: "Reflexión sobre la propia experiencia autista", comp: MiIdentidadAutista, adolescentOnly: true },
     ],
     lectoescritura: [
         { id: "forma", label: "Forma Palabras", desc: "Une sílabas", comp: FormaPalabras, hasAI: true },
@@ -30855,9 +31922,13 @@ const AREA_ACTIVITIES = {
         { id: "pseudopalabras", label: "Pseudopalabras", desc: "Lectura cronometrada de palabras inventadas (ruta fonológica)", comp: Pseudopalabras },
     ],
     instrumentales: [
+        { id: "trazos", label: "Trazos Básicos", desc: "Sigue líneas, ondas, zigzag y espirales", comp: Trazos },
+        { id: "conecta_puntos", label: "Conecta los Puntos", desc: "Une puntos en orden numérico", comp: ConectaPuntos },
+        { id: "copia_formas", label: "Copia de Formas", desc: "Reproduce el modelo (Bender/VMI)", comp: CopiaFormas },
         { id: "caligrafia", label: "Caligrafía", desc: "Traza con lápiz táctil", comp: Caligrafia, complex: true },
     ],
     discalculia: [
+        { id: "subitizacion", label: "Subitización", desc: "Reconoce cantidades sin contar (1-9 puntos)", comp: Subitizacion },
         { id: "magnitudes", label: "Más Grande / Más Pequeño", desc: "Comparación de magnitudes (sentido numérico)", comp: ComparacionMagnitudes },
         { id: "recta_numerica", label: "Recta Numérica", desc: "Estimación de números en la recta mental", comp: RectaNumerica },
         { id: "descomposicion", label: "Descompón el Número", desc: "Centenas, decenas y unidades", comp: Descomposicion },
@@ -30913,6 +31984,9 @@ const ACTIVITY_DX = {
     // Memoria
     simon: ["tdah"], parejas: ["tdah"], secuencia: ["tdah"], cambio: ["tdah"],
     categoriza: ["tdah", "tea"], temporal: ["tdah", "tea"], nback: ["tdah"], rutas: ["tdah"],
+    span_digitos: ["tdah", "dislexia"],
+    subitizacion: ["discalculia"],
+    trazos: [], conecta_puntos: ["tdah"], copia_formas: ["dislexia"],
     cara_nombre: ["tdah", "tea"], lista_compra: ["tdah"],
     // Reg. Emocional
     identifica: ["tea", "ansiedad"], termometro: ["ansiedad", "tea", "tdah"], respiracion: ["ansiedad"],
@@ -30926,6 +32000,7 @@ const ACTIVITY_DX = {
     escenarios: ["tea", "ansiedad"], dialogos: ["tea", "ansiedad"], expresiones: ["tea"],
     historia: ["tea"], conflictos: ["tea", "tdah"], roleplay: ["tea", "ansiedad"],
     que_piensa: ["tea"], doble_sentido: ["tea"], claves_nv: ["tea"], toma_turno: ["tea"],
+    entrevista_trabajo: ["tea"], subtexto: ["tea"], identidad: ["tea"],
     // Lectoescritura
     forma: ["dislexia"], desorden: ["dislexia"], completa: ["dislexia"], sopa: ["dislexia", "tdah"],
     comprension: ["dislexia"], velocimetro: ["dislexia"], dictado: ["dislexia"],
@@ -30966,6 +32041,9 @@ const ACTIVITY_AGE = {
     // Memoria
     simon: [5, 14], parejas: [5, 12], secuencia: [5, 12], cambio: [7, 14],
     categoriza: [7, 14], temporal: [7, 14], nback: [10, 17], rutas: [8, 14],
+    span_digitos: [6, 17],
+    subitizacion: [5, 14],
+    trazos: [5, 10], conecta_puntos: [5, 12], copia_formas: [6, 14],
     cara_nombre: [8, 16], lista_compra: [7, 14],
     // Reg. emocional
     identifica: [5, 11], como_se_siente: [7, 14], termometro: [6, 14],
@@ -30977,8 +32055,8 @@ const ACTIVITY_AGE = {
     // Hab. sociales
     escenarios: [7, 13], dialogos: [8, 14], expresiones: [6, 14],
     historia: [8, 14], conflictos: [9, 16], roleplay: [9, 16],
-    que_piensa: [8, 16], doble_sentido: [9, 17],
-    claves_nv: [8, 16], toma_turno: [10, 17],
+    que_piensa: [8, 16], doble_sentido: [9, 17], claves_nv: [8, 16], toma_turno: [10, 17],
+    entrevista_trabajo: [16, 17], subtexto: [15, 17], identidad: [14, 17],
     // Lectoescritura
     forma: [5, 10], desorden: [6, 12], completa: [7, 13], sopa: [7, 14],
     comprension: [7, 14], velocimetro: [7, 14], dictado: [7, 14],
@@ -31330,6 +32408,136 @@ function GuiaDislexia({ onClose }) {
                     React.createElement("li", null, "Coordínate con el logopeda o el centro escolar si los hay.")),
                 React.createElement("div", { style: { padding: 12, background: "#FFF4EF", borderRadius: 10, fontSize: 12, lineHeight: 1.55, marginTop: 10, borderLeft: "3px solid #E07A5F" } },
                     "Genera un Informe de sesión al terminar (alcance \"Sesión de hoy\") para que la familia vea el trabajo concreto del día."))));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK & RATING — User-facing modal + admin panel for the therapist
+// Lets families/patients send suggestions or rate the therapist.
+// Data stored locally with timestamp; therapist views from PatientRegistry.
+// ═══════════════════════════════════════════════════════════════
+function FeedbackModal({ onClose, patient }) {
+    const [tab, setTab] = useState("sugerencia");
+    const [text, setText] = useState("");
+    const [rating, setRating] = useState(0);
+    const [sent, setSent] = useState(false);
+    const submit = () => {
+        if (tab === "sugerencia" && !text.trim()) return;
+        if (tab === "puntuar" && rating === 0) return;
+        const all = storeLoad("feedback:all") || [];
+        const entry = {
+            id: uid(),
+            ts: Date.now(),
+            type: tab,
+            text: text.trim() || null,
+            rating: tab === "puntuar" ? rating : null,
+            patientId: patient ? patient.id : null,
+            patientName: patient ? patient.nombre : null,
+        };
+        all.push(entry);
+        storeSave("feedback:all", all);
+        sfx.success();
+        setSent(true);
+        setTimeout(onClose, 1600);
+    };
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 20, overflowY: "auto" } },
+        React.createElement("div", { style: { background: C.bg, borderRadius: 18, padding: 22, maxWidth: 500, width: "100%", marginTop: 40 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "💬 Sugerencias y feedback"),
+                React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar")),
+            sent ? React.createElement("div", { style: { padding: 24, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 60, marginBottom: 8 } }, "✓"),
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: C.success } }, "¡Gracias por tu mensaje!"))
+            : React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 14, lineHeight: 1.5 } },
+                    "Tu mensaje queda guardado para que tu terapeuta lo vea cuando revise la app."),
+                React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14 } },
+                    [{ id: "sugerencia", l: "Sugerencia / Comentario" }, { id: "puntuar", l: "Puntuar al terapeuta" }].map(t =>
+                        React.createElement("button", { key: t.id, onClick: () => { sfx.tap(); setTab(t.id); }, style: {
+                            flex: 1, padding: "10px 12px", borderRadius: 10, cursor: "pointer", fontSize: 12.5, fontWeight: 700,
+                            background: tab === t.id ? C.primary : "#fff",
+                            color: tab === t.id ? "#fff" : C.text,
+                            border: `2px solid ${tab === t.id ? C.primary : C.border}`, fontFamily: "inherit",
+                        } }, t.l))),
+                tab === "sugerencia" && React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 6 } },
+                        "Cuéntanos qué te ha parecido la actividad, qué mejorarías, qué echas de menos..."),
+                    React.createElement("textarea", {
+                        value: text, onChange: (e) => setText(e.target.value),
+                        placeholder: "Escribe aquí tu sugerencia...",
+                        rows: 5,
+                        style: { width: "100%", padding: 12, borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 10, resize: "vertical" },
+                    })),
+                tab === "puntuar" && React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10 } },
+                        "¿Cómo valoras a tu terapeuta? (puedes añadir un comentario)"),
+                    React.createElement("div", { style: { display: "flex", gap: 4, justifyContent: "center", marginBottom: 14 } },
+                        [1, 2, 3, 4, 5].map(n => React.createElement("button", {
+                            key: n, onClick: () => { sfx.tap(); setRating(n); },
+                            style: {
+                                background: "transparent", border: "none", cursor: "pointer",
+                                fontSize: 42, padding: 4, lineHeight: 1, fontFamily: "inherit",
+                                color: rating >= n ? "#E9C46A" : "#ddd",
+                            },
+                        }, "★"))),
+                    React.createElement("textarea", {
+                        value: text, onChange: (e) => setText(e.target.value),
+                        placeholder: "Comentario opcional...",
+                        rows: 3,
+                        style: { width: "100%", padding: 12, borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 10, resize: "vertical" },
+                    })),
+                React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 8 } },
+                    React.createElement(Btn, { color: C.primary, onClick: submit, small: true,
+                        disabled: (tab === "sugerencia" && !text.trim()) || (tab === "puntuar" && rating === 0) },
+                        "✓ Enviar")))));
+}
+function FeedbackAdmin({ onClose }) {
+    const [items, setItems] = useState(() => (storeLoad("feedback:all") || []).slice().reverse());
+    const remove = (id) => {
+        if (!confirm("¿Eliminar este mensaje?")) return;
+        const remaining = items.filter(i => i.id !== id);
+        setItems(remaining);
+        storeSave("feedback:all", remaining.slice().reverse());
+    };
+    const clearAll = () => {
+        if (!confirm("¿Eliminar TODOS los mensajes? Esto no se puede deshacer.")) return;
+        setItems([]);
+        storeSave("feedback:all", []);
+    };
+    const fmtDate = (ts) => new Date(ts).toLocaleString("es-ES", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const ratings = items.filter(i => i.type === "puntuar" && i.rating);
+    const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.rating, 0) / ratings.length) : 0;
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 20, overflowY: "auto" } },
+        React.createElement("div", { style: { background: C.bg, borderRadius: 18, padding: 22, maxWidth: 620, width: "100%", marginTop: 30 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8, flexWrap: "wrap" } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "💬 Mensajes recibidos"),
+                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    items.length > 0 && React.createElement(Btn, { color: C.error, onClick: clearAll, small: true, outline: true }, "🗑 Vaciar"),
+                    React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
+            ratings.length > 0 && React.createElement("div", { style: { padding: 12, background: "#fff", borderRadius: 10, marginBottom: 14, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginBottom: 4 } }, "PUNTUACIÓN MEDIA"),
+                React.createElement("div", { style: { fontSize: 24, fontWeight: 900, color: "#E9C46A" } },
+                    "★".repeat(Math.round(avgRating)) + "☆".repeat(5 - Math.round(avgRating)),
+                    " · ", avgRating.toFixed(1), "/5"),
+                React.createElement("div", { style: { fontSize: 11, color: C.textL, marginTop: 4 } }, ratings.length, " valoración", ratings.length === 1 ? "" : "es")),
+            items.length === 0
+                ? React.createElement("div", { style: { padding: 40, textAlign: "center", color: C.textL, fontStyle: "italic" } }, "Sin mensajes por ahora.")
+                : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+                    items.map(item => React.createElement("div", { key: item.id, style: {
+                        padding: 12, background: "#fff", borderRadius: 10,
+                        borderLeft: `4px solid ${item.type === "puntuar" ? "#E9C46A" : C.primary}`,
+                    } },
+                        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, gap: 6 } },
+                            React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: item.type === "puntuar" ? "#A88A33" : C.primary } },
+                                item.type === "puntuar" ? "★ PUNTUACIÓN" : "💬 SUGERENCIA",
+                                item.patientName ? " · " + item.patientName : ""),
+                            React.createElement("button", {
+                                onClick: () => remove(item.id),
+                                style: { background: "transparent", border: "none", color: C.textL, cursor: "pointer", fontSize: 13, padding: 2 },
+                            }, "🗑")),
+                        item.rating && React.createElement("div", { style: { fontSize: 22, color: "#E9C46A", marginBottom: 6 } },
+                            "★".repeat(item.rating) + "☆".repeat(5 - item.rating)),
+                        item.text && React.createElement("div", { style: { fontSize: 13, lineHeight: 1.5, color: C.text, marginBottom: 4 } }, item.text),
+                        React.createElement("div", { style: { fontSize: 10, color: C.textL } }, fmtDate(item.ts)))))));
 }
 
 function GuiaDiscalculia({ onClose }) {
@@ -32115,7 +33323,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v23.2</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.0</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -32264,7 +33472,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v23.2</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.0</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -32924,6 +34132,8 @@ function TerapiAppInner() {
     const [patients, setPatients] = useState(() => storeLoad("patients") || []);
     const [activePatient, setActivePatient] = useState(null);
     const [showRegistry, setShowRegistry] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
+    const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [reportPatient, setReportPatient] = useState(null);
     const [trackingPatient, setTrackingPatient] = useState(null);
@@ -33228,11 +34438,13 @@ function TerapiAppInner() {
         achievementToast && React.createElement(AchievementToast, { achievementId: achievementToast, onDismiss: () => setAchievementToast(null) }),
         React.createElement("div", { style: { maxWidth: 1000, margin: "0 auto", padding: "22px 16px" } },
             showSettings && React.createElement(SettingsModal, { onClose: () => { setShowSettings(false); storeSave("dismissedSettingsHint", true); } }),
-            showRegistry && (React.createElement(PatientRegistry, { patients: patients, setPatients: setPatients, activePatient: activePatient, setActivePatient: setActivePatient, onClose: () => setShowRegistry(false), onShowReport: (p) => { setShowRegistry(false); setReportPatient(p); }, onShowTracking: (p) => { setShowRegistry(false); setTrackingPatient(p); } })),
+            showRegistry && (React.createElement(PatientRegistry, { patients: patients, setPatients: setPatients, activePatient: activePatient, setActivePatient: setActivePatient, onClose: () => setShowRegistry(false), onShowReport: (p) => { setShowRegistry(false); setReportPatient(p); }, onShowTracking: (p) => { setShowRegistry(false); setTrackingPatient(p); }, onShowFeedbackAdmin: () => { setShowRegistry(false); setShowFeedbackAdmin(true); } })),
             reportPatient && React.createElement(SessionReport, { patient: reportPatient, onClose: () => setReportPatient(null) }),
             trackingPatient && React.createElement(SeguimientoClinico, { patient: trackingPatient, onClose: () => setTrackingPatient(null) }),
             showGuiaDislexia && React.createElement(GuiaDislexia, { onClose: () => setShowGuiaDislexia(false) }),
             showGuiaDiscalculia && React.createElement(GuiaDiscalculia, { onClose: () => setShowGuiaDiscalculia(false) }),
+            showFeedback && React.createElement(FeedbackModal, { onClose: () => setShowFeedback(false), patient: activePatient }),
+            showFeedbackAdmin && React.createElement(FeedbackAdmin, { onClose: () => setShowFeedbackAdmin(false) }),
             showPlanner && React.createElement(SessionPlanner, {
                 onClose: () => setShowPlanner(false),
                 onLaunch: (areaId, activityId) => { setShowPlanner(false); nav(areaId, activityId); },
@@ -33257,6 +34469,11 @@ function TerapiAppInner() {
                         getPatientDiagnosticos(activePatient).length > 0 && React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 } },
                             getPatientDiagnosticos(activePatient).map((d, di) => React.createElement("span", { key: di, style: { padding: "1px 7px", borderRadius: 8, background: "rgba(255,255,255,0.25)", fontSize: 10, fontWeight: 700 } }, d)))),
                     React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+                        React.createElement("button", { onClick: () => { sfx.click(); setShowFeedback(true); }, title: "Enviar sugerencia o puntuar", style: {
+                            background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                            borderRadius: 10, padding: "7px 12px", color: "#fff", fontSize: 13, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                        } }, "💬"),
                         React.createElement("button", { onClick: () => {
                             sfx.click();
                             const sCount = (getSessions(activePatient.id) || []).length;
@@ -33359,8 +34576,8 @@ function TerapiAppInner() {
                     const candidates = [];
                     Object.keys(AREA_ACTIVITIES).forEach(areaId => {
                         AREA_ACTIVITIES[areaId].forEach(act => {
-                            if (act.adolescentOnly && !ado) return;
-                            if (act.childOnly && ado) return;
+                            if (act.adolescentOnly && activePatient && !ado) return;
+                            if (act.childOnly && activePatient && ado) return;
                             const acDx = ACTIVITY_DX[act.id] || [];
                             const dxHit = dxList.some(d => acDx.includes(d));
                             const ageRange = ACTIVITY_AGE[act.id];
@@ -33397,8 +34614,8 @@ function TerapiAppInner() {
                     Object.keys(AREA_ACTIVITIES).forEach(areaId => {
                         AREA_ACTIVITIES[areaId].forEach(act => {
                             // Respect adolescent/child visibility
-                            if (act.adolescentOnly && !ado) return;
-                            if (act.childOnly && ado) return;
+                            if (act.adolescentOnly && activePatient && !ado) return;
+                            if (act.childOnly && activePatient && ado) return;
                             if (act.label.toLowerCase().includes(q) || (act.desc || "").toLowerCase().includes(q)) {
                                 matches.push({ ...act, areaId });
                             }
@@ -33454,8 +34671,8 @@ function TerapiAppInner() {
                     const matches = [];
                     Object.keys(AREA_ACTIVITIES).forEach(areaId => {
                         AREA_ACTIVITIES[areaId].forEach(act => {
-                            if (act.adolescentOnly && !ado) return;
-                            if (act.childOnly && ado) return;
+                            if (act.adolescentOnly && activePatient && !ado) return;
+                            if (act.childOnly && activePatient && ado) return;
                             if (predicates.every(p => p(act, areaId))) matches.push({ ...act, areaId });
                         });
                     });
@@ -33513,8 +34730,8 @@ function TerapiAppInner() {
                         if (!list) return null;
                         const act = list.find(a => a.id === f.actId);
                         if (!act) return null;
-                        if (act.adolescentOnly && !ado) return null;
-                        if (act.childOnly && ado) return null;
+                        if (act.adolescentOnly && activePatient && !ado) return null;
+                        if (act.childOnly && activePatient && ado) return null;
                         return { ...act, areaId: f.areaId };
                     }).filter(Boolean);
                     if (favs.length === 0) return null;
@@ -33586,8 +34803,8 @@ function TerapiAppInner() {
                     const lastSession = getLastSessionActivities(activePatient && activePatient.id);
                     return AREA_ACTIVITIES[area].filter(it => {
                         const ado = isAdolescentMode(activePatient);
-                        if (it.adolescentOnly && !ado) return false;
-                        if (it.childOnly && ado) return false;
+                        if (it.adolescentOnly && activePatient && !ado) return false;
+                        if (it.childOnly && activePatient && ado) return false;
                         return true;
                     }).map(it => {
                     const dxList = ACTIVITY_DX[it.id] || [];
@@ -33652,7 +34869,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v23.2"),
+                "© 2026 Todos los derechos reservados · TerapiApp v24.0"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
