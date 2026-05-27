@@ -17248,7 +17248,7 @@ exports.version = "19.2.4";
 <!-- App code (pre-compiled from JSX) -->
 <script>
 try {
-const { useState, useEffect, useCallback, useRef } = React;
+const { useState, useEffect, useCallback, useRef, useMemo } = React;
 // ═══════════════════════════════════════════════════════════════
 // THEME
 // ═══════════════════════════════════════════════════════════════
@@ -23900,7 +23900,7 @@ Formato JSON:
 // Briefly flash N dots (1-9). User reports count. Subitizing range is
 // 1-4; counting takes over after that. Slower/inaccurate subitization
 // is a core marker of dyscalculia.
-function Subitizacion({ patient }) {
+function SubitizacionTest({ patient }) {
     const [diff, setDiff] = useState("medio");
     const cfg = {
         "fácil": { max: 5, flashMs: 1000, trials: 12 },
@@ -30486,6 +30486,2097 @@ const TOMA_TURNO_BANK = [
     { ctx: "Te das cuenta de que has interrumpido a alguien sin querer.", q: "¿Qué dices?", opts: ["Sigues con lo tuyo, ya está hecho", "'Perdón, sigue tú, estabas contando algo'", "Te disculpas y te callas todo el resto de la conversación"], ans: 1,
         exp: "Reconocer la interrupción con un \"perdón, sigue\" devuelve el turno limpiamente. Disculparse en exceso o callarse del todo es excesivo." },
 ];
+// ═══════════════════════════════════════════════════════════════
+// EXPANSION v24.1 — 11 evidence-based activities covering gaps in TEA,
+// TDAH, reasoning, young children's regulation, and CBT for adolescents.
+// ═══════════════════════════════════════════════════════════════
+
+// ── A. Faux Pas Test (Stone, Baron-Cohen, 1998) ──
+const FAUX_PAS_BANK = [
+    { story: "Marta está enseñando su nueva casa a su amiga Ana. Pasan al salón y Ana ve un cuadro abstracto colgado en la pared. Ana dice: '¡Qué cuadro tan feo! ¿Quién pintaría algo así?'. Marta responde: 'Lo pintó mi hija el mes pasado'.",
+      preguntas: [
+        { q: "¿Dijo alguien algo que no debía decir?", opts: ["Sí", "No"], ans: 0, exp: "Sí — Ana criticó el cuadro sin saber que lo había pintado la hija de Marta." },
+        { q: "¿Quién lo dijo?", opts: ["Marta", "Ana", "Las dos"], ans: 1 },
+        { q: "¿Por qué fue inapropiado?", opts: ["Porque el cuadro era feo de verdad", "Porque Ana no sabía que lo había pintado la hija de Marta", "Porque a Marta le gustó el cuadro"], ans: 1, exp: "Ana no sabía la información clave (autoría del cuadro). El faux pas surge de hablar sin saber." },
+      ] },
+    { story: "Carlos llega tarde a clase. La profesora dice delante de todos: 'Carlos, otra vez tarde. ¿Es que duermes hasta tarde porque no te importa?'. Carlos se queda callado. Más tarde, una compañera se entera de que la madre de Carlos está enferma y por eso ha llegado tarde.",
+      preguntas: [
+        { q: "¿La profesora dijo algo inapropiado?", opts: ["Sí", "No"], ans: 0, exp: "Sí — asumió una razón (vagancia) sin saber lo que pasaba realmente." },
+        { q: "¿Por qué fue inapropiado?", opts: ["Porque llegar tarde es muy grave", "Porque le acusó de algo (no importarle) sin saber que su madre estaba enferma", "Porque lo dijo delante de los compañeros"], ans: 1 },
+        { q: "¿Qué creía la profesora cuando lo dijo?", opts: ["Que Carlos llegaba tarde por desinterés", "Que la madre de Carlos estaba enferma", "Que Carlos había tenido un problema serio"], ans: 0 },
+      ] },
+    { story: "Luis y María están en el cine. Sale del baño un hombre y María dice: '¡Anda, qué calvo está ese señor!'. Luis le susurra al oído: 'María, ese es mi tío'.",
+      preguntas: [
+        { q: "¿María dijo algo inapropiado?", opts: ["Sí", "No"], ans: 0 },
+        { q: "¿Por qué fue inapropiado?", opts: ["Porque criticó a alguien por su físico, y además era familiar de Luis", "Porque hablaba muy alto en el cine", "Porque al tío no le gusta que le miren"], ans: 0 },
+        { q: "¿María sabía que era el tío de Luis?", opts: ["Sí", "No, no lo sabía"], ans: 1, exp: "No lo sabía. El faux pas viene de comentar sin información sobre quién es la persona." },
+      ] },
+    { story: "Es el cumpleaños de Sara. Su amigo Tomás le regala un libro. Sara lo desenvuelve y dice: 'Vaya, ya tengo este libro en casa'. Tomás se queda callado.",
+      preguntas: [
+        { q: "¿Sara dijo algo inapropiado?", opts: ["Sí", "No"], ans: 0 },
+        { q: "¿Por qué?", opts: ["Porque a Tomás le sentó mal que ella ya tuviera el libro", "Porque demostró que no valoraba el esfuerzo de Tomás en hacer un regalo", "Porque debió mentir y decir que no lo tenía"], ans: 1, exp: "Lo importante es que Tomás se molestó porque pareció que ella no valoraba el gesto." },
+      ] },
+    { story: "Pedro y Andrea quedan a comer con Andrea explicando que ha invitado a Roberto. Cuando llegan al restaurante, Pedro dice: 'Espero que no venga Roberto, es muy aburrido'. Andrea responde: 'Roberto ya está aquí, mira'.",
+      preguntas: [
+        { q: "¿Pedro dijo algo que no debía?", opts: ["Sí", "No"], ans: 0 },
+        { q: "¿Por qué?", opts: ["Porque criticó a Roberto sin saber que ya estaba allí (y oyéndolo)", "Porque Roberto no es realmente aburrido", "Porque Andrea no le había avisado"], ans: 0 },
+      ] },
+    { story: "Una vecina llama a la puerta y dice: 'Hola, vengo a pediros si podéis bajar la música. Mi hijo está estudiando para un examen importante'. La persona responde: 'Claro, perdona, ahora la bajamos'.",
+      preguntas: [
+        { q: "¿Alguien dijo algo inapropiado?", opts: ["Sí", "No"], ans: 1, exp: "No. La vecina hizo una petición razonable y la persona aceptó con educación. Interacción adecuada." },
+        { q: "¿Cómo describirías esta interacción?", opts: ["Tensa", "Respetuosa entre ambas partes", "Conflictiva"], ans: 1 },
+      ] },
+    { story: "En la cena, el padre dice: 'Esta sopa está rica, ¿quién la ha hecho?'. La madre dice: 'La he hecho yo'. El padre dice: 'Está mucho mejor que las que sueles hacer'.",
+      preguntas: [
+        { q: "¿El padre dijo algo inapropiado?", opts: ["Sí", "No"], ans: 0 },
+        { q: "¿Por qué?", opts: ["Porque dio a entender que las sopas anteriores de la madre eran peores", "Porque dijo la verdad y no se debe mentir", "Porque cocinar es delicado"], ans: 0, exp: "El cumplido lleva una crítica encubierta a los platos anteriores. La forma de halagar importa." },
+      ] },
+    { story: "Llega Juan al trabajo y un compañero le dice: 'Buenos días, ¿qué tal el fin de semana?'. Juan responde: 'Bien, gracias. ¿Y tú?'. El compañero responde: 'No muy bien, mi padre falleció el sábado'.",
+      preguntas: [
+        { q: "¿Alguien dijo algo inapropiado?", opts: ["Sí", "No"], ans: 1, exp: "No. Juan hizo una pregunta cortés y el compañero respondió con sinceridad. No hay faux pas — solo una noticia triste compartida." },
+        { q: "¿Qué sería apropiado que Juan dijera ahora?", opts: ["Cambiar de tema rápido para no incomodar", "Lamentarlo con palabras simples y sinceras", "Pedir disculpas por haber preguntado"], ans: 1 },
+      ] },
+    { story: "En clase, la profesora pregunta a Andrés: '¿Cuál es la capital de Francia?'. Andrés dice 'No lo sé'. Otro alumno, Pablo, se ríe en voz alta y dice: 'No te lo puedes creer, ¿no sabe la capital de Francia?'.",
+      preguntas: [
+        { q: "¿Pablo dijo algo inapropiado?", opts: ["Sí", "No"], ans: 0 },
+        { q: "¿Por qué?", opts: ["Porque humilló a un compañero delante de la clase", "Porque Andrés sí sabía la capital", "Porque a la profesora no le gusta que hablen"], ans: 0 },
+      ] },
+    { story: "Una tía visita a su sobrina pequeña y le da un regalo. La niña lo abre y dice con alegría: '¡Qué bonito! Mamá, mira lo que me ha regalado la tía'.",
+      preguntas: [
+        { q: "¿Alguien dijo algo inapropiado?", opts: ["Sí", "No"], ans: 1, exp: "No. Interacción afectuosa normal. La niña agradeció con alegría sincera." },
+      ] },
+];
+function FauxPas({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(FAUX_PAS_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [qIdx, setQIdx] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = FAUX_PAS_BANK[order[pos]];
+    const q = item.preguntas[qIdx];
+    const nextQ = () => {
+        if (qIdx + 1 < item.preguntas.length) { setQIdx(qIdx + 1); setSel(null); }
+        else {
+            let np = pos + 1, no = order;
+            if (np >= order.length) { no = shuffle(FAUX_PAS_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+            setPos(np); setQIdx(0); setSel(null);
+        }
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = i === q.ans;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(nextQ, 4200);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Paso en Falso"),
+        React.createElement(Instructions, { adoChildren: "Faux Pas Test (Stone & Baron-Cohen, 1998). Atribución de creencias de segundo orden (qué creía el hablante vs el oyente). Marcador clásico de TdM avanzada en TEA." },
+            "Lee la historia y responde las preguntas. A veces alguien dice algo inapropiado sin querer; otras veces no hay nada inapropiado. Lee bien."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.primary }, "Historia ", pos + 1, " · pregunta ", qIdx + 1, "/", item.preguntas.length),
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 14, borderRadius: 12, marginBottom: 12, fontSize: 13, lineHeight: 1.55, color: C.text } }, item.story),
+        React.createElement("div", { style: { fontSize: 14, fontWeight: 700, marginBottom: 8, color: C.text } }, q.q),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 } },
+            q.opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (i === q.ans) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "11px 14px", borderRadius: 12, fontSize: 13.5, fontWeight: 600, textAlign: "left",
+                        background: bg, border: `2px solid ${border}`, color, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit", lineHeight: 1.4 } }, o);
+            })),
+        sel !== null && q.exp && React.createElement("div", { style: { background: `${C.yellow}22`, padding: 11, borderRadius: 8, fontSize: 12.5, lineHeight: 1.5 } }, q.exp));
+}
+
+// ── B. Emociones Complejas y Mixtas ──
+const MIXTAS_BANK = [
+    { sit: "Te has graduado de la universidad y mañana te marchas a vivir lejos.", emos: ["orgullo", "nostalgia"], opts: ["orgullo", "alegría", "nostalgia", "miedo", "rabia"] },
+    { sit: "Tu hermano consigue un trabajo importante en otra ciudad. Vais a vernos mucho menos.", emos: ["alegría", "tristeza"], opts: ["alegría", "tristeza", "envidia", "alivio", "rabia"] },
+    { sit: "Acabas un examen muy difícil. Salió mal pero por fin terminó el periodo de exámenes.", emos: ["alivio", "tristeza"], opts: ["alivio", "tristeza", "ilusión", "vergüenza", "calma"] },
+    { sit: "Una amiga te confiesa que ha estado hablando mal de ti, y te pide perdón sincero.", emos: ["dolor", "alivio"], opts: ["dolor", "alivio", "rabia", "alegría", "miedo"] },
+    { sit: "Tras un año tratando, rompes con alguien que ya no te hacía bien.", emos: ["alivio", "tristeza"], opts: ["alivio", "tristeza", "ilusión", "vergüenza", "rabia"] },
+    { sit: "Tu mejor amigo gana un premio que tú también esperabas ganar.", emos: ["alegría", "envidia"], opts: ["alegría", "envidia", "tristeza", "calma", "miedo"] },
+    { sit: "Has tenido que decir que no a un favor importante a alguien querido.", emos: ["culpa", "alivio"], opts: ["culpa", "alivio", "rabia", "alegría", "miedo"] },
+    { sit: "Te enteras de que un amigo, al que veías mal, encontró ayuda profesional.", emos: ["alivio", "tristeza"], opts: ["alivio", "tristeza", "ilusión", "rabia", "miedo"] },
+    { sit: "Recibes una crítica dura en un trabajo o examen — pero tiene razón.", emos: ["vergüenza", "agradecimiento"], opts: ["vergüenza", "agradecimiento", "rabia", "tristeza", "miedo"] },
+    { sit: "Después de un funeral familiar, te ríes con un primo recordando una anécdota.", emos: ["tristeza", "alegría"], opts: ["tristeza", "alegría", "vergüenza", "miedo", "calma"] },
+];
+function EmocionesMixtas({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(MIXTAS_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [selected, setSelected] = useState([]);
+    const [done, setDone] = useState(false);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = MIXTAS_BANK[order[pos]];
+    const toggle = (e) => {
+        if (done) return;
+        sfx.tap();
+        setSelected(s => s.includes(e) ? s.filter(x => x !== e) : s.length >= 2 ? s : [...s, e]);
+    };
+    const validate = () => {
+        const ok = selected.length === 2 && item.emos.every(e => selected.includes(e));
+        setDone(true);
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(() => {
+            let np = pos + 1, no = order;
+            if (np >= order.length) { no = shuffle(MIXTAS_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+            setPos(np); setSelected([]); setDone(false);
+        }, 3000);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Emociones Mixtas"),
+        React.createElement(Instructions, { adoChildren: "Reconocimiento de ambivalencia emocional (Larsen, Reilly). Trabajar emociones simultáneas opuestas es nuclear en TEA, que tiende a categorizar en una única etiqueta clara." },
+            "A veces sentimos dos cosas a la vez. Lee la situación y elige las ", React.createElement("strong", null, "dos emociones"), " que mejor describen lo que se siente."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 14, borderRadius: 12, marginBottom: 12, fontSize: 14, lineHeight: 1.55 } }, item.sit),
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 12 } },
+            item.opts.map(o => {
+                const isSel = selected.includes(o);
+                const isAns = item.emos.includes(o);
+                let bg = "#fff", border = C.border, color = C.text;
+                if (done) {
+                    if (isAns) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (isSel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                } else if (isSel) { bg = C.primary; border = C.primary; color = "#fff"; }
+                return React.createElement("button", { key: o, onClick: () => toggle(o), disabled: done,
+                    style: { padding: "10px 16px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: done ? "default" : "pointer",
+                        background: bg, color, border: `2px solid ${border}`, fontFamily: "inherit", textTransform: "capitalize" } }, o);
+            })),
+        !done && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: validate, small: true, disabled: selected.length !== 2 }, "✓ Validar (" + selected.length + "/2)")));
+}
+
+// ── C. Reading the Mind in the Eyes (ilustrado) ──
+const EYES_BANK = [
+    { id: "asombro", target: "asombro", opts: ["calma", "asombro", "aburrimiento", "enfado"],
+      eyebrows: "M30,25 Q40,18 50,25 M70,25 Q80,18 90,25", openness: 0.9, pupilY: 50, pupilDx: 0 },
+    { id: "sospecha", target: "sospecha", opts: ["alegría", "tristeza", "sospecha", "miedo"],
+      eyebrows: "M30,30 L52,28 M68,28 L90,30", openness: 0.5, pupilY: 47, pupilDx: -3 },
+    { id: "preocupacion", target: "preocupación", opts: ["preocupación", "rabia", "calma", "diversión"],
+      eyebrows: "M28,28 Q40,22 52,28 M68,28 Q80,22 92,28", openness: 0.7, pupilY: 52, pupilDx: 0 },
+    { id: "burla", target: "burla", opts: ["ternura", "burla", "miedo", "vergüenza"],
+      eyebrows: "M30,30 L52,24 M68,24 L90,30", openness: 0.55, pupilY: 48, pupilDx: 0 },
+    { id: "ternura", target: "ternura", opts: ["ternura", "ira", "duda", "sorpresa"],
+      eyebrows: "M30,28 Q40,28 50,28 M70,28 Q80,28 90,28", openness: 0.55, pupilY: 50, pupilDx: 0 },
+    { id: "duda", target: "duda", opts: ["duda", "alegría", "asombro", "calma"],
+      eyebrows: "M28,32 Q40,28 52,30 M68,30 Q80,28 92,32", openness: 0.7, pupilY: 47, pupilDx: 4 },
+    { id: "decision", target: "determinación", opts: ["miedo", "determinación", "tristeza", "duda"],
+      eyebrows: "M28,28 L52,32 M68,32 L92,28", openness: 0.6, pupilY: 50, pupilDx: 0 },
+    { id: "interes", target: "interés", opts: ["aburrimiento", "rabia", "interés", "sospecha"],
+      eyebrows: "M28,25 Q40,22 52,26 M68,26 Q80,22 92,25", openness: 0.85, pupilY: 50, pupilDx: 0 },
+    { id: "vergonzosa", target: "vergüenza", opts: ["vergüenza", "alegría", "asombro", "rabia"],
+      eyebrows: "M30,28 Q40,28 50,28 M70,28 Q80,28 90,28", openness: 0.45, pupilY: 52, pupilDx: -4 },
+    { id: "esperanza", target: "esperanza", opts: ["preocupación", "esperanza", "burla", "miedo"],
+      eyebrows: "M28,27 Q40,23 52,27 M68,27 Q80,23 92,27", openness: 0.75, pupilY: 49, pupilDx: 2 },
+    { id: "alivio", target: "alivio", opts: ["tensión", "alivio", "duda", "rabia"],
+      eyebrows: "M30,30 Q40,32 50,30 M70,30 Q80,32 90,30", openness: 0.5, pupilY: 50, pupilDx: 0 },
+    { id: "incredulidad", target: "incredulidad", opts: ["ternura", "alegría", "incredulidad", "calma"],
+      eyebrows: "M28,28 Q40,22 52,28 M68,28 Q80,32 92,30", openness: 0.7, pupilY: 49, pupilDx: 0 },
+];
+function EyesTest({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(EYES_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = EYES_BANK[order[pos]];
+    const eyeHeight = 16 * (item.openness || 0.7);
+    const pupilDx = item.pupilDx || 0;
+    const next = () => {
+        let np = pos + 1, no = order;
+        if (np >= order.length) { no = shuffle(EYES_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = item.opts[i] === item.target;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 2400);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Lectura de la Mirada"),
+        React.createElement(Instructions, { adoChildren: "Adaptación ilustrada del Reading the Mind in the Eyes Test (Baron-Cohen, 2001). La versión clínica usa fotografías; esta versión con dibujos conserva el constructo (mentalising desde la región orbital). Para entrenamiento, no como medida clínica." },
+            "Mira solo los ojos. ¿Qué siente o piensa la persona? Elige la opción que mejor encaje."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 16, marginBottom: 14, display: "flex", justifyContent: "center" } },
+            React.createElement("svg", { viewBox: "0 0 120 80", style: { width: 320, height: 220 } },
+                React.createElement("path", { d: item.eyebrows, stroke: "#3a2a18", strokeWidth: 3, fill: "none", strokeLinecap: "round" }),
+                React.createElement("ellipse", { cx: 40, cy: 50, rx: 12, ry: eyeHeight, fill: "#fff", stroke: "#3a2a18", strokeWidth: 1.5 }),
+                React.createElement("ellipse", { cx: 80, cy: 50, rx: 12, ry: eyeHeight, fill: "#fff", stroke: "#3a2a18", strokeWidth: 1.5 }),
+                React.createElement("circle", { cx: 40 + pupilDx, cy: item.pupilY, r: 4, fill: "#3a2a18" }),
+                React.createElement("circle", { cx: 80 + pupilDx, cy: item.pupilY, r: 4, fill: "#3a2a18" }),
+                React.createElement("circle", { cx: 41 + pupilDx, cy: item.pupilY - 1, r: 1, fill: "#fff" }),
+                React.createElement("circle", { cx: 81 + pupilDx, cy: item.pupilY - 1, r: 1, fill: "#fff" }))),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 } },
+            item.opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (o === item.target) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "12px 16px", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: sel === null ? "pointer" : "default",
+                        background: bg, border: `2px solid ${border}`, color, fontFamily: "inherit", textTransform: "capitalize" } }, o);
+            })));
+}
+
+// ── D. Estimación Temporal (Time Reproduction) ──
+function EstimacionTemporal({ patient }) {
+    const DURATIONS = [5, 12, 30];
+    const [phase, setPhase] = useState("idle");
+    const [trial, setTrial] = useState(0);
+    const [targetDur, setTargetDur] = useState(0);
+    const [startTime, setStartTime] = useState(0);
+    const [trials, setTrials] = useState([]);
+    const beepRef = useRef(null);
+    const start = () => { setTrials([]); setTrial(0); setTimeout(nextTrial, 200); };
+    const nextTrial = () => {
+        if (trial >= DURATIONS.length) {
+            setPhase("done");
+            sfx.success();
+            const errs = trials.map(t => Math.abs(t.error));
+            const mean = errs.length ? errs.reduce((a, b) => a + b, 0) / errs.length : 0;
+            if (_activePatientId) { addStar(_activePatientId, _activeAreaId, mean < 2); logCurrentResult(mean < 4); }
+            return;
+        }
+        const d = DURATIONS[trial];
+        setTargetDur(d);
+        setPhase("listening");
+        const beepStart = Date.now();
+        beepRef.current = setInterval(() => {
+            if (Date.now() - beepStart >= d * 1000) {
+                clearInterval(beepRef.current);
+                sfx.tap();
+                setPhase("waiting");
+                setStartTime(Date.now());
+            }
+        }, 50);
+    };
+    const stop = () => {
+        if (phase !== "waiting") return;
+        const elapsed = (Date.now() - startTime) / 1000;
+        const error = elapsed - targetDur;
+        setTrials(t => [...t, { target: targetDur, given: elapsed, error }]);
+        setPhase("feedback");
+        sfx.tap();
+        setTimeout(() => { setTrial(t => t + 1); setTimeout(nextTrial, 100); }, 2000);
+    };
+    useEffect(() => () => beepRef.current && clearInterval(beepRef.current), []);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Estimación Temporal"),
+        React.createElement(Instructions, { adoChildren: "Tarea de reproducción temporal. Déficit nuclear en TDAH (Barkley, Toplak, 2013): sesgo sistemático y mayor variabilidad. No requiere conteo verbal." },
+            "Verás un círculo iluminado durante un tiempo. Cuando se apague, ese tiempo ha pasado. Tu tarea: cuando creas que ha vuelto a pasar ", React.createElement("strong", null, "el mismo tiempo"), ", pulsa el botón. No cuentes mentalmente."),
+        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        (phase === "listening" || phase === "waiting" || phase === "feedback") && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 14 } },
+                React.createElement(Badge, { color: C.primary }, "Ensayo ", trial + 1, "/", DURATIONS.length, " · ", targetDur, "s")),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 16 } },
+                React.createElement("div", { style: {
+                    width: 240, height: 240, borderRadius: "50%",
+                    background: phase === "listening" ? C.accent : "#1A1F2E",
+                    boxShadow: phase === "listening" ? `0 0 60px ${C.accent}, 0 0 0 12px ${C.accent}44` : "0 8px 24px rgba(0,0,0,0.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#fff", fontSize: 22, fontWeight: 800, textAlign: "center", padding: 20, boxSizing: "border-box",
+                    transition: "background 0.2s",
+                } }, phase === "listening" ? "atento" : phase === "waiting" ? "" : (trials.length > 0 ? (trials[trials.length - 1].error > 0 ? "+" : "") + trials[trials.length - 1].error.toFixed(1) + "s" : ""))),
+            phase === "waiting" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: stop }, "✓ Ya pasó el tiempo"))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: trials.every(t => Math.abs(t.error) < 2) },
+                "Errores: " + trials.map(t => (t.error > 0 ? "+" : "") + t.error.toFixed(1) + "s").join(" · ")),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic", lineHeight: 1.5 } },
+                "Sesgo positivo (sobreestima) o negativo (subestima) sistemático es típico en TDAH. Variabilidad alta entre las tres duraciones también es indicador."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"))));
+}
+
+// ── E. Memoria Prospectiva ──
+function MemoriaProspectiva({ patient }) {
+    const LETTERS = "BCDFGHJKLMNPQRSTV".split("");
+    const TARGET = "A";
+    const [phase, setPhase] = useState("idle");
+    const [grid, setGrid] = useState([]);
+    const [marked, setMarked] = useState({});
+    const [finishMode, setFinishMode] = useState(null);
+    const [elapsed, setElapsed] = useState(0);
+    const elapsedRef = useRef(null);
+    const ROWS = 8, COLS = 9;
+    const buildGrid = () => {
+        const cells = [];
+        for (let r = 0; r < ROWS; r++) {
+            const row = [];
+            for (let c = 0; c < COLS; c++) {
+                row.push(Math.random() < 0.25 ? TARGET : LETTERS[randInt(0, LETTERS.length - 1)]);
+            }
+            cells.push(row);
+        }
+        return cells;
+    };
+    const start = () => {
+        setGrid(buildGrid()); setMarked({}); setFinishMode(null); setElapsed(0);
+        setPhase("playing");
+        elapsedRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    };
+    const toggle = (r, c) => {
+        if (phase !== "playing") return;
+        sfx.tap();
+        const k = `${r}-${c}`;
+        setMarked(m => { const n = { ...m }; if (n[k]) delete n[k]; else n[k] = true; return n; });
+    };
+    const finish = (mode) => {
+        if (phase !== "playing") return;
+        clearInterval(elapsedRef.current);
+        setFinishMode(mode);
+        setPhase("done");
+        let total = 0, correct = 0;
+        grid.forEach((row, r) => row.forEach((ch, c) => {
+            const m = marked[`${r}-${c}`];
+            if (ch === TARGET) { total++; if (m) correct++; }
+        }));
+        const prospOk = mode === "blue";
+        sfx.success();
+        if (_activePatientId) {
+            addStar(_activePatientId, _activeAreaId, prospOk && correct / total >= 0.85);
+            saveBest(_activePatientId, "prospectiva", correct);
+            logCurrentResult(prospOk);
+        }
+    };
+    let totalT = 0, correctT = 0, errorsT = 0;
+    grid.forEach((row, r) => row.forEach((ch, c) => {
+        const m = marked[`${r}-${c}`];
+        if (ch === TARGET) { totalT++; if (m) correctT++; }
+        else if (m) errorsT++;
+    }));
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Memoria Prospectiva"),
+        React.createElement(Instructions, { adoChildren: "Memoria prospectiva = recordar realizar una acción en el futuro. Déficit marcado en TDAH (McCauley, Levine). Mezcla tarea principal (cancelación) con intención embebida." },
+            "Tu tarea principal es marcar todas las letras ", React.createElement("strong", null, "A"), " que veas. ",
+            React.createElement("br"),
+            React.createElement("strong", { style: { color: "#1976d2" } }, "IMPORTANTE: "),
+            "Cuando termines, NO pulses el botón verde habitual. Pulsa el botón ", React.createElement("strong", { style: { color: "#1976d2" } }, "AZUL"), " que aparecerá. Acuérdate."),
+        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        phase === "playing" && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 10 } },
+                React.createElement(Badge, { color: C.primary }, "Tiempo: ", elapsed, "s"),
+                React.createElement(Badge, { color: C.success }, "A marcadas: ", correctT, "/", totalT)),
+            React.createElement("div", { style: { background: "#FAFAF7", padding: 8, borderRadius: 12, marginBottom: 12, overflowX: "auto" } },
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 3, minWidth: 320 } },
+                    grid.flatMap((row, r) => row.map((ch, c) => {
+                        const m = marked[`${r}-${c}`];
+                        return React.createElement("div", { key: `${r}-${c}`, onClick: () => toggle(r, c),
+                            style: { aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800,
+                                background: m ? C.primary : "#fff", color: m ? "#fff" : C.text, borderRadius: 6, cursor: "pointer", border: `1px solid ${C.border}` } }, ch);
+                    })))),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
+                React.createElement("button", { onClick: () => finish("green"), style: {
+                    padding: "12px 22px", background: C.success, color: "#fff", border: "none", borderRadius: 12,
+                    fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+                } }, "✓ He terminado"),
+                React.createElement("button", { onClick: () => finish("blue"), style: {
+                    padding: "12px 22px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 12,
+                    fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+                } }, "✓ He terminado (azul)"))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: finishMode === "blue" && correctT / totalT >= 0.85 },
+                `Tarea principal: ${correctT}/${totalT} aciertos · ${errorsT} errores · Tiempo: ${elapsed}s · Intención: ${finishMode === "blue" ? "✓ recordada (azul)" : "✗ olvidada (verde)"}`),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic", lineHeight: 1.5 } },
+                "Olvidar el botón azul es típico en TDAH: la tarea principal absorbió los recursos y se perdió la intención embebida."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"))));
+}
+
+// ── F. Matrices Abstractas (estilo Raven) ──
+const MATRICES_BANK = [
+    { id: "m1", rule: "Mismo color, crece de tamaño", cells: [
+        { sh: "circle", n: 1, sz: "s", col: "#4A90D9" }, { sh: "circle", n: 1, sz: "m", col: "#4A90D9" }, { sh: "circle", n: 1, sz: "l", col: "#4A90D9" },
+        { sh: "square", n: 1, sz: "s", col: "#E07A5F" }, { sh: "square", n: 1, sz: "m", col: "#E07A5F" }, { sh: "square", n: 1, sz: "l", col: "#E07A5F" },
+        { sh: "triangle", n: 1, sz: "s", col: "#2A9D8F" }, { sh: "triangle", n: 1, sz: "m", col: "#2A9D8F" }],
+      opts: [
+        { sh: "triangle", n: 1, sz: "l", col: "#2A9D8F" },
+        { sh: "triangle", n: 1, sz: "s", col: "#2A9D8F" },
+        { sh: "circle", n: 1, sz: "l", col: "#2A9D8F" },
+        { sh: "triangle", n: 1, sz: "l", col: "#4A90D9" },
+        { sh: "square", n: 1, sz: "l", col: "#2A9D8F" },
+        { sh: "triangle", n: 2, sz: "l", col: "#2A9D8F" },
+      ], ans: 0 },
+    { id: "m2", rule: "Aumenta el número (1, 2, 3)", cells: [
+        { sh: "circle", n: 1, sz: "m", col: "#4A90D9" }, { sh: "circle", n: 2, sz: "m", col: "#4A90D9" }, { sh: "circle", n: 3, sz: "m", col: "#4A90D9" },
+        { sh: "square", n: 1, sz: "m", col: "#E07A5F" }, { sh: "square", n: 2, sz: "m", col: "#E07A5F" }, { sh: "square", n: 3, sz: "m", col: "#E07A5F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#2A9D8F" }, { sh: "triangle", n: 2, sz: "m", col: "#2A9D8F" }],
+      opts: [
+        { sh: "triangle", n: 3, sz: "m", col: "#2A9D8F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "triangle", n: 3, sz: "m", col: "#4A90D9" },
+        { sh: "circle", n: 3, sz: "m", col: "#2A9D8F" },
+        { sh: "square", n: 3, sz: "m", col: "#2A9D8F" },
+        { sh: "triangle", n: 2, sz: "m", col: "#2A9D8F" },
+      ], ans: 0 },
+    { id: "m3", rule: "Color en diagonal", cells: [
+        { sh: "circle", n: 1, sz: "m", col: "#4A90D9" }, { sh: "circle", n: 1, sz: "m", col: "#E07A5F" }, { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "circle", n: 1, sz: "m", col: "#E07A5F" }, { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" }, { sh: "circle", n: 1, sz: "m", col: "#4A90D9" },
+        { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" }, { sh: "circle", n: 1, sz: "m", col: "#4A90D9" }],
+      opts: [
+        { sh: "circle", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "circle", n: 1, sz: "m", col: "#4A90D9" },
+        { sh: "square", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "circle", n: 2, sz: "m", col: "#E07A5F" },
+      ], ans: 0 },
+    { id: "m4", rule: "Forma cambia por fila", cells: [
+        { sh: "circle", n: 1, sz: "m", col: "#4A90D9" }, { sh: "circle", n: 1, sz: "m", col: "#E07A5F" }, { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "square", n: 1, sz: "m", col: "#4A90D9" }, { sh: "square", n: 1, sz: "m", col: "#E07A5F" }, { sh: "square", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#4A90D9" }, { sh: "triangle", n: 1, sz: "m", col: "#E07A5F" }],
+      opts: [
+        { sh: "triangle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "triangle", n: 1, sz: "m", col: "#4A90D9" },
+        { sh: "circle", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "square", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "diamond", n: 1, sz: "m", col: "#2A9D8F" },
+      ], ans: 0 },
+    { id: "m5", rule: "Combina tamaño y número", cells: [
+        { sh: "diamond", n: 1, sz: "s", col: "#E07A5F" }, { sh: "diamond", n: 2, sz: "s", col: "#E07A5F" }, { sh: "diamond", n: 3, sz: "s", col: "#E07A5F" },
+        { sh: "diamond", n: 1, sz: "m", col: "#E07A5F" }, { sh: "diamond", n: 2, sz: "m", col: "#E07A5F" }, { sh: "diamond", n: 3, sz: "m", col: "#E07A5F" },
+        { sh: "diamond", n: 1, sz: "l", col: "#E07A5F" }, { sh: "diamond", n: 2, sz: "l", col: "#E07A5F" }],
+      opts: [
+        { sh: "diamond", n: 3, sz: "l", col: "#E07A5F" },
+        { sh: "diamond", n: 3, sz: "m", col: "#E07A5F" },
+        { sh: "diamond", n: 3, sz: "s", col: "#E07A5F" },
+        { sh: "diamond", n: 2, sz: "l", col: "#E07A5F" },
+        { sh: "diamond", n: 3, sz: "l", col: "#4A90D9" },
+        { sh: "circle", n: 3, sz: "l", col: "#E07A5F" },
+      ], ans: 0 },
+    { id: "m6", rule: "Color rota por columna", cells: [
+        { sh: "square", n: 1, sz: "m", col: "#4A90D9" }, { sh: "square", n: 1, sz: "m", col: "#E07A5F" }, { sh: "square", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "square", n: 1, sz: "m", col: "#E07A5F" }, { sh: "square", n: 1, sz: "m", col: "#2A9D8F" }, { sh: "square", n: 1, sz: "m", col: "#4A90D9" },
+        { sh: "square", n: 1, sz: "m", col: "#2A9D8F" }, { sh: "square", n: 1, sz: "m", col: "#4A90D9" }],
+      opts: [
+        { sh: "square", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "square", n: 1, sz: "m", col: "#2A9D8F" },
+        { sh: "square", n: 1, sz: "m", col: "#4A90D9" },
+        { sh: "circle", n: 1, sz: "m", col: "#E07A5F" },
+        { sh: "square", n: 2, sz: "m", col: "#E07A5F" },
+        { sh: "diamond", n: 1, sz: "m", col: "#E07A5F" },
+      ], ans: 0 },
+    { id: "m7", rule: "Decrece la cantidad", cells: [
+        { sh: "circle", n: 3, sz: "m", col: "#9B59B6" }, { sh: "circle", n: 2, sz: "m", col: "#9B59B6" }, { sh: "circle", n: 1, sz: "m", col: "#9B59B6" },
+        { sh: "square", n: 3, sz: "m", col: "#9B59B6" }, { sh: "square", n: 2, sz: "m", col: "#9B59B6" }, { sh: "square", n: 1, sz: "m", col: "#9B59B6" },
+        { sh: "triangle", n: 3, sz: "m", col: "#9B59B6" }, { sh: "triangle", n: 2, sz: "m", col: "#9B59B6" }],
+      opts: [
+        { sh: "triangle", n: 1, sz: "m", col: "#9B59B6" },
+        { sh: "triangle", n: 3, sz: "m", col: "#9B59B6" },
+        { sh: "triangle", n: 2, sz: "m", col: "#9B59B6" },
+        { sh: "circle", n: 1, sz: "m", col: "#9B59B6" },
+        { sh: "triangle", n: 1, sz: "l", col: "#9B59B6" },
+        { sh: "triangle", n: 1, sz: "m", col: "#4A90D9" },
+      ], ans: 0 },
+    { id: "m8", rule: "Cambia forma y tamaño", cells: [
+        { sh: "circle", n: 1, sz: "s", col: "#E9A23B" }, { sh: "circle", n: 1, sz: "m", col: "#E9A23B" }, { sh: "circle", n: 1, sz: "l", col: "#E9A23B" },
+        { sh: "diamond", n: 1, sz: "s", col: "#E9A23B" }, { sh: "diamond", n: 1, sz: "m", col: "#E9A23B" }, { sh: "diamond", n: 1, sz: "l", col: "#E9A23B" },
+        { sh: "triangle", n: 1, sz: "s", col: "#E9A23B" }, { sh: "triangle", n: 1, sz: "m", col: "#E9A23B" }],
+      opts: [
+        { sh: "triangle", n: 1, sz: "l", col: "#E9A23B" },
+        { sh: "triangle", n: 1, sz: "s", col: "#E9A23B" },
+        { sh: "diamond", n: 1, sz: "l", col: "#E9A23B" },
+        { sh: "circle", n: 1, sz: "l", col: "#E9A23B" },
+        { sh: "triangle", n: 2, sz: "l", col: "#E9A23B" },
+        { sh: "square", n: 1, sz: "l", col: "#E9A23B" },
+      ], ans: 0 },
+];
+const RenderShape = ({ shape, w = 60, h = 60 }) => {
+    if (!shape) return React.createElement("svg", { viewBox: "0 0 60 60", width: w, height: h });
+    const sizeMap = { s: 0.45, m: 0.7, l: 0.95 };
+    const sz = sizeMap[shape.sz] || 0.7;
+    const r = 26 * sz;
+    const cx = 30, cy = 30;
+    let elems;
+    const drawOne = (offsetX, key, scale = 1) => {
+        const r2 = r * scale;
+        if (shape.sh === "circle") return React.createElement("circle", { key, cx: cx + offsetX, cy, r: r2, fill: shape.col });
+        if (shape.sh === "square") return React.createElement("rect", { key, x: cx + offsetX - r2, y: cy - r2, width: r2 * 2, height: r2 * 2, fill: shape.col });
+        if (shape.sh === "triangle") return React.createElement("polygon", { key, points: `${cx + offsetX},${cy - r2} ${cx + offsetX + r2},${cy + r2} ${cx + offsetX - r2},${cy + r2}`, fill: shape.col });
+        if (shape.sh === "diamond") return React.createElement("polygon", { key, points: `${cx + offsetX},${cy - r2} ${cx + offsetX + r2},${cy} ${cx + offsetX},${cy + r2} ${cx + offsetX - r2},${cy}`, fill: shape.col });
+        return null;
+    };
+    if (shape.n === 1) elems = [drawOne(0, 0)];
+    else if (shape.n === 2) elems = [drawOne(-r * 0.9, 0, 0.75), drawOne(r * 0.9, 1, 0.75)];
+    else elems = [drawOne(-r * 1.1, 0, 0.6), drawOne(0, 1, 0.6), drawOne(r * 1.1, 2, 0.6)];
+    return React.createElement("svg", { viewBox: "0 0 60 60", width: w, height: h }, elems);
+};
+function Matrices({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(MATRICES_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = MATRICES_BANK[order[pos]];
+    const next = () => {
+        let np = pos + 1, no = order;
+        if (np >= order.length) { no = shuffle(MATRICES_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = i === item.ans;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 2400);
+    };
+    const optsOrder = useMemo(() => shuffle([0, 1, 2, 3, 4, 5]), [pos, order]);
+    const optsShuffled = optsOrder.map(i => ({ ...item.opts[i], origIdx: i }));
+    const correctShuffledIdx = optsOrder.indexOf(item.ans);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Matrices"),
+        React.createElement(Instructions, { adoChildren: "Razonamiento fluido no verbal. Banco inspirado en Raven's Progressive Matrices (Raven, 1938). Identificar la regla relacional (tamaño, número, color, forma) y aplicarla a la celda vacía." },
+            "Mira la rejilla: hay una pieza vacía. Descubre qué regla sigue y elige cuál de las opciones encaja en el hueco."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.primary }, "Matriz ", pos + 1),
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: "#FAFAF7", padding: 10, borderRadius: 14, marginBottom: 12, display: "flex", justifyContent: "center" } },
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 70px)", gap: 6 } },
+                item.cells.map((s, i) => React.createElement("div", { key: i, style: { width: 70, height: 70, background: "#fff", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.border}` } },
+                    React.createElement(RenderShape, { shape: s }))),
+                React.createElement("div", { style: { width: 70, height: 70, background: `${C.primary}11`, border: `2px dashed ${C.primary}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: C.primary } }, "?"))),
+        React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, textAlign: "center", marginBottom: 6 } }, "Elige la pieza que falta"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 } },
+            optsShuffled.map((opt, i) => {
+                let bg = "#fff", border = C.border;
+                if (sel !== null) {
+                    if (i === correctShuffledIdx) { bg = `${C.success}33`; border = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(opt.origIdx), disabled: sel !== null,
+                    style: { padding: 6, background: bg, border: `2px solid ${border}`, borderRadius: 10, cursor: sel === null ? "pointer" : "default", height: 76, display: "flex", alignItems: "center", justifyContent: "center" } },
+                    React.createElement(RenderShape, { shape: opt }));
+            })),
+        sel !== null && item.rule && React.createElement("div", { style: { background: `${C.yellow}22`, padding: 10, borderRadius: 8, marginTop: 8, fontSize: 12.5, textAlign: "center", fontStyle: "italic" } },
+            "Regla: ", item.rule));
+}
+
+// ── G. Analogías Verbales ──
+const ANALOGIAS_VERB = [
+    { a: "perro", b: "ladrar", c: "gato", opts: ["maullar", "correr", "comer", "saltar"], ans: 0 },
+    { a: "pluma", b: "ligera", c: "piedra", opts: ["redonda", "fría", "pesada", "blanca"], ans: 2 },
+    { a: "médico", b: "hospital", c: "profesor", opts: ["coche", "escuela", "casa", "tienda"], ans: 1 },
+    { a: "ojo", b: "ver", c: "oído", opts: ["oler", "comer", "oír", "tocar"], ans: 2 },
+    { a: "joven", b: "viejo", c: "alto", opts: ["bajo", "grande", "delgado", "fuerte"], ans: 0 },
+    { a: "pez", b: "agua", c: "pájaro", opts: ["tierra", "fuego", "aire", "nube"], ans: 2 },
+    { a: "libro", b: "leer", c: "comida", opts: ["dormir", "comer", "caminar", "ver"], ans: 1 },
+    { a: "alegre", b: "triste", c: "rápido", opts: ["divertido", "lento", "fuerte", "alto"], ans: 1 },
+    { a: "luz", b: "oscuridad", c: "calor", opts: ["sol", "frío", "tibio", "humedad"], ans: 1 },
+    { a: "frase", b: "palabra", c: "palabra", opts: ["letra", "página", "libro", "idea"], ans: 0 },
+    { a: "pan", b: "horno", c: "ropa", opts: ["plancha", "lavadora", "tienda", "armario"], ans: 1 },
+    { a: "carpintero", b: "madera", c: "alfarero", opts: ["agua", "barro", "fuego", "hierro"], ans: 1 },
+    { a: "mañana", b: "amanecer", c: "noche", opts: ["luz", "luna", "anochecer", "estrella"], ans: 2 },
+    { a: "iglesia", b: "rezar", c: "biblioteca", opts: ["dormir", "comer", "leer", "comprar"], ans: 2 },
+    { a: "barco", b: "puerto", c: "avión", opts: ["coche", "aeropuerto", "calle", "estación"], ans: 1 },
+];
+function Analogias({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(ANALOGIAS_VERB.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = ANALOGIAS_VERB[order[pos]];
+    const next = () => {
+        let np = pos + 1, no = order;
+        if (np >= order.length) { no = shuffle(ANALOGIAS_VERB.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = i === item.ans;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1800);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Analogías"),
+        React.createElement(Instructions, { adoChildren: "Razonamiento analógico verbal. Identificar la relación entre el primer par y aplicarla al segundo. Habilidad transferible al aula y a la comprensión lectora." },
+            "Descubre la relación entre el primer par de palabras. Luego aplícala para encontrar la palabra que falta."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 18, borderRadius: 14, marginBottom: 14, textAlign: "center", fontSize: 18, fontWeight: 700 } },
+            React.createElement("span", null, item.a), " ",
+            React.createElement("span", { style: { color: C.textL, fontSize: 22 } }, "→"),
+            " ", React.createElement("span", { style: { color: C.primary } }, item.b),
+            React.createElement("span", { style: { color: C.textL, margin: "0 16px" } }, " ⟹ "),
+            React.createElement("span", null, item.c), " ",
+            React.createElement("span", { style: { color: C.textL, fontSize: 22 } }, "→"),
+            " ", React.createElement("span", { style: { color: C.primary, fontWeight: 900 } }, "?")),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 6 } },
+            item.opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (i === item.ans) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "14px 16px", background: bg, border: `2px solid ${border}`, borderRadius: 12, fontSize: 14, fontWeight: 700, color, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit" } }, o);
+            })));
+}
+
+// ── H. Termómetro Corporal / Mapa de Sensaciones ──
+const BODY_ZONES = [
+    { id: "cabeza", cx: 200, cy: 70, r: 36 },
+    { id: "cara", cx: 200, cy: 95, r: 24 },
+    { id: "garganta", cx: 200, cy: 130, r: 16 },
+    { id: "pecho", cx: 200, cy: 175, r: 32 },
+    { id: "estomago", cx: 200, cy: 240, r: 30 },
+    { id: "hombros_l", cx: 145, cy: 145, r: 20 },
+    { id: "hombros_r", cx: 255, cy: 145, r: 20 },
+    { id: "manos_l", cx: 95, cy: 245, r: 18 },
+    { id: "manos_r", cx: 305, cy: 245, r: 18 },
+    { id: "piernas_l", cx: 175, cy: 360, r: 22 },
+    { id: "piernas_r", cx: 225, cy: 360, r: 22 },
+];
+function TermometroCorporal({ patient }) {
+    const EMOCIONES = [
+        { id: "alegria", l: "Alegría", color: "#E9C46A" },
+        { id: "tristeza", l: "Tristeza", color: "#457B9D" },
+        { id: "miedo", l: "Miedo", color: "#9B59B6" },
+        { id: "rabia", l: "Rabia", color: "#E63946" },
+        { id: "calma", l: "Calma", color: "#A8DADC" },
+    ];
+    const [emo, setEmo] = useState(EMOCIONES[0].id);
+    const [marks, setMarks] = useState({});
+    const tap = (zoneId) => {
+        sfx.tap();
+        setMarks(m => {
+            const cur = m[emo] || {};
+            const curInt = cur[zoneId] || 0;
+            const newInt = (curInt + 1) % 4;
+            const newEmo = { ...cur };
+            if (newInt === 0) delete newEmo[zoneId]; else newEmo[zoneId] = newInt;
+            return { ...m, [emo]: newEmo };
+        });
+    };
+    const save = () => {
+        if (!_activePatientId) { alert("Selecciona un paciente para guardar."); return; }
+        const key = "termo_corporal:" + _activePatientId;
+        const existing = storeLoad(key) || [];
+        existing.push({ id: uid(), ts: Date.now(), marks });
+        storeSave(key, existing.slice(-20));
+        sfx.success();
+        addStar(_activePatientId, _activeAreaId, true);
+        logCurrentResult(true);
+        alert("Registro guardado.");
+    };
+    const clear = () => setMarks({});
+    const emoData = EMOCIONES.find(e => e.id === emo);
+    const currentMarks = marks[emo] || {};
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Termómetro Corporal"),
+        React.createElement(Instructions, { adoChildren: "Trabajo de interocepción y mapa corporal de emociones (Craig, 2009; MAIA-Mehling). Especialmente útil en alexitimia, frecuente en TEA, y en somatización." },
+            "Elige una emoción. Después toca las partes del cuerpo donde la notas. Puedes tocar varias veces la misma zona para marcar más intensidad."),
+        React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginBottom: 12 } },
+            EMOCIONES.map(e => React.createElement("button", { key: e.id, onClick: () => { sfx.tap(); setEmo(e.id); },
+                style: { padding: "8px 12px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700,
+                    background: emo === e.id ? e.color : "#fff", color: emo === e.id ? "#fff" : C.text,
+                    border: `2px solid ${e.color}`, fontFamily: "inherit" } }, e.l))),
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 10, marginBottom: 10, display: "flex", justifyContent: "center" } },
+            React.createElement("svg", { viewBox: "0 0 400 440", style: { width: "100%", maxWidth: 320, touchAction: "manipulation" } },
+                React.createElement("ellipse", { cx: 200, cy: 75, rx: 40, ry: 48, fill: "#fff", stroke: "#888", strokeWidth: 2 }),
+                React.createElement("path", { d: "M 160 130 L 130 240 L 95 250 M 240 130 L 270 240 L 305 250 M 145 130 L 145 280 L 170 280 L 175 400 L 195 400 L 195 280 L 205 280 L 205 400 L 225 400 L 230 280 L 255 280 L 255 130 Z", fill: "#fff", stroke: "#888", strokeWidth: 2 }),
+                BODY_ZONES.map(z => {
+                    const intensity = currentMarks[z.id] || 0;
+                    return React.createElement("circle", {
+                        key: z.id, cx: z.cx, cy: z.cy, r: z.r,
+                        fill: intensity > 0 ? emoData.color : "transparent",
+                        fillOpacity: intensity > 0 ? intensity * 0.33 : 0,
+                        stroke: intensity > 0 ? emoData.color : "rgba(0,0,0,0.05)",
+                        strokeWidth: intensity > 0 ? 2 : 1,
+                        onClick: () => tap(z.id),
+                        style: { cursor: "pointer" },
+                    });
+                }))),
+        React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", fontStyle: "italic", marginBottom: 10 } },
+            "Toca las zonas donde notas la emoción. Toca varias veces para subir la intensidad."),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.textL, onClick: clear, small: true, outline: true }, "🗑 Limpiar"),
+            patient && React.createElement(Btn, { color: C.primary, onClick: save, small: true }, "💾 Guardar registro")));
+}
+
+// ── I. Respiración Guiada Simple ──
+function RespiracionSimple({ patient }) {
+    const PATTERNS = {
+        cuadrada: { name: "Respiración cuadrada", phases: [["Inspira", 4], ["Aguanta", 4], ["Espira", 4], ["Aguanta", 4]], desc: "4-4-4-4. Equilibrio y calma. Box breathing del Navy SEAL." },
+        "478": { name: "Respiración 4-7-8", phases: [["Inspira", 4], ["Aguanta", 7], ["Espira", 8], ["Pausa", 0]], desc: "4-7-8 (Weil). Activa parasimpático profundo. Útil antes de dormir y para ansiedad alta." },
+    };
+    const [pattern, setPattern] = useState("cuadrada");
+    const [running, setRunning] = useState(false);
+    const [cycle, setCycle] = useState(0);
+    const [phaseIdx, setPhaseIdx] = useState(0);
+    const [phaseProgress, setPhaseProgress] = useState(0);
+    const tickRef = useRef(null);
+    const cfg = PATTERNS[pattern];
+    useEffect(() => {
+        if (!running) return;
+        const phase = cfg.phases[phaseIdx];
+        const ms = phase[1] * 1000;
+        if (ms === 0) {
+            setPhaseIdx(p => (p + 1) % cfg.phases.length);
+            if (phaseIdx === cfg.phases.length - 1) setCycle(c => c + 1);
+            return;
+        }
+        const start = Date.now();
+        tickRef.current = setInterval(() => {
+            const t = (Date.now() - start) / ms;
+            if (t >= 1) {
+                clearInterval(tickRef.current);
+                const nextIdx = (phaseIdx + 1) % cfg.phases.length;
+                if (nextIdx === 0) setCycle(c => c + 1);
+                setPhaseIdx(nextIdx);
+                setPhaseProgress(0);
+            } else setPhaseProgress(t);
+        }, 50);
+        return () => clearInterval(tickRef.current);
+    }, [running, phaseIdx, pattern]);
+    const toggle = () => {
+        sfx.tap();
+        if (running) { setRunning(false); clearInterval(tickRef.current); }
+        else { setRunning(true); setPhaseIdx(0); setPhaseProgress(0); setCycle(0); }
+    };
+    const phase = cfg.phases[phaseIdx];
+    let scale = 0.55;
+    if (phase[0] === "Inspira") scale = 0.55 + 0.45 * phaseProgress;
+    else if (phase[0] === "Espira") scale = 1.0 - 0.45 * phaseProgress;
+    else if (phase[0] === "Aguanta") scale = phaseIdx === 1 ? 1.0 : 0.55;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Respiración Guiada"),
+        React.createElement(Instructions, { adoChildren: "Respiración pautada para regulación autonómica rápida (Brown & Gerbarg, 2005). Box breathing para calma equilibrada; 4-7-8 (Weil) para activación parasimpática profunda y conciliación del sueño." },
+            "Sigue el círculo con tu respiración. Cuando se hace grande, respira hondo. Cuando se hace pequeño, suelta el aire. No fuerces."),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+            Object.keys(PATTERNS).map(p => React.createElement("button", { key: p, onClick: () => { sfx.tap(); setPattern(p); setRunning(false); },
+                style: { padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    background: pattern === p ? C.primary : "#fff", color: pattern === p ? "#fff" : C.text,
+                    border: `2px solid ${pattern === p ? C.primary : C.border}`, fontFamily: "inherit" } }, PATTERNS[p].name))),
+        React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginBottom: 14, fontStyle: "italic" } }, cfg.desc),
+        React.createElement("div", { style: { background: "#1A1F2E", borderRadius: 18, padding: 30, marginBottom: 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 320 } },
+            React.createElement("div", { style: {
+                width: 200, height: 200, borderRadius: "50%",
+                background: `radial-gradient(circle, ${C.accent}cc, ${C.primary}88)`,
+                transform: `scale(${scale})`, transition: "transform 50ms linear",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff", fontSize: 24, fontWeight: 800,
+            } }, running ? phase[0] : ""),
+            React.createElement("div", { style: { color: "#8FA6BB", marginTop: 18, fontSize: 12, fontWeight: 700 } }, running ? `Ciclo ${cycle + 1}` : "Toca para comenzar")),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: toggle }, running ? "⏸ Pausar" : "▶ Empezar")));
+}
+
+// ── J. Registro de Pensamientos Automáticos (CBT) ──
+function PensamientosAutomaticos({ patient }) {
+    const [sit, setSit] = useState("");
+    const [pens, setPens] = useState("");
+    const [emo, setEmo] = useState("");
+    const [intensity, setIntensity] = useState(5);
+    const [conducta, setConducta] = useState("");
+    const [alt, setAlt] = useState("");
+    const [step, setStep] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const generateAlt = async () => {
+        if (!sit.trim() || !pens.trim()) return;
+        setLoading(true);
+        const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
+Ayuda a generar pensamientos alternativos más adaptativos (terapia cognitiva, modelo de Beck) para un adolescente.
+
+Situación: "${sit.trim()}"
+Pensamiento automático: "${pens.trim()}"
+Emoción: "${emo.trim()}" (intensidad ${intensity}/10)
+
+Devuelve SOLO JSON:
+{
+  "distorsiones": "1-2 distorsiones cognitivas que podrían estar operando (con jerga TCC: catastrofización, lectura de mente, todo-o-nada, etc.)",
+  "preguntas": "2-3 preguntas socráticas concretas para cuestionar el pensamiento",
+  "alternativa": "una formulación alternativa, realista (no positiva fingida), del pensamiento",
+  "consejo": "una sugerencia breve de qué hacer ahora con eso"
+}`;
+        const result = await callClaude(prompt, "pensamientos_auto");
+        setLoading(false);
+        if (!result || result.__noKey || result.__authError) {
+            if (result && result.__noKey) alert("Configura tu API key en ⚙️.");
+            return;
+        }
+        if (result.alternativa) setAlt(result.alternativa + "\n\nDistorsiones detectadas: " + (result.distorsiones || "") + "\n\nPreguntas para cuestionarlo:\n" + (result.preguntas || "") + "\n\nSugerencia: " + (result.consejo || ""));
+    };
+    const save = () => {
+        if (!_activePatientId) { alert("Selecciona un paciente para guardar."); return; }
+        const key = "pens_auto:" + _activePatientId;
+        const existing = storeLoad(key) || [];
+        existing.push({ id: uid(), ts: Date.now(), sit, pens, emo, intensity, conducta, alt });
+        storeSave(key, existing.slice(-30));
+        setSaved(true);
+        sfx.success();
+        addStar(_activePatientId, _activeAreaId, true);
+        logCurrentResult(true);
+        setTimeout(() => { setSit(""); setPens(""); setEmo(""); setIntensity(5); setConducta(""); setAlt(""); setStep(0); setSaved(false); }, 2000);
+    };
+    const steps = [
+        { l: "Situación", help: "¿Qué pasó? Sé concreto (cuándo, dónde, con quién).", val: sit, set: setSit, type: "text" },
+        { l: "Pensamiento automático", help: "¿Qué pasó por tu cabeza? Tal cual, sin filtrar.", val: pens, set: setPens, type: "text" },
+        { l: "Emoción", help: "Una palabra basta: tristeza, rabia, miedo, vergüenza...", val: emo, set: setEmo, type: "text" },
+        { l: "Intensidad (1-10)", help: "Del 1 (apenas) al 10 (muchísimo).", val: intensity, set: setIntensity, type: "slider" },
+        { l: "Conducta", help: "¿Qué hiciste? (te aislaste, lloraste, gritaste, callaste...)", val: conducta, set: setConducta, type: "text" },
+        { l: "Pensamiento alternativo", help: "¿Hay otra manera de mirarlo? La IA puede ayudarte.", val: alt, set: setAlt, type: "ai" },
+    ];
+    const current = steps[step];
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Registro de Pensamientos"),
+            React.createElement(AIBadge, null)),
+        React.createElement(Instructions, { adoChildren: "Técnica TCC clásica (Beck, 1976). Autorregistro para identificar distorsiones cognitivas y generar interpretaciones alternativas. Útil en ansiedad, depresión y autoconocimiento adolescente." },
+            "Vamos paso a paso. Cuanto más concreto seas, mejor podrás trabajarlo después con tu terapeuta."),
+        React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 14, flexWrap: "wrap" } },
+            steps.map((s, i) => React.createElement("button", { key: i, onClick: () => { sfx.tap(); setStep(i); },
+                style: { flex: "1 1 100px", padding: "6px 8px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", borderRadius: 8,
+                    background: step === i ? C.primary : i < step ? C.success : "#fff",
+                    color: step === i || i < step ? "#fff" : C.text,
+                    border: `2px solid ${step === i ? C.primary : i < step ? C.success : C.border}`, fontFamily: "inherit" } },
+                (i + 1) + ". " + s.l))),
+        React.createElement("div", { style: { padding: 16, background: "#fff", borderRadius: 14, border: `2px solid ${C.border}`, marginBottom: 12 } },
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, current.l),
+            React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10, fontStyle: "italic" } }, current.help),
+            current.type === "text" && React.createElement("textarea", {
+                value: current.val, onChange: e => current.set(e.target.value), rows: 3,
+                style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical" },
+            }),
+            current.type === "slider" && React.createElement("div", null,
+                React.createElement("input", { type: "range", min: 1, max: 10, value: current.val, onChange: e => current.set(parseInt(e.target.value)), style: { width: "100%" } }),
+                React.createElement("div", { style: { textAlign: "center", fontSize: 22, fontWeight: 900, color: C.primary } }, current.val + "/10")),
+            current.type === "ai" && React.createElement("div", null,
+                React.createElement("textarea", {
+                    value: current.val, onChange: e => current.set(e.target.value), rows: 8,
+                    placeholder: "Escribe tú una alternativa, o pulsa el botón para que la IA te ayude.",
+                    style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical", marginBottom: 8 },
+                }),
+                React.createElement(Btn, { color: C.accent, onClick: generateAlt, loading, small: true, disabled: !sit.trim() || !pens.trim() }, "✨ Ayúdame con IA"))),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "space-between", flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.textL, onClick: () => setStep(s => Math.max(0, s - 1)), small: true, outline: true, disabled: step === 0 }, "← Anterior"),
+            step < steps.length - 1
+                ? React.createElement(Btn, { color: C.primary, onClick: () => setStep(s => s + 1), small: true }, "Siguiente →")
+                : React.createElement(Btn, { color: C.primary, onClick: save, small: true, disabled: saved || !sit || !pens }, saved ? "✓ Guardado" : "💾 Guardar registro")));
+}
+
+// ── K. Solución de Problemas (D'Zurilla & Nezu, 1971) ──
+function SolucionProblemas({ patient }) {
+    const [problema, setProblema] = useState("");
+    const [meta, setMeta] = useState("");
+    const [alternativas, setAlternativas] = useState(["", "", "", "", ""]);
+    const [evaluaciones, setEvaluaciones] = useState({});
+    const [elegida, setElegida] = useState(null);
+    const [plan, setPlan] = useState("");
+    const [step, setStep] = useState(0);
+    const [loadingAlt, setLoadingAlt] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const generateAlt = async () => {
+        if (!problema.trim()) return;
+        setLoadingAlt(true);
+        const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
+Ayuda a generar alternativas de solución a un problema (técnica D'Zurilla & Nezu, 1971).
+
+Problema: "${problema.trim()}"
+Meta deseada: "${meta.trim() || "(sin definir)"}"
+
+Genera 5 alternativas variadas, incluso alguna poco ortodoxa pero plausible (la fluencia importa). NO evalúes — solo enumera. Devuelve SOLO JSON:
+{
+  "alternativas": ["alt 1", "alt 2", "alt 3", "alt 4", "alt 5"]
+}`;
+        const result = await callClaude(prompt, "solucion_prob");
+        setLoadingAlt(false);
+        if (!result || result.__noKey || result.__authError) {
+            if (result && result.__noKey) alert("Configura tu API key en ⚙️.");
+            return;
+        }
+        if (result.alternativas && Array.isArray(result.alternativas)) {
+            setAlternativas([...result.alternativas, "", "", "", "", ""].slice(0, 5));
+        }
+    };
+    const setAlt = (i, v) => { const a = [...alternativas]; a[i] = v; setAlternativas(a); };
+    const setEval = (i, field, v) => { setEvaluaciones(e => ({ ...e, [i]: { ...e[i], [field]: v } })); };
+    const save = () => {
+        if (!_activePatientId) { alert("Selecciona un paciente para guardar."); return; }
+        const key = "soluc_prob:" + _activePatientId;
+        const existing = storeLoad(key) || [];
+        existing.push({ id: uid(), ts: Date.now(), problema, meta, alternativas, evaluaciones, elegida, plan });
+        storeSave(key, existing.slice(-20));
+        setSaved(true);
+        sfx.success();
+        addStar(_activePatientId, _activeAreaId, true);
+        logCurrentResult(true);
+        setTimeout(() => { setProblema(""); setMeta(""); setAlternativas(["", "", "", "", ""]); setEvaluaciones({}); setElegida(null); setPlan(""); setStep(0); setSaved(false); }, 2000);
+    };
+    const STEPS = ["1. Definir", "2. Alternativas", "3. Pros/contras", "4. Elegir", "5. Plan"];
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Solución de Problemas"),
+            React.createElement(AIBadge, null)),
+        React.createElement(Instructions, { adoChildren: "Modelo de solución de problemas de D'Zurilla & Nezu (1971). 5 pasos: definir, generar alternativas, evaluar, elegir, planificar. Útil en TDAH (planificación), ansiedad e impulsividad adolescente." },
+            "Cinco pasos para resolver un problema con cabeza. No saltes pasos: cada uno se apoya en el anterior."),
+        React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 14, flexWrap: "wrap" } },
+            STEPS.map((s, i) => React.createElement("button", { key: i, onClick: () => { sfx.tap(); setStep(i); },
+                style: { flex: "1 1 80px", padding: "6px 6px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", borderRadius: 8,
+                    background: step === i ? C.primary : i < step ? C.success : "#fff",
+                    color: step === i || i < step ? "#fff" : C.text,
+                    border: `2px solid ${step === i ? C.primary : i < step ? C.success : C.border}`, fontFamily: "inherit" } }, s))),
+        React.createElement("div", { style: { padding: 16, background: "#fff", borderRadius: 14, border: `2px solid ${C.border}`, marginBottom: 12 } },
+            step === 0 && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, "Definir el problema"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 8, fontStyle: "italic" } }, "Sé concreto: qué pasa, cuándo, con quién. Después di qué te gustaría que pase."),
+                React.createElement("input", { value: problema, onChange: e => setProblema(e.target.value), placeholder: "Mi problema es...",
+                    style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 8 } }),
+                React.createElement("input", { value: meta, onChange: e => setMeta(e.target.value), placeholder: "Lo que quiero conseguir es...",
+                    style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" } })),
+            step === 1 && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, "Genera alternativas"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10, fontStyle: "italic" } }, "Aquí cuenta la cantidad, no la calidad. Apunta hasta las que parezcan absurdas — la creatividad expande las opciones."),
+                React.createElement(Btn, { color: C.accent, onClick: generateAlt, loading: loadingAlt, small: true, disabled: !problema.trim() }, "✨ Generar con IA"),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginTop: 10 } },
+                    alternativas.map((a, i) => React.createElement("div", { key: i, style: { display: "flex", gap: 6, alignItems: "center" } },
+                        React.createElement("div", { style: { fontWeight: 700, color: C.textL, width: 18 } }, i + 1),
+                        React.createElement("input", { value: a, onChange: e => setAlt(i, e.target.value), placeholder: "Alternativa " + (i + 1),
+                            style: { flex: 1, padding: 8, borderRadius: 6, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit" } }))))),
+            step === 2 && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, "Pros y contras"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10, fontStyle: "italic" } }, "Para cada alternativa, anota lo bueno y lo malo brevemente."),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+                    alternativas.map((a, i) => a.trim() && React.createElement("div", { key: i, style: { padding: 10, background: "#f9f9f9", borderRadius: 8 } },
+                        React.createElement("div", { style: { fontWeight: 700, fontSize: 13, marginBottom: 6 } }, (i + 1) + ". " + a),
+                        React.createElement("div", { style: { display: "flex", gap: 6 } },
+                            React.createElement("input", { value: (evaluaciones[i] && evaluaciones[i].pros) || "", onChange: e => setEval(i, "pros", e.target.value), placeholder: "Pros",
+                                style: { flex: 1, padding: 6, borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, fontFamily: "inherit" } }),
+                            React.createElement("input", { value: (evaluaciones[i] && evaluaciones[i].contras) || "", onChange: e => setEval(i, "contras", e.target.value), placeholder: "Contras",
+                                style: { flex: 1, padding: 6, borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 12, fontFamily: "inherit" } })))))),
+            step === 3 && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, "Elige una"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10, fontStyle: "italic" } }, "Tocando una la marcarás como la elegida. Mira los pros y contras antes de decidir."),
+                React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+                    alternativas.map((a, i) => a.trim() && React.createElement("button", { key: i, onClick: () => { sfx.tap(); setElegida(i); },
+                        style: { padding: "10px 12px", textAlign: "left", borderRadius: 8, cursor: "pointer", fontSize: 13, fontFamily: "inherit",
+                            background: elegida === i ? C.success + "33" : "#fff", border: `2px solid ${elegida === i ? C.success : C.border}`, fontWeight: 600 } }, (elegida === i ? "✓ " : "") + (i + 1) + ". " + a)))),
+            step === 4 && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, "Plan concreto"),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 10, fontStyle: "italic" } }, "Qué vas a hacer, cuándo y cómo. Lo más concreto que puedas."),
+                elegida !== null && React.createElement("div", { style: { padding: 10, background: `${C.success}15`, borderRadius: 8, marginBottom: 10, fontSize: 13 } },
+                    React.createElement("strong", null, "Elegida: "), alternativas[elegida]),
+                React.createElement("textarea", { value: plan, onChange: e => setPlan(e.target.value), rows: 5,
+                    placeholder: "Voy a... el día... empezando por...",
+                    style: { width: "100%", padding: 10, borderRadius: 8, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical" } }))),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "space-between", flexWrap: "wrap" } },
+            React.createElement(Btn, { color: C.textL, onClick: () => setStep(s => Math.max(0, s - 1)), small: true, outline: true, disabled: step === 0 }, "← Anterior"),
+            step < STEPS.length - 1
+                ? React.createElement(Btn, { color: C.primary, onClick: () => setStep(s => s + 1), small: true }, "Siguiente →")
+                : React.createElement(Btn, { color: C.primary, onClick: save, small: true, disabled: saved || !problema || !plan }, saved ? "✓ Guardado" : "💾 Guardar")));
+}
+
+// ── A. Rueda de Emociones (Plutchik / Geneva Emotion Wheel) ──
+// Three concentric rings of increasing emotional granularity. Two modes:
+// free-browse for vocabulary expansion, or guided exercise from a vignette
+// progressing inward → outward refinement. Targets emotional granularity,
+// a documented deficit in TEA and alexithymia (Hill, Berthoz, Frith).
+const EMO_WHEEL = {
+    // 6 primary emotions (inner ring)
+    primary: [
+        { id: "alegria", label: "Alegría", color: "#E9C46A", angle: 0 },
+        { id: "sorpresa", label: "Sorpresa", color: "#2A9D8F", angle: 60 },
+        { id: "miedo", label: "Miedo", color: "#9B59B6", angle: 120 },
+        { id: "tristeza", label: "Tristeza", color: "#457B9D", angle: 180 },
+        { id: "asco", label: "Asco", color: "#7A8E5A", angle: 240 },
+        { id: "rabia", label: "Rabia", color: "#E63946", angle: 300 },
+    ],
+    // Mid ring: per primary, 2-3 sub-emotions
+    secondary: {
+        alegria: [
+            { id: "felicidad", label: "Felicidad", def: "Estado general de bienestar y satisfacción." },
+            { id: "ilusion", label: "Ilusión", def: "Alegría anticipada por algo que está por venir." },
+            { id: "alivio", label: "Alivio", def: "Alegría por el final de algo malo o difícil." },
+        ],
+        sorpresa: [
+            { id: "asombro", label: "Asombro", def: "Sorpresa por algo grande o impresionante." },
+            { id: "curiosidad", label: "Curiosidad", def: "Interés por descubrir algo nuevo." },
+            { id: "confusion", label: "Confusión", def: "Sorpresa por algo que no se entiende." },
+        ],
+        miedo: [
+            { id: "inquietud", label: "Inquietud", def: "Miedo leve, intranquilidad." },
+            { id: "panico", label: "Pánico", def: "Miedo muy intenso, paralizante." },
+            { id: "preocupacion", label: "Preocupación", def: "Miedo anticipatorio sostenido." },
+        ],
+        tristeza: [
+            { id: "melancolia", label: "Melancolía", def: "Tristeza suave, contemplativa." },
+            { id: "decepcion", label: "Decepción", def: "Tristeza por algo que no salió como esperabas." },
+            { id: "soledad", label: "Soledad", def: "Tristeza por sentirse desconectado." },
+        ],
+        asco: [
+            { id: "desagrado", label: "Desagrado", def: "Asco suave, algo que no te gusta." },
+            { id: "rechazo", label: "Rechazo", def: "Asco moral o ético hacia algo." },
+        ],
+        rabia: [
+            { id: "irritacion", label: "Irritación", def: "Rabia leve, fastidio." },
+            { id: "frustracion", label: "Frustración", def: "Rabia por algo que no consigues." },
+            { id: "indignacion", label: "Indignación", def: "Rabia por algo que ves injusto." },
+        ],
+    },
+    // Outer ring: very fine-grained matices
+    tertiary: {
+        felicidad: ["plenitud", "regocijo", "gozo"],
+        ilusion: ["entusiasmo", "expectativa", "esperanza"],
+        alivio: ["liberación", "descanso"],
+        asombro: ["maravilla", "estupor"],
+        curiosidad: ["intriga", "interés"],
+        confusion: ["desorientación", "perplejidad"],
+        inquietud: ["recelo", "nerviosismo", "aprensión"],
+        panico: ["terror", "horror"],
+        preocupacion: ["ansiedad", "agobio"],
+        melancolia: ["nostalgia", "pesar"],
+        decepcion: ["desencanto", "desilusión"],
+        soledad: ["abandono", "vacío"],
+        desagrado: ["fastidio", "repulsión"],
+        rechazo: ["aversión", "desprecio"],
+        irritacion: ["enojo", "molestia"],
+        frustracion: ["impotencia", "exasperación"],
+        indignacion: ["ira", "resentimiento"],
+    },
+};
+const EMO_VIGNETTES = [
+    { sit: "Has aprobado el examen para el que tanto habías estudiado.", primary: "alegria", secondary: "ilusion" },
+    { sit: "Tu mejor amigo se ha mudado a otra ciudad y ya no le verás tanto.", primary: "tristeza", secondary: "soledad" },
+    { sit: "Suspendiste un examen sin haber estudiado lo suficiente.", primary: "tristeza", secondary: "decepcion" },
+    { sit: "Te has enterado de que alguien ha estado mintiendo sobre ti.", primary: "rabia", secondary: "indignacion" },
+    { sit: "Mañana tienes que hablar en público delante de toda la clase.", primary: "miedo", secondary: "preocupacion" },
+    { sit: "Acabas de terminar una semana de exámenes muy dura.", primary: "alegria", secondary: "alivio" },
+    { sit: "Te enseñan un truco de magia y no consigues explicártelo.", primary: "sorpresa", secondary: "asombro" },
+    { sit: "Estás intentando montar algo y se te cae todas las veces.", primary: "rabia", secondary: "frustracion" },
+    { sit: "Recibes una llamada inesperada de un familiar querido.", primary: "alegria", secondary: "felicidad" },
+    { sit: "Tu hermano ha cogido tu cosa favorita sin avisar.", primary: "rabia", secondary: "irritacion" },
+    { sit: "Escuchas un ruido fuerte por la noche en casa.", primary: "miedo", secondary: "panico" },
+    { sit: "Pensabas que tu equipo iba a ganar, pero perdió en el último minuto.", primary: "tristeza", secondary: "decepcion" },
+];
+function RuedaEmociones({ patient }) {
+    const [mode, setMode] = useState("libre"); // libre | ejercicio
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Rueda de Emociones"),
+        React.createElement(Instructions, { adoChildren: "Rueda de emociones inspirada en Plutchik (1980) y Geneva Emotion Wheel. Tres anillos de granularidad creciente — emociones primarias, sub-emociones y matices finos. Trabajar granularidad emocional es central en TEA y alexitimia (Hill, Berthoz, Frith)." },
+            "Dos modos: ", React.createElement("strong", null, "Libre"), " para explorar el vocabulario emocional, o ", React.createElement("strong", null, "Ejercicio"), " para entrenar la precisión partiendo de una situación."),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 14 } },
+            ["libre", "ejercicio"].map(m => React.createElement("button", { key: m, onClick: () => { sfx.tap(); setMode(m); },
+                style: { padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                    background: mode === m ? C.primary : "#fff", color: mode === m ? "#fff" : C.text,
+                    border: `2px solid ${mode === m ? C.primary : C.border}`, fontFamily: "inherit" } },
+                m === "libre" ? "🔍 Explorar" : "🎯 Ejercicio"))),
+        mode === "libre" ? React.createElement(RuedaLibre, null) : React.createElement(RuedaEjercicio, null));
+}
+function RuedaLibre() {
+    const [selected, setSelected] = useState(null); // {ring, primary, secondary}
+    const select = (ring, primary, secondary) => { sfx.tap(); setSelected({ ring, primary, secondary }); };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 12, marginBottom: 12 } },
+            React.createElement(WheelSVG, { onSelect: select, selected })),
+        selected && React.createElement(EmoDetail, { selected }));
+}
+function WheelSVG({ onSelect, selected, highlightPrimary, highlightSecondary, lockPrimary, lockSecondary }) {
+    // SVG wheel with concentric arcs
+    const cx = 200, cy = 200;
+    const r1 = 60, r2 = 110, r3 = 170;
+    const arcPath = (cx, cy, r0, r1, startAngle, endAngle) => {
+        const toRad = a => (a - 90) * Math.PI / 180;
+        const x0 = cx + r0 * Math.cos(toRad(startAngle));
+        const y0 = cy + r0 * Math.sin(toRad(startAngle));
+        const x1 = cx + r0 * Math.cos(toRad(endAngle));
+        const y1 = cy + r0 * Math.sin(toRad(endAngle));
+        const x2 = cx + r1 * Math.cos(toRad(endAngle));
+        const y2 = cy + r1 * Math.sin(toRad(endAngle));
+        const x3 = cx + r1 * Math.cos(toRad(startAngle));
+        const y3 = cy + r1 * Math.sin(toRad(startAngle));
+        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+        return `M ${x0} ${y0} A ${r0} ${r0} 0 ${largeArc} 1 ${x1} ${y1} L ${x2} ${y2} A ${r1} ${r1} 0 ${largeArc} 0 ${x3} ${y3} Z`;
+    };
+    const textPos = (cx, cy, r, angle) => {
+        const toRad = a => (a - 90) * Math.PI / 180;
+        return { x: cx + r * Math.cos(toRad(angle)), y: cy + r * Math.sin(toRad(angle)) };
+    };
+    return React.createElement("svg", { viewBox: "0 0 400 400", style: { width: "100%", maxWidth: 380, display: "block", margin: "0 auto", touchAction: "manipulation" } },
+        EMO_WHEEL.primary.map((p, i) => {
+            const startA = p.angle - 30, endA = p.angle + 30;
+            const subs = EMO_WHEEL.secondary[p.id] || [];
+            const tert = subs.flatMap(s => (EMO_WHEEL.tertiary[s.id] || []).map(t => ({ ...s, tertId: t })));
+            const isHighlighted = highlightPrimary === p.id;
+            const isLockedOther = lockPrimary && lockPrimary !== p.id;
+            const dimFactor = isLockedOther ? 0.2 : (isHighlighted ? 1 : 0.85);
+            return React.createElement("g", { key: p.id },
+                // Inner ring: primary
+                React.createElement("path", { d: arcPath(cx, cy, 20, r1, startA, endA),
+                    fill: p.color, opacity: dimFactor,
+                    stroke: "#fff", strokeWidth: 2,
+                    onClick: () => onSelect && onSelect("primary", p.id, null),
+                    style: { cursor: "pointer" } }),
+                (() => {
+                    const tp = textPos(cx, cy, (20 + r1) / 2, p.angle);
+                    return React.createElement("text", { x: tp.x, y: tp.y + 4, textAnchor: "middle", fontSize: 11, fontWeight: 800, fill: "#fff", style: { pointerEvents: "none" } }, p.label);
+                })(),
+                // Mid ring: secondary
+                subs.map((s, j) => {
+                    const subSpan = 60 / subs.length;
+                    const sStart = startA + j * subSpan;
+                    const sEnd = sStart + subSpan;
+                    const isSubHighlighted = highlightSecondary === s.id;
+                    const isSubLockedOther = lockSecondary && lockSecondary !== s.id;
+                    const subDim = isSubLockedOther ? 0.2 : (isSubHighlighted ? 1 : 0.75);
+                    const tp = textPos(cx, cy, (r1 + r2) / 2, (sStart + sEnd) / 2);
+                    return React.createElement("g", { key: s.id },
+                        React.createElement("path", { d: arcPath(cx, cy, r1, r2, sStart, sEnd),
+                            fill: p.color, opacity: subDim,
+                            stroke: "#fff", strokeWidth: 1.5,
+                            onClick: () => onSelect && onSelect("secondary", p.id, s.id),
+                            style: { cursor: "pointer" } }),
+                        React.createElement("text", { x: tp.x, y: tp.y + 3, textAnchor: "middle", fontSize: 9, fontWeight: 700, fill: "#fff", style: { pointerEvents: "none" } }, s.label));
+                }),
+                // Outer ring: tertiary
+                tert.map((t, k) => {
+                    const tSpan = 60 / Math.max(1, tert.length);
+                    const tStart = startA + k * tSpan;
+                    const tEnd = tStart + tSpan;
+                    const tp = textPos(cx, cy, (r2 + r3) / 2, (tStart + tEnd) / 2);
+                    const angle = (tStart + tEnd) / 2;
+                    return React.createElement("g", { key: t.tertId + "-" + k },
+                        React.createElement("path", { d: arcPath(cx, cy, r2, r3, tStart, tEnd),
+                            fill: p.color, opacity: 0.55,
+                            stroke: "#fff", strokeWidth: 1,
+                            onClick: () => onSelect && onSelect("tertiary", p.id, t.id, t.tertId),
+                            style: { cursor: "pointer" } }),
+                        React.createElement("text", { x: tp.x, y: tp.y + 3, textAnchor: "middle", fontSize: 8, fontWeight: 600, fill: "#fff", style: { pointerEvents: "none" }, transform: `rotate(${angle - 90 - (angle > 180 ? 180 : 0)}, ${tp.x}, ${tp.y})` }, t.tertId));
+                }));
+        }));
+}
+function EmoDetail({ selected }) {
+    const primary = EMO_WHEEL.primary.find(p => p.id === selected.primary);
+    const secondary = selected.secondary ? (EMO_WHEEL.secondary[selected.primary] || []).find(s => s.id === selected.secondary) : null;
+    return React.createElement("div", { style: { padding: 14, background: "#fff", borderLeft: `4px solid ${primary.color}`, borderRadius: 8 } },
+        React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: primary.color, textTransform: "uppercase", marginBottom: 4 } }, primary.label),
+        secondary && React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, secondary.label),
+        secondary && React.createElement("div", { style: { fontSize: 13, lineHeight: 1.5, color: C.text } }, secondary.def),
+        !secondary && React.createElement("div", { style: { fontSize: 13, color: C.textL, fontStyle: "italic" } }, "Toca el anillo medio para ver matices."));
+}
+function RuedaEjercicio() {
+    const [order, setOrder] = useState(() => shuffle(EMO_VIGNETTES.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [stage, setStage] = useState("primary"); // primary | secondary | done
+    const [selPrimary, setSelPrimary] = useState(null);
+    const [selSecondary, setSelSecondary] = useState(null);
+    const [score, setScore] = useState({ primaryOk: 0, secondaryOk: 0, total: 0 });
+    const item = EMO_VIGNETTES[order[pos]];
+    const handleSelect = (ring, primary, secondary) => {
+        if (stage === "primary" && ring === "primary") {
+            sfx.tap();
+            setSelPrimary(primary);
+            const ok = primary === item.primary;
+            if (ok) sfx.success(); else sfx.fail();
+            setTimeout(() => setStage("secondary"), 1000);
+        } else if (stage === "secondary" && ring === "secondary" && primary === item.primary) {
+            sfx.tap();
+            setSelSecondary(secondary);
+            const primOk = selPrimary === item.primary;
+            const secOk = secondary === item.secondary;
+            if (secOk) sfx.success(); else sfx.fail();
+            setScore(s => ({
+                primaryOk: s.primaryOk + (primOk ? 1 : 0),
+                secondaryOk: s.secondaryOk + (secOk ? 1 : 0),
+                total: s.total + 1,
+            }));
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, primOk && secOk);
+                logCurrentResult(primOk);
+            }
+            setStage("done");
+            setTimeout(() => {
+                let np = pos + 1, no = order;
+                if (np >= order.length) { no = shuffle(EMO_VIGNETTES.map((_, i) => i)); np = 0; setOrder(no); }
+                setPos(np); setStage("primary"); setSelPrimary(null); setSelSecondary(null);
+            }, 2800);
+        }
+    };
+    const primaryTarget = EMO_WHEEL.primary.find(p => p.id === item.primary);
+    const secondaryTarget = (EMO_WHEEL.secondary[item.primary] || []).find(s => s.id === item.secondary);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 10 } },
+            React.createElement(Badge, { color: C.primary }, "Caso ", pos + 1),
+            React.createElement(Badge, { color: C.success }, "Acertadas ", score.secondaryOk, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 14, borderRadius: 12, marginBottom: 10, fontSize: 14, lineHeight: 1.55 } }, item.sit),
+        React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, textAlign: "center", marginBottom: 8 } },
+            stage === "primary" && "Paso 1 — ¿Qué emoción principal? (anillo interior)",
+            stage === "secondary" && "Paso 2 — Ahora afina: ¿qué tipo de " + primaryTarget.label.toLowerCase() + "? (anillo medio)",
+            stage === "done" && (selSecondary === item.secondary && selPrimary === item.primary ? "✓ ¡Muy preciso!" : "Respuesta esperada: " + (secondaryTarget ? secondaryTarget.label.toLowerCase() : "?"))),
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 12 } },
+            React.createElement(WheelSVG, {
+                onSelect: handleSelect,
+                lockPrimary: stage === "secondary" || stage === "done" ? selPrimary : null,
+                highlightPrimary: stage === "done" ? item.primary : null,
+                highlightSecondary: stage === "done" ? item.secondary : null,
+            })));
+}
+
+// ── B. Stop Signal Task ──
+// User responds quickly to GO stimuli (left/right arrows). On a subset
+// of trials, a STOP signal appears AFTER the Go onset and the user must
+// cancel the response. Stop-signal delay (SSD) adjusts dynamically.
+// Estimates SSRT (stop-signal reaction time) — primary measure of
+// inhibitory control. Reference: Logan & Cowan (1984).
+function StopSignal({ patient }) {
+    const [diff, setDiff] = useState("medio");
+    const cfg = {
+        "fácil": { goTrials: 18, stopRatio: 0.33, maxRT: 1400, initialSSD: 300 },
+        "medio": { goTrials: 28, stopRatio: 0.28, maxRT: 1200, initialSSD: 250 },
+        "difícil": { goTrials: 40, stopRatio: 0.25, maxRT: 1000, initialSSD: 200 },
+    }[diff];
+    const [phase, setPhase] = useState("idle"); // idle | fixation | go | response | feedback | done
+    const [trial, setTrial] = useState(0);
+    const [arrow, setArrow] = useState(null); // "L" | "R"
+    const [isStop, setIsStop] = useState(false);
+    const [stopShown, setStopShown] = useState(false);
+    const [ssd, setSSD] = useState(0); // current SSD in ms
+    const [trials, setTrials] = useState([]); // {type:"go"|"stop", correct:bool, rt:ms, ssd}
+    const goStartRef = useRef(0);
+    const trialTimeoutRef = useRef(null);
+    const responded = useRef(false);
+    const ssdRef = useRef(cfg.initialSSD);
+    const start = () => {
+        setTrials([]); setTrial(0); ssdRef.current = cfg.initialSSD; setSSD(cfg.initialSSD);
+        setTimeout(nextTrial, 300);
+    };
+    const nextTrial = () => {
+        if (trial >= cfg.goTrials) {
+            setPhase("done");
+            // Compute results
+            const goTrials = trials.filter(t => t.type === "go");
+            const stopTrials = trials.filter(t => t.type === "stop");
+            const goAcc = goTrials.length > 0 ? goTrials.filter(t => t.correct).length / goTrials.length : 0;
+            const stopAcc = stopTrials.length > 0 ? stopTrials.filter(t => t.correct).length / stopTrials.length : 0;
+            sfx.success();
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, stopAcc >= 0.4 && goAcc >= 0.85);
+                logCurrentResult(stopAcc >= 0.4 && goAcc >= 0.7);
+            }
+            return;
+        }
+        setArrow(null); setIsStop(false); setStopShown(false); responded.current = false;
+        setPhase("fixation");
+        setTimeout(() => {
+            const ar = Math.random() < 0.5 ? "L" : "R";
+            const stop = Math.random() < cfg.stopRatio;
+            setArrow(ar); setIsStop(stop);
+            goStartRef.current = Date.now();
+            setPhase("go");
+            // If stop trial, show stop signal after SSD ms
+            if (stop) {
+                setTimeout(() => { if (!responded.current) setStopShown(true); }, ssdRef.current);
+            }
+            // Timeout after maxRT
+            trialTimeoutRef.current = setTimeout(() => {
+                if (!responded.current) {
+                    // No response: correct stop or miss go
+                    handleNoResponse(ar, stop);
+                }
+            }, cfg.maxRT);
+        }, 500);
+    };
+    const handleNoResponse = (ar, stop) => {
+        clearTimeout(trialTimeoutRef.current);
+        responded.current = true;
+        const correct = stop; // correct iff was a stop trial
+        const t = { type: stop ? "stop" : "go", correct, rt: null, ssd: stop ? ssdRef.current : null, arrow: ar, response: null };
+        setTrials(ts => [...ts, t]);
+        // Staircase: stop trial without response → harder (longer SSD)
+        if (stop && correct) {
+            ssdRef.current = Math.min(800, ssdRef.current + 50);
+            setSSD(ssdRef.current);
+        }
+        if (correct) sfx.success(); else sfx.fail();
+        setPhase("feedback");
+        setTrial(t => t + 1);
+        setTimeout(nextTrial, 600);
+    };
+    const respond = (dir) => {
+        if (phase !== "go" || responded.current) return;
+        responded.current = true;
+        clearTimeout(trialTimeoutRef.current);
+        const rt = Date.now() - goStartRef.current;
+        const correctDir = dir === arrow;
+        let correct, type;
+        if (isStop) {
+            // Responded on a stop trial = stop failure
+            type = "stop"; correct = false;
+            // Staircase: failed stop → easier next time
+            ssdRef.current = Math.max(50, ssdRef.current - 50);
+            setSSD(ssdRef.current);
+        } else {
+            type = "go"; correct = correctDir;
+        }
+        const t = { type, correct, rt, ssd: isStop ? ssdRef.current : null, arrow, response: dir };
+        setTrials(ts => [...ts, t]);
+        if (correct) sfx.success(); else sfx.fail();
+        setPhase("feedback");
+        setTrial(t => t + 1);
+        setTimeout(nextTrial, 500);
+    };
+    useEffect(() => () => clearTimeout(trialTimeoutRef.current), []);
+    // ── Results computation for done screen ──
+    const goTrials = trials.filter(t => t.type === "go");
+    const stopTrials = trials.filter(t => t.type === "stop");
+    const goCorrect = goTrials.filter(t => t.correct);
+    const stopCorrect = stopTrials.filter(t => t.correct);
+    const goRTs = goCorrect.filter(t => t.rt).map(t => t.rt).sort((a, b) => a - b);
+    const meanGoRT = goRTs.length ? Math.round(goRTs.reduce((a, b) => a + b, 0) / goRTs.length) : 0;
+    const stopAccPct = stopTrials.length ? Math.round((stopCorrect.length / stopTrials.length) * 100) : 0;
+    // SSRT estimation (Logan): meanGoRT - mean SSD on stop trials (simple integration method)
+    const stopSSDs = stopTrials.map(t => t.ssd).filter(x => x != null);
+    const meanSSD = stopSSDs.length ? Math.round(stopSSDs.reduce((a, b) => a + b, 0) / stopSSDs.length) : 0;
+    const ssrtEstimate = meanGoRT && meanSSD ? meanGoRT - meanSSD : null;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Stop Signal Task"),
+            phase === "idle" && React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
+        React.createElement(Instructions, { adoChildren: "Tarea Stop Signal (Logan & Cowan, 1984). Estima el SSRT — tiempo necesario para cancelar una respuesta ya iniciada. Más sensible que Go/No-Go al control inhibitorio impulsivo. Es el estándar para evaluar impulsividad TDAH desde los años 80." },
+            "Verás flechas: ← o →. Pulsa rápido el botón correspondiente. Pero a veces aparecerá una ", React.createElement("strong", { style: { color: C.error } }, "X roja"), " después de la flecha: si la ves, ", React.createElement("strong", null, "NO PULSES"), ". Tienes que frenar la respuesta."),
+        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        (phase === "fixation" || phase === "go" || phase === "feedback") && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+                React.createElement(Badge, { color: C.primary }, "Ensayo ", trial + 1, "/", cfg.goTrials),
+                React.createElement(Badge, { color: C.success }, "✓ ", goCorrect.length + stopCorrect.length),
+                React.createElement(Badge, { color: C.accent }, "Stop bien: ", stopCorrect.length, "/", stopTrials.length)),
+            React.createElement("div", { style: { background: "#1A1F2E", borderRadius: 18, padding: 30, marginBottom: 14, minHeight: 220, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } },
+                phase === "fixation" && React.createElement("div", { style: { fontSize: 40, color: "#8FA6BB", fontWeight: 800 } }, "+"),
+                phase === "go" && React.createElement(React.Fragment, null,
+                    React.createElement("div", { style: { fontSize: 120, color: stopShown ? C.error : "#fff", fontWeight: 900, lineHeight: 1, transition: "color 0.05s" } }, arrow === "L" ? "←" : "→"),
+                    stopShown && React.createElement("div", { style: { fontSize: 80, color: C.error, fontWeight: 900, marginTop: -10 } }, "✗")),
+                phase === "feedback" && React.createElement("div", { style: { fontSize: 60, fontWeight: 900, color: trials[trials.length - 1] && trials[trials.length - 1].correct ? C.success : C.error } },
+                    trials[trials.length - 1] && trials[trials.length - 1].correct ? "✓" : "✗")),
+            React.createElement("div", { style: { display: "flex", gap: 14, justifyContent: "center" } },
+                React.createElement("button", { onClick: () => respond("L"), disabled: phase !== "go", style: {
+                    padding: "26px 38px", background: phase === "go" ? C.primary : "#ccc", color: "#fff", border: "none", borderRadius: 16,
+                    fontSize: 36, fontWeight: 900, cursor: phase === "go" ? "pointer" : "default", fontFamily: "inherit", minWidth: 140,
+                } }, "←"),
+                React.createElement("button", { onClick: () => respond("R"), disabled: phase !== "go", style: {
+                    padding: "26px 38px", background: phase === "go" ? C.primary : "#ccc", color: "#fff", border: "none", borderRadius: 16,
+                    fontSize: 36, fontWeight: 900, cursor: phase === "go" ? "pointer" : "default", fontFamily: "inherit", minWidth: 140,
+                } }, "→"))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: stopAccPct >= 40 },
+                `${goCorrect.length}/${goTrials.length} Go correctos · ${stopCorrect.length}/${stopTrials.length} Stop correctos (${stopAccPct}%)`),
+            React.createElement("div", { style: { marginTop: 10, padding: 12, background: "#FAFAF7", borderRadius: 8, fontSize: 12, lineHeight: 1.6 } },
+                React.createElement("div", null, "TR medio Go: ", React.createElement("strong", null, meanGoRT, " ms")),
+                React.createElement("div", null, "SSD final: ", React.createElement("strong", null, ssdRef.current, " ms")),
+                ssrtEstimate && React.createElement("div", null, "SSRT estimado: ", React.createElement("strong", null, ssrtEstimate, " ms"),
+                    React.createElement("span", { style: { fontStyle: "italic", color: C.textL, fontSize: 11, display: "block", marginTop: 4 } },
+                        "Referencia: SSRT típico en niños/adolescentes ~250-350ms. SSRT >400ms sugiere dificultad inhibitoria."))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Otra ronda"))));
+}
+
+// ── C. Span Visoespacial (Corsi Block-Tapping) ──
+// 4x4 grid of blocks. Sequence lights up, user reproduces by tapping
+// in same order. Length grows after correct trials, stops after 2
+// consecutive failures at same length. Spatial complement of digit span.
+// Reference: Corsi (1972); WMS-IV spatial span subtest.
+function CorsiBlocks({ patient }) {
+    const GRID_N = 4;
+    const TOTAL_CELLS = GRID_N * GRID_N;
+    const [phase, setPhase] = useState("idle"); // idle | present | input | feedback | done
+    const [span, setSpan] = useState(2);
+    const [attempt, setAttempt] = useState(1);
+    const [sequence, setSequence] = useState([]); // array of cell indices
+    const [showIdx, setShowIdx] = useState(-1);
+    const [userSeq, setUserSeq] = useState([]);
+    const [maxSpan, setMaxSpan] = useState(0);
+    const [result, setResult] = useState(null); // {ok, expected}
+    const start = () => { setSpan(2); setAttempt(1); setMaxSpan(0); setUserSeq([]); setResult(null); beginTrial(2); };
+    const beginTrial = (s) => {
+        const seq = [];
+        while (seq.length < s) {
+            const c = randInt(0, TOTAL_CELLS - 1);
+            if (seq[seq.length - 1] !== c) seq.push(c);
+        }
+        setSequence(seq); setUserSeq([]); setShowIdx(-1); setResult(null);
+        setPhase("present");
+    };
+    useEffect(() => {
+        if (phase !== "present" || sequence.length === 0) return;
+        let i = -1;
+        const tick = () => {
+            i++;
+            if (i >= sequence.length) {
+                setShowIdx(-1);
+                setTimeout(() => setPhase("input"), 400);
+                return;
+            }
+            setShowIdx(i);
+            setTimeout(() => setShowIdx(-2), 700);
+            setTimeout(tick, 1000);
+        };
+        tick();
+    }, [phase, sequence]);
+    const tap = (idx) => {
+        if (phase !== "input") return;
+        if (userSeq.length >= sequence.length) return;
+        sfx.tap();
+        const newSeq = [...userSeq, idx];
+        setUserSeq(newSeq);
+        if (newSeq.length === sequence.length) {
+            // Validate
+            const ok = newSeq.every((c, i) => c === sequence[i]);
+            setResult({ ok, expected: sequence });
+            setPhase("feedback");
+            if (ok) sfx.success(); else sfx.fail();
+            setTimeout(() => {
+                if (ok) {
+                    if (span > maxSpan) setMaxSpan(span);
+                    setSpan(span + 1); setAttempt(1);
+                    beginTrial(span + 1);
+                } else {
+                    if (attempt === 1) {
+                        setAttempt(2); beginTrial(span);
+                    } else {
+                        setPhase("done");
+                        if (_activePatientId) {
+                            addStar(_activePatientId, _activeAreaId, maxSpan >= 5);
+                            saveBest(_activePatientId, "corsi", maxSpan);
+                            logCurrentResult(maxSpan >= 4);
+                        }
+                    }
+                }
+            }, 1500);
+        }
+    };
+    if (phase === "idle") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Span Visoespacial (Corsi)"),
+            React.createElement(Instructions, { adoChildren: "Test de Corsi (1972). Mide span de memoria visoespacial. Subtest del WMS, complemento espacial del Span de Dígitos. Su disociación con el span verbal puede ser muy informativa." },
+                "Vas a ver una rejilla con cuadros. Algunos se iluminarán en orden. Tu tarea: tocarlos ", React.createElement("strong", null, "en el mismo orden"), " cuando se apaguen."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")));
+    }
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800 } }, "Corsi · Span ", span),
+            React.createElement("div", { style: { display: "flex", gap: 6 } },
+                React.createElement(Badge, { color: C.accent }, "Intento ", attempt, "/2"),
+                React.createElement(Badge, { color: C.success }, "Máx: ", maxSpan))),
+        phase !== "done" && React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.textL, textAlign: "center", marginBottom: 10 } },
+            phase === "present" && "Mira y memoriza la secuencia",
+            phase === "input" && `Toca los cuadros en orden (${userSeq.length}/${sequence.length})`,
+            phase === "feedback" && (result && result.ok ? "✓ ¡Correcto!" : "✗ Secuencia: " + result.expected.map(c => "·").join(" "))),
+        phase !== "done" && React.createElement("div", { style: { background: "#1A1F2E", borderRadius: 18, padding: 20, marginBottom: 14, display: "flex", justifyContent: "center" } },
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${GRID_N}, 60px)`, gap: 12 } },
+                Array.from({ length: TOTAL_CELLS }, (_, i) => {
+                    let bg = "rgba(255,255,255,0.1)", border = "rgba(255,255,255,0.2)";
+                    if (phase === "present") {
+                        if (showIdx >= 0 && sequence[showIdx] === i) { bg = C.accent; border = C.accent; }
+                    } else if (phase === "input") {
+                        if (userSeq.includes(i)) {
+                            const idx = userSeq.indexOf(i);
+                            bg = idx === userSeq.length - 1 ? C.primary : "rgba(74,144,217,0.5)";
+                            border = C.primary;
+                        }
+                    } else if (phase === "feedback" && result) {
+                        const inSeq = sequence.indexOf(i);
+                        const inUser = userSeq.indexOf(i);
+                        if (inSeq >= 0 && inSeq === inUser) { bg = C.success; border = C.success; }
+                        else if (inUser >= 0) { bg = C.error; border = C.error; }
+                        else if (inSeq >= 0) { bg = `${C.success}55`; border = C.success; }
+                    }
+                    return React.createElement("div", { key: i, onClick: () => tap(i),
+                        style: { width: 60, height: 60, borderRadius: 10,
+                            background: bg, border: `2px solid ${border}`,
+                            transition: "background 0.15s, border 0.15s",
+                            cursor: phase === "input" ? "pointer" : "default" } });
+                }))),
+        phase === "done" && React.createElement("div", null,
+            React.createElement(Feedback, { success: maxSpan >= 5 }, `Span visoespacial máximo: ${maxSpan}`),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic", lineHeight: 1.5 } },
+                "Referencia WMS-IV (orientativa): 6-7 años ≈ 4 · 8-10 años ≈ 5 · 11-13 años ≈ 5-6 · Adolescentes ≈ 6. Disociación clara con span de dígitos puede indicar perfil específico."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, marginTop: 12 } },
+                React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "↻ Nueva ronda"))));
+}
+
+// ── G. Secuencia de Eventos Cotidianos ──
+// Curated everyday scripts split into 4-6 panels. Patient drags/taps
+// panels into correct order. Useful for young children and TEA (social
+// scripts).
+const SCRIPTS = [
+    { id: "lavarse_dientes", title: "Lavarse los dientes", steps: [
+        { emoji: "🪥", text: "Cojo el cepillo" },
+        { emoji: "🧴", text: "Pongo pasta en el cepillo" },
+        { emoji: "💧", text: "Mojo el cepillo" },
+        { emoji: "😬", text: "Me cepillo los dientes" },
+        { emoji: "💦", text: "Me enjuago la boca" },
+        { emoji: "✨", text: "Dientes limpios" },
+    ]},
+    { id: "bocadillo", title: "Hacer un bocadillo", steps: [
+        { emoji: "🍞", text: "Cojo el pan" },
+        { emoji: "🔪", text: "Lo abro o lo corto" },
+        { emoji: "🧀", text: "Pongo el relleno dentro" },
+        { emoji: "🥪", text: "Junto las dos partes" },
+        { emoji: "😋", text: "Listo para comer" },
+    ]},
+    { id: "ir_cole", title: "Ir al cole por la mañana", steps: [
+        { emoji: "⏰", text: "Suena el despertador" },
+        { emoji: "🛏️", text: "Me levanto de la cama" },
+        { emoji: "👕", text: "Me visto" },
+        { emoji: "🥣", text: "Desayuno" },
+        { emoji: "🎒", text: "Cojo la mochila" },
+        { emoji: "🏫", text: "Llego al cole" },
+    ]},
+    { id: "dormir", title: "Prepararse para dormir", steps: [
+        { emoji: "🍽️", text: "Acabo de cenar" },
+        { emoji: "🚿", text: "Me ducho" },
+        { emoji: "👚", text: "Me pongo el pijama" },
+        { emoji: "🪥", text: "Me lavo los dientes" },
+        { emoji: "🛏️", text: "Me meto en la cama" },
+        { emoji: "😴", text: "Me duermo" },
+    ]},
+    { id: "regar_planta", title: "Regar una planta", steps: [
+        { emoji: "🪴", text: "Veo la planta" },
+        { emoji: "💧", text: "Cojo agua en una jarra" },
+        { emoji: "🌱", text: "Echo el agua en la tierra" },
+        { emoji: "✨", text: "La planta ya está regada" },
+    ]},
+    { id: "comprar_pan", title: "Ir a comprar el pan", steps: [
+        { emoji: "💰", text: "Cojo dinero en casa" },
+        { emoji: "🚪", text: "Salgo de casa" },
+        { emoji: "🚶", text: "Voy a la panadería" },
+        { emoji: "🥖", text: "Pido el pan" },
+        { emoji: "💵", text: "Pago el pan" },
+        { emoji: "🏠", text: "Vuelvo a casa" },
+    ]},
+    { id: "lavar_manos", title: "Lavarme las manos", steps: [
+        { emoji: "💧", text: "Abro el grifo" },
+        { emoji: "🧼", text: "Cojo jabón" },
+        { emoji: "🙌", text: "Froto las manos" },
+        { emoji: "💦", text: "Aclaro con agua" },
+        { emoji: "🚰", text: "Cierro el grifo" },
+        { emoji: "🤲", text: "Me seco las manos" },
+    ]},
+    { id: "cumple", title: "Una fiesta de cumpleaños", steps: [
+        { emoji: "📩", text: "Recibo la invitación" },
+        { emoji: "🎁", text: "Compro un regalo" },
+        { emoji: "🎉", text: "Llego a la fiesta" },
+        { emoji: "🍰", text: "Comemos tarta" },
+        { emoji: "🎈", text: "Jugamos juntos" },
+        { emoji: "👋", text: "Me despido y vuelvo a casa" },
+    ]},
+    { id: "deberes", title: "Hacer los deberes", steps: [
+        { emoji: "🎒", text: "Saco los libros de la mochila" },
+        { emoji: "📖", text: "Miro qué tengo que hacer" },
+        { emoji: "✏️", text: "Hago los ejercicios" },
+        { emoji: "✅", text: "Reviso si están bien" },
+        { emoji: "🎒", text: "Guardo todo en la mochila" },
+    ]},
+    { id: "decision_cole", title: "Decidir qué hacer en el recreo", steps: [
+        { emoji: "🤔", text: "Pienso qué me apetece" },
+        { emoji: "👀", text: "Miro con quién puedo jugar" },
+        { emoji: "🗣️", text: "Pregunto si quieren jugar conmigo" },
+        { emoji: "🏃", text: "Empezamos a jugar" },
+        { emoji: "😊", text: "Disfruto del recreo" },
+    ]},
+];
+function SecuenciaEventos({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(SCRIPTS.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [arrangement, setArrangement] = useState([]); // user's current order: array of step indices
+    const [pool, setPool] = useState([]); // shuffled steps still to place
+    const [done, setDone] = useState(false);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const script = SCRIPTS[order[pos]];
+    useEffect(() => {
+        setArrangement([]);
+        const idxs = script.steps.map((_, i) => i);
+        setPool(shuffle([...idxs]));
+        setDone(false);
+    }, [pos, order]);
+    const place = (stepIdx) => {
+        if (done) return;
+        sfx.tap();
+        setArrangement(a => [...a, stepIdx]);
+        setPool(p => p.filter(x => x !== stepIdx));
+    };
+    const undo = (slotIdx) => {
+        if (done) return;
+        sfx.tap();
+        const removed = arrangement[slotIdx];
+        setArrangement(a => a.filter((_, i) => i !== slotIdx));
+        setPool(p => [...p, removed]);
+    };
+    const validate = () => {
+        const ok = arrangement.length === script.steps.length && arrangement.every((s, i) => s === i);
+        setDone(true);
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(() => {
+            let np = pos + 1, no = order;
+            if (np >= order.length) { no = shuffle(SCRIPTS.map((_, i) => i)); np = 0; setOrder(no); }
+            setPos(np);
+        }, 3500);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Secuencia de Eventos"),
+        React.createElement(Instructions, { adoChildren: "Ordenación de viñetas de un guion cotidiano. Útil para niños pequeños y para trabajar guiones sociales en TEA, donde los scripts implícitos a veces requieren explicitación." },
+            "Mira la situación. Después coloca las imágenes ", React.createElement("strong", null, "en el orden correcto"), " tocándolas una a una de las que están abajo."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.primary }, script.title),
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        // Top: user's arrangement slots
+        React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 12, padding: 10, marginBottom: 10, minHeight: 110 } },
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginBottom: 6, textTransform: "uppercase", textAlign: "center" } }, "Mi orden"),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+                arrangement.map((stepIdx, slotIdx) => {
+                    const step = script.steps[stepIdx];
+                    let bg = "#fff", border = C.primary;
+                    if (done) {
+                        if (stepIdx === slotIdx) { bg = `${C.success}33`; border = C.success; }
+                        else { bg = `${C.error}33`; border = C.error; }
+                    }
+                    return React.createElement("div", { key: slotIdx, onClick: () => undo(slotIdx), style: {
+                        width: 80, padding: 6, background: bg, border: `2px solid ${border}`,
+                        borderRadius: 10, cursor: done ? "default" : "pointer", textAlign: "center",
+                    } },
+                        React.createElement("div", { style: { fontSize: 9, fontWeight: 800, color: border, marginBottom: 2 } }, slotIdx + 1),
+                        React.createElement("div", { style: { fontSize: 28, marginBottom: 2 } }, step.emoji),
+                        React.createElement("div", { style: { fontSize: 9, lineHeight: 1.2 } }, step.text));
+                }),
+                Array.from({ length: script.steps.length - arrangement.length }, (_, i) => React.createElement("div", { key: "empty-" + i, style: {
+                    width: 80, height: 90, background: "transparent", border: `2px dashed ${C.border}`,
+                    borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: C.textL, fontWeight: 800, fontSize: 18,
+                } }, arrangement.length + i + 1)))),
+        // Bottom: pool of remaining steps
+        !done && React.createElement("div", { style: { background: "#fff", borderRadius: 12, padding: 10, marginBottom: 10, border: `1px solid ${C.border}` } },
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.textL, marginBottom: 6, textTransform: "uppercase", textAlign: "center" } }, "Toca el que viene"),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap" } },
+                pool.map(stepIdx => {
+                    const step = script.steps[stepIdx];
+                    return React.createElement("div", { key: stepIdx, onClick: () => place(stepIdx), style: {
+                        width: 80, padding: 6, background: "#fff", border: `2px solid ${C.border}`,
+                        borderRadius: 10, cursor: "pointer", textAlign: "center",
+                    } },
+                        React.createElement("div", { style: { fontSize: 28, marginBottom: 2 } }, step.emoji),
+                        React.createElement("div", { style: { fontSize: 9, lineHeight: 1.2 } }, step.text));
+                }))),
+        !done && arrangement.length === script.steps.length && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+            React.createElement(Btn, { color: C.primary, onClick: validate, small: true }, "✓ Validar orden")));
+}
+
+// ── D. Predicción Social ──
+// Brief vignette + 3 options for "what happens next". Trains social
+// inference and causal reasoning about social outcomes.
+const PREDICCION_BANK = [
+    { sit: "Una compañera entra a la sala con cara seria y la cabeza baja. Todos dejan de hablar.",
+      opts: ["Alguien le pregunta '¿estás bien?'", "Todos siguen hablando como si nada", "Le piden que se vaya"],
+      ans: 0, exp: "Cuando alguien entra visiblemente afectado y el grupo nota el cambio, lo más probable socialmente es que alguien le ofrezca acogida — preguntar cómo está." },
+    { sit: "Llevas tres días sin contestar a un amigo que te ha escrito varias veces.",
+      opts: ["Te escribe un mensaje preguntando si pasa algo o si está todo bien", "Te llama gritando", "Te bloquea sin más"],
+      ans: 0, exp: "Lo natural antes de pensar mal es preguntar. El silencio largo genera incertidumbre y los amigos suelen intentar comprobar primero." },
+    { sit: "En clase, un profesor dice 'esperemos que ahora SÍ hayáis estudiado para el examen'.",
+      opts: ["Felicita a la clase", "Da a entender que la mayoría no estudió la vez anterior", "Está pidiendo silencio"],
+      ans: 1, exp: "El 'SÍ' marcado en mayúsculas y el 'ahora' implican que antes no fue así. Es una crítica indirecta." },
+    { sit: "Tu hermano lleva todo el día encerrado en su cuarto. Cuando le ves al baño, no te mira.",
+      opts: ["Está enfadado o triste por algo, probablemente quiere espacio", "Está perfectamente bien, son cosas suyas", "Te está retando a una pelea"],
+      ans: 0, exp: "Encerrarse + evitar mirada son señales claras de querer estar solo o de estar mal. Respetar el espacio suele ser lo más prudente." },
+    { sit: "Una compañera te dice 'estoy bien' mientras tiene los ojos rojos de haber llorado.",
+      opts: ["Está bien y por eso lo dice", "No quiere hablar del tema ahora aunque no esté bien", "Te está mintiendo para molestarte"],
+      ans: 1, exp: "La fórmula 'estoy bien' con señales físicas de lo contrario suele ser una manera socialmente educada de pedir que no se insista." },
+    { sit: "Cuentas un chiste y la sala se queda en silencio.",
+      opts: ["Era genial pero estaban pensando", "El chiste no funcionó o resultó incómodo", "Están planeando una sorpresa"],
+      ans: 1, exp: "El silencio tras un chiste es una señal social bastante clara de que no encajó. Lo más útil es seguir adelante con naturalidad." },
+    { sit: "Le pides un favor a alguien y te responde 'a ver si puedo, te digo algo' sin más.",
+      opts: ["Te confirmará pronto y lo hará", "Probablemente no quiere hacerlo o le da pereza decirlo directamente", "Lo está organizando con calma"],
+      ans: 1, exp: "Las respuestas dilatorias sin compromiso ('a ver si...', 'ya te digo...') sin un sí claro suelen ser un no educado." },
+    { sit: "En una reunión de trabajo o aula, alguien empieza una frase con 'no es por nada, pero...'.",
+      opts: ["Va a hacer un comentario neutro", "Va a decir algo crítico suavizado por la fórmula", "Te va a felicitar"],
+      ans: 1, exp: "'No es por nada pero...' suele anteceder a una queja o crítica que se intenta suavizar con la fórmula introductoria." },
+    { sit: "Te invitan a una fiesta y dices 'ya veré si puedo'.",
+      opts: ["La persona entenderá que probablemente no irás", "Pensará que sí vas a ir", "Cancelará la fiesta"],
+      ans: 0, exp: "Igual que pasa contigo: 'ya veré' sin compromiso firme se interpreta como un no probable. Sé consciente del mensaje que envías." },
+    { sit: "Un profesor pregunta '¿alguna duda?' y nadie responde. Luego el examen va mal.",
+      opts: ["Los alumnos no tenían dudas reales", "Tenían dudas pero les daba vergüenza preguntar", "El profesor habla muy bajo"],
+      ans: 1, exp: "Pocas dudas + mal resultado suele indicar que sí había dudas pero la gente no se atrevió a preguntar." },
+    { sit: "Tu amigo te enseña una foto suya y dice 'mira qué horrible salgo'. Tú le respondes 'sí, qué mal'.",
+      opts: ["Se reirá contigo del comentario", "Probablemente le siente mal aunque él mismo lo dijera", "Te lo agradecerá por sincero"],
+      ans: 1, exp: "Cuando alguien se critica esperando que le contradigas (decir 'qué va, sales bien'), confirmarle la crítica suele dolerle." },
+    { sit: "Tras una discusión fuerte con tu pareja o amigo, te dice 'haz lo que quieras'.",
+      opts: ["Te está dando permiso libre", "Está enfadado y la frase no es literal", "Está cansado del tema, mejor pregunta después"],
+      ans: 1, exp: "'Haz lo que quieras' en pleno conflicto casi nunca es literal. Suele significar 'estoy harto/herido y no quiero seguir negociando ahora'." },
+];
+function PrediccionSocial({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(PREDICCION_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = PREDICCION_BANK[order[pos]];
+    const next = () => {
+        let np = pos + 1, no = order;
+        if (np >= order.length) { no = shuffle(PREDICCION_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = i === item.ans;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 3800);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Predicción Social"),
+        React.createElement(Instructions, { adoChildren: "Inferencia social y razonamiento causal. Trabaja la anticipación de consecuencias sociales a partir de claves implícitas (tono, postura, contexto, fórmulas). Útil en TEA donde la predicción social requiere explicitación." },
+            "Lee la situación. Después elige qué es lo ", React.createElement("strong", null, "más probable"), " que pase a continuación según la información que tienes."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 14, borderRadius: 12, marginBottom: 12, fontSize: 14, lineHeight: 1.6 } }, item.sit),
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.textL, marginBottom: 8 } }, "¿Qué crees que pasa después?"),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 } },
+            item.opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (i === item.ans) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "11px 14px", borderRadius: 12, fontSize: 13.5, fontWeight: 600, textAlign: "left",
+                        background: bg, border: `2px solid ${border}`, color, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit", lineHeight: 1.4 } }, o);
+            })),
+        sel !== null && item.exp && React.createElement("div", { style: { background: `${C.yellow}22`, padding: 11, borderRadius: 8, fontSize: 12.5, lineHeight: 1.5 } }, item.exp));
+}
+
+// ── E. Empatía afectiva vs cognitiva ──
+// Same situation, two separate questions: "what does the person FEEL"
+// (affective) and "what does the person THINK" (cognitive). In TEA the
+// dissociation is documented (Smith, Baron-Cohen): affective relatively
+// preserved, cognitive more limited.
+const EMPATIA_BANK = [
+    { sit: "Tu amiga Sara ha hecho una tarta para sus padres. Al sacarla del horno, se cae al suelo y se rompe.",
+      siente: { q: "¿Qué SIENTE Sara?", opts: ["frustración y tristeza", "indiferencia", "alegría"], ans: 0 },
+      piensa: { q: "¿Qué PIENSA Sara probablemente?", opts: ["'qué bien, así no tengo que limpiarla'", "'todo el esfuerzo para nada, no va a llegar a tiempo'", "'pues hago otra rápidamente'"], ans: 1 } },
+    { sit: "Mario estudia muchas horas para un examen importante. Cuando le devuelven la nota, ha suspendido.",
+      siente: { q: "¿Qué SIENTE Mario?", opts: ["calma", "decepción y rabia consigo mismo", "vergüenza por los demás"], ans: 1 },
+      piensa: { q: "¿Qué PIENSA Mario?", opts: ["'no merece la pena estudiar tanto'", "'qué bien me lo paso'", "'voy a celebrarlo'"], ans: 0 } },
+    { sit: "Ana lleva semanas viendo que su mejor amiga queda con otra persona y no la invita. Hoy se han cruzado por la calle y la amiga apenas le ha saludado.",
+      siente: { q: "¿Qué SIENTE Ana?", opts: ["tranquilidad", "dolor y exclusión", "diversión"], ans: 1 },
+      piensa: { q: "¿Qué PIENSA Ana?", opts: ["'me está apartando, ya no le importo'", "'qué bien me lo paso sola'", "'hoy hace buen día'"], ans: 0 } },
+    { sit: "El padre de Marc consigue por fin un trabajo después de mucho tiempo parado.",
+      siente: { q: "¿Qué SIENTE el padre de Marc?", opts: ["miedo", "alivio y alegría", "rabia"], ans: 1 },
+      piensa: { q: "¿Qué PIENSA?", opts: ["'por fin podemos respirar tranquilos'", "'qué horrible tener que trabajar'", "'no me lo merezco'"], ans: 0 } },
+    { sit: "Una compañera de clase nueva, que aún no conoce a nadie, ve cómo todos se sientan en parejas y ella se queda sola en una mesa.",
+      siente: { q: "¿Qué SIENTE la nueva compañera?", opts: ["soledad e incomodidad", "alegría por la libertad", "aburrimiento normal"], ans: 0 },
+      piensa: { q: "¿Qué PIENSA?", opts: ["'qué guay, sola para mis cosas'", "'no encajo aquí, todos ya tienen su grupo'", "'me gusta estar aquí'"], ans: 1 } },
+    { sit: "Pablo le presta a su hermano un libro favorito. Cuando se lo devuelve, está manchado y con páginas dobladas.",
+      siente: { q: "¿Qué SIENTE Pablo?", opts: ["alegría", "enfado y desilusión", "alivio"], ans: 1 },
+      piensa: { q: "¿Qué PIENSA?", opts: ["'no le voy a volver a prestar nada importante'", "'qué bien, ahora tengo excusa para comprar otro'", "'no pasa nada, son cosas que pasan'"], ans: 0 } },
+    { sit: "Una compañera te ha hecho un regalo de cumpleaños muy detallado. Al abrirlo, te das cuenta de que ella se acordó hasta del color que te gusta.",
+      siente: { q: "¿Qué SIENTES tú?", opts: ["agradecimiento y cariño", "indiferencia", "incomodidad"], ans: 0 },
+      piensa: { q: "¿Qué PIENSAS de ella?", opts: ["'qué pesada con tantos detalles'", "'me presta atención de verdad, me conoce'", "'me debe algo'"], ans: 1 } },
+    { sit: "Tu profesor te llama aparte después de clase para decirte que has mejorado mucho desde el inicio del curso.",
+      siente: { q: "¿Qué SIENTES?", opts: ["orgullo y motivación", "miedo", "vergüenza muy fuerte"], ans: 0 },
+      piensa: { q: "¿Qué PIENSA el profesor?", opts: ["'le quiero presionar más'", "'esto le va a venir bien escuchar, ha trabajado'", "'mejor no le digo'"], ans: 1 } },
+];
+function EmpatiaTask({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(EMPATIA_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [stage, setStage] = useState("siente"); // siente | piensa
+    const [selSiente, setSelSiente] = useState(null);
+    const [selPiensa, setSelPiensa] = useState(null);
+    const [score, setScore] = useState({ sienteOk: 0, piensaOk: 0, total: 0 });
+    const item = EMPATIA_BANK[order[pos]];
+    const q = stage === "siente" ? item.siente : item.piensa;
+    const choose = (i) => {
+        if (stage === "siente" && selSiente !== null) return;
+        if (stage === "piensa" && selPiensa !== null) return;
+        const ok = i === q.ans;
+        if (stage === "siente") {
+            setSelSiente(i);
+            if (ok) sfx.success(); else sfx.fail();
+            setTimeout(() => setStage("piensa"), 1800);
+        } else {
+            setSelPiensa(i);
+            if (ok) sfx.success(); else sfx.fail();
+            const sienteOk = selSiente === item.siente.ans;
+            const piensaOk = ok;
+            setScore(s => ({
+                sienteOk: s.sienteOk + (sienteOk ? 1 : 0),
+                piensaOk: s.piensaOk + (piensaOk ? 1 : 0),
+                total: s.total + 1,
+            }));
+            if (_activePatientId) {
+                addStar(_activePatientId, _activeAreaId, sienteOk && piensaOk);
+                logCurrentResult(sienteOk && piensaOk);
+            }
+            setTimeout(() => {
+                let np = pos + 1, no = order;
+                if (np >= order.length) { no = shuffle(EMPATIA_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+                setPos(np); setStage("siente"); setSelSiente(null); setSelPiensa(null);
+            }, 2200);
+        }
+    };
+    const sel = stage === "siente" ? selSiente : selPiensa;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Empatía: Sentir vs Pensar"),
+        React.createElement(Instructions, { adoChildren: "Disociación empatía afectiva vs cognitiva (Smith, Baron-Cohen). En TEA la afectiva suele estar relativamente preservada y la cognitiva más limitada. Esta tarea separa ambas con preguntas paralelas." },
+            "Lee la situación. Después responde dos preguntas: primero ", React.createElement("strong", null, "qué SIENTE"), " la persona (empatía emocional), después ", React.createElement("strong", null, "qué PIENSA"), " (empatía cognitiva)."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+            React.createElement(Badge, { color: C.accent }, "Caso ", pos + 1),
+            React.createElement(Badge, { color: "#E63946" }, "💗 ", score.sienteOk, "/", score.total),
+            React.createElement(Badge, { color: "#4A90D9" }, "💭 ", score.piensaOk, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 14, borderRadius: 12, marginBottom: 12, fontSize: 14, lineHeight: 1.6 } }, item.sit),
+        React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 10 } },
+            React.createElement("div", { style: { flex: 1, padding: "6px 10px", borderRadius: 8, textAlign: "center", fontSize: 11, fontWeight: 800,
+                background: stage === "siente" ? "#E63946" : (selSiente !== null ? "#E6394633" : "#eee"),
+                color: stage === "siente" || selSiente !== null ? "#fff" : C.textL,
+            } }, selSiente !== null ? "💗 Siente ✓" : "💗 Siente"),
+            React.createElement("div", { style: { flex: 1, padding: "6px 10px", borderRadius: 8, textAlign: "center", fontSize: 11, fontWeight: 800,
+                background: stage === "piensa" ? "#4A90D9" : (selPiensa !== null ? "#4A90D933" : "#eee"),
+                color: stage === "piensa" || selPiensa !== null ? "#fff" : C.textL,
+            } }, selPiensa !== null ? "💭 Piensa ✓" : "💭 Piensa")),
+        React.createElement("div", { style: { fontSize: 14, fontWeight: 700, marginBottom: 8 } }, q.q),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+            q.opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) {
+                    if (i === q.ans) { bg = `${C.success}33`; border = C.success; color = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; color = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "11px 14px", borderRadius: 12, fontSize: 13.5, fontWeight: 600, textAlign: "left",
+                        background: bg, border: `2px solid ${border}`, color, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit", lineHeight: 1.4 } }, o);
+            })));
+}
+
+// ── F. Asociación Palabra-Imagen (estilo Peabody) ──
+// Receptive vocabulary task. A word appears; 4 emoji options. Curated bank
+// progresses from concrete nouns to less frequent ones. Useful in TEA
+// with language delay and in young children for receptive vocabulary.
+const PEABODY_BANK = [
+    // ── Fáciles: objetos cotidianos, animales ──
+    { word: "perro", correct: "🐕", opts: ["🐕", "🐈", "🐇", "🐦"] },
+    { word: "manzana", correct: "🍎", opts: ["🍌", "🍎", "🍐", "🍊"] },
+    { word: "casa", correct: "🏠", opts: ["🏠", "🚗", "⛵", "🏥"] },
+    { word: "zapato", correct: "👟", opts: ["👕", "🧢", "👟", "🧤"] },
+    { word: "tijeras", correct: "✂️", opts: ["🖌️", "✏️", "✂️", "📎"] },
+    { word: "vaca", correct: "🐄", opts: ["🐖", "🐄", "🐑", "🐎"] },
+    { word: "paraguas", correct: "☂️", opts: ["☂️", "🧢", "🎒", "👓"] },
+    { word: "reloj", correct: "⌚", opts: ["📱", "⌚", "💍", "🔑"] },
+    { word: "estrella", correct: "⭐", opts: ["☀️", "🌙", "⭐", "☁️"] },
+    { word: "guitarra", correct: "🎸", opts: ["🎹", "🎺", "🎸", "🥁"] },
+    // ── Medio: emociones, conceptos ──
+    { word: "alegría", correct: "😄", opts: ["😢", "😡", "😄", "😨"] },
+    { word: "enfadado", correct: "😡", opts: ["😡", "🥺", "😴", "🤔"] },
+    { word: "asustado", correct: "😨", opts: ["😄", "😨", "😴", "🤢"] },
+    { word: "cansado", correct: "😴", opts: ["😴", "😡", "🤔", "😨"] },
+    { word: "pensando", correct: "🤔", opts: ["😴", "🤔", "😄", "🤢"] },
+    { word: "victoria", correct: "🏆", opts: ["🥈", "🏆", "🎖️", "🪙"] },
+    { word: "doctor", correct: "👨‍⚕️", opts: ["👨‍🏫", "👨‍⚕️", "👮", "👨‍🍳"] },
+    { word: "cocinero", correct: "👨‍🍳", opts: ["👨‍🍳", "👨‍🎨", "👮", "👨‍⚕️"] },
+    { word: "biblioteca", correct: "📚", opts: ["📚", "📰", "📝", "🔖"] },
+    { word: "celebración", correct: "🎉", opts: ["🎁", "🎂", "🎉", "🎈"] },
+    // ── Difícil: vocabulario menos frecuente ──
+    { word: "microscopio", correct: "🔬", opts: ["🔬", "🔭", "🥽", "💉"] },
+    { word: "brújula", correct: "🧭", opts: ["🗺️", "🧭", "⛺", "🌍"] },
+    { word: "candelabro", correct: "🕯️", opts: ["💡", "🕯️", "🔦", "🪔"] },
+    { word: "instrumento musical", correct: "🎺", opts: ["🎮", "🎺", "📱", "🧸"] },
+    { word: "transporte aéreo", correct: "✈️", opts: ["🚂", "✈️", "⛵", "🚲"] },
+];
+function PeabodyTest({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(PEABODY_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ correct: 0, total: 0 });
+    const item = PEABODY_BANK[order[pos]];
+    // Shuffle options on each item using pos+order as seed key (memo)
+    const opts = useMemo(() => shuffle([...item.opts]), [pos, order]);
+    const next = () => {
+        let np = pos + 1, no = order;
+        if (np >= order.length) { no = shuffle(PEABODY_BANK.map((_, i) => i)); np = 0; setOrder(no); }
+        setPos(np); setSel(null);
+    };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = opts[i] === item.correct;
+        setScore(s => ({ correct: s.correct + (ok ? 1 : 0), total: s.total + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1500);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Palabra e Imagen"),
+        React.createElement(Instructions, { adoChildren: "Tarea de vocabulario receptivo, inspirada en el Peabody Picture Vocabulary Test. Utiliza emojis en lugar de las láminas originales — útil como entrenamiento, no como evaluación clínica. Apropiada para vocabulario pasivo y TEA con retraso del lenguaje." },
+            "Vas a leer (o escuchar) una palabra. Toca el dibujo que mejor la represente entre las cuatro opciones."),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 } },
+            React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+        React.createElement("div", { style: { background: C.warm, padding: 20, borderRadius: 14, marginBottom: 14, textAlign: "center" } },
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, fontWeight: 700, textTransform: "uppercase", marginBottom: 4 } }, "Palabra"),
+            React.createElement("div", { style: { fontSize: 32, fontWeight: 900, color: C.primary } }, item.word)),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+            opts.map((o, i) => {
+                let bg = "#fff", border = C.border;
+                if (sel !== null) {
+                    if (o === item.correct) { bg = `${C.success}33`; border = C.success; }
+                    else if (i === sel) { bg = `${C.error}33`; border = C.error; }
+                }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null,
+                    style: { padding: "24px 16px", background: bg, border: `2px solid ${border}`, borderRadius: 14,
+                        fontSize: 60, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit" } }, o);
+            })));
+}
+
+// ── H. DBT: TIPP y Acción Opuesta ──
+// Two concrete DBT distress tolerance / emotion regulation skills.
+// TIPP = Temperature / Intense exercise / Paced breathing / Paired
+// muscle relaxation. Acción Opuesta = identify urge, do opposite.
+// Reference: Linehan (1993) Skills Training Manual for DBT.
+function DBTSkills({ patient }) {
+    const [mode, setMode] = useState("menu"); // menu | tipp | opposite
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Habilidades DBT"),
+        React.createElement(Instructions, { adoChildren: "Dos habilidades DBT (Linehan, 1993) con evidencia para regulación emocional intensa: TIPP (tolerancia al malestar agudo) y Acción Opuesta (transformar urgencias emocionales no adaptativas)." },
+            "Dos herramientas para cuando una emoción se dispara. ", React.createElement("strong", null, "TIPP"), " es para momentos de crisis (calmar el cuerpo rápido); ", React.createElement("strong", null, "Acción Opuesta"), " es para identificar la urgencia emocional y hacer deliberadamente lo contrario."),
+        mode === "menu" && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+            React.createElement("button", { onClick: () => { sfx.tap(); setMode("tipp"); },
+                style: { padding: 16, background: "#fff", borderRadius: 14, border: `2px solid ${C.error}`, cursor: "pointer", textAlign: "left", fontFamily: "inherit" } },
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.error, marginBottom: 4 } }, "🆘 TIPP — Crisis emocional"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.5 } }, "Para cuando estás muy activado/a (ataque de ansiedad, rabia intensa, ganas de autolesión). Calma el cuerpo rápido para poder pensar después.")),
+            React.createElement("button", { onClick: () => { sfx.tap(); setMode("opposite"); },
+                style: { padding: 16, background: "#fff", borderRadius: 14, border: `2px solid ${C.primary}`, cursor: "pointer", textAlign: "left", fontFamily: "inherit" } },
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.primary, marginBottom: 4 } }, "↔️ Acción Opuesta"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.5 } }, "Cuando una emoción te empuja a hacer algo que sabes que te va a perjudicar. Identificas la urgencia y haces deliberadamente lo contrario."))),
+        mode === "tipp" && React.createElement(TIPPProtocol, { onBack: () => setMode("menu") }),
+        mode === "opposite" && React.createElement(AccionOpuestaProtocol, { onBack: () => setMode("menu") }));
+}
+function TIPPProtocol({ onBack }) {
+    const [step, setStep] = useState(0);
+    const STEPS = [
+        { letter: "T", name: "Temperatura fría",
+          desc: "El frío en la cara baja el ritmo cardiaco (reflejo de inmersión). Es el más rápido de los cuatro.",
+          how: ["Llena un cuenco con agua muy fría (con hielo si tienes).",
+                "Sumerge la cara durante 15-30 segundos, aguantando la respiración.",
+                "Si no puedes, una bolsa de hielo en las mejillas y debajo de los ojos funciona también.",
+                "Tras una vez, evalúa cómo estás. Repite si hace falta."] },
+        { letter: "I", name: "Intensidad — ejercicio breve",
+          desc: "Quemar la energía activada del cuerpo. Corto pero intenso.",
+          how: ["Si puedes, haz 3-5 minutos de actividad intensa: correr en el sitio, saltos, subir escaleras rápido.",
+                "El objetivo NO es entrenar — es bajar la activación. Para cuando notes el corazón acelerado pero respires todavía.",
+                "Tras parar, espera un minuto antes de evaluar cómo estás."] },
+        { letter: "P", name: "Pacing — respiración pautada",
+          desc: "Espiración más larga que inspiración. Activa el parasimpático.",
+          how: ["Inspira por la nariz contando 4 segundos.",
+                "Espira por la boca contando 6 segundos (más larga).",
+                "Repite durante 2-3 minutos. NO contengas la respiración.",
+                "Si te mareas, vuelve a tu respiración normal y prueba más lento."] },
+        { letter: "P", name: "Paired — relajación muscular",
+          desc: "Tensar y soltar grupos musculares en pares. Reduce la tensión física.",
+          how: ["Sentado/a o tumbado/a. Aprieta los puños 5 segundos, suelta y nota la diferencia.",
+                "Aprieta los brazos pegados al cuerpo 5 segundos, suelta.",
+                "Aprieta hombros hacia las orejas 5 segundos, suelta.",
+                "Aprieta los pies 5 segundos, suelta.",
+                "Repite el ciclo completo 2 veces."] },
+    ];
+    const s = STEPS[step];
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.error } }, "🆘 TIPP en 4 pasos"),
+            React.createElement(Btn, { color: C.textL, onClick: onBack, small: true, outline: true }, "← Menú")),
+        React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 12 } },
+            STEPS.map((st, i) => React.createElement("button", { key: i, onClick: () => { sfx.tap(); setStep(i); },
+                style: { flex: 1, padding: "10px 6px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 800, fontFamily: "inherit",
+                    background: step === i ? C.error : (i < step ? "#7A1F26" : "#fff"),
+                    color: step === i || i < step ? "#fff" : C.text,
+                    border: `2px solid ${C.error}` } }, st.letter))),
+        React.createElement("div", { style: { padding: 16, background: "#fff", borderRadius: 14, border: `2px solid ${C.error}`, marginBottom: 12 } },
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.error, marginBottom: 4, textTransform: "uppercase" } }, "Paso ", step + 1, " · " + s.letter),
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 6 } }, s.name),
+            React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 12, fontStyle: "italic", lineHeight: 1.5 } }, s.desc),
+            React.createElement("ol", { style: { margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.7, color: C.text } },
+                s.how.map((h, i) => React.createElement("li", { key: i, style: { marginBottom: 4 } }, h)))),
+        React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "space-between" } },
+            React.createElement(Btn, { color: C.textL, onClick: () => setStep(s => Math.max(0, s - 1)), small: true, outline: true, disabled: step === 0 }, "← Anterior"),
+            React.createElement(Btn, { color: C.error, onClick: () => setStep(s => Math.min(STEPS.length - 1, s + 1)), small: true, disabled: step === STEPS.length - 1 }, "Siguiente →")));
+}
+const URGENCIAS_OPUESTAS = [
+    { emo: "Tristeza", urge: "Aislarme, quedarme en cama, no hacer nada",
+      opp: "Activarte físicamente, salir, contactar con alguien, hacer una sola cosa pequeña",
+      help: "La tristeza fuerte empuja a parar, pero el aislamiento la profundiza. La actividad la modula." },
+    { emo: "Miedo / Ansiedad", urge: "Evitar la situación, escapar, no afrontar",
+      opp: "Acercarte a lo que temes en pasos pequeños y graduales (siempre que sea seguro)",
+      help: "La evitación reduce la ansiedad a corto plazo pero la mantiene a largo plazo. La aproximación gradual la reduce de verdad." },
+    { emo: "Rabia", urge: "Atacar, gritar, romper algo, ser hostil",
+      opp: "Apartarte de la situación. Hablar con tono bajo y suave. Imaginar al otro con dificultades",
+      help: "Atacar la valida y la hace crecer. Apartarse permite que baje y luego permite pensar." },
+    { emo: "Vergüenza", urge: "Esconderse, callar lo que has hecho, evitar mirar a la cara",
+      opp: "Si lo que hiciste NO es realmente vergonzoso para ti: hablarlo abiertamente, mantener contacto visual, no esconderte",
+      help: "Si te avergüenzas por algo coherente con tus valores, la vergüenza es injustificada. Acción opuesta = comportarte como si no hubiera nada que esconder." },
+    { emo: "Culpa", urge: "Castigarte, rumiar, evitar a la persona",
+      opp: "Si es justificada: reparar y disculparte de forma concreta. Si no es justificada: actuar como si no hubieras hecho nada malo",
+      help: "Rumiar la culpa no la repara. La acción concreta sí (reparar o seguir adelante según el caso)." },
+    { emo: "Envidia", urge: "Desear que al otro le vaya mal, criticar internamente",
+      opp: "Reconocer lo que la otra persona ha hecho. Centrarte en tus propios pasos hacia lo mismo",
+      help: "La envidia mantiene la mirada en el otro. Volver a tus pasos te devuelve la agencia." },
+];
+function AccionOpuestaProtocol({ onBack }) {
+    const [emoIdx, setEmoIdx] = useState(null);
+    const [step, setStep] = useState(0); // 0 = pick emotion, 1 = see urge, 2 = see opposite, 3 = commit
+    const [committed, setCommitted] = useState(false);
+    const e = emoIdx !== null ? URGENCIAS_OPUESTAS[emoIdx] : null;
+    const commit = () => {
+        sfx.success();
+        setCommitted(true);
+        if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); }
+        setTimeout(() => { setEmoIdx(null); setStep(0); setCommitted(false); }, 2500);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.primary } }, "↔️ Acción Opuesta"),
+            React.createElement(Btn, { color: C.textL, onClick: onBack, small: true, outline: true }, "← Menú")),
+        emoIdx === null && React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 13, marginBottom: 12, lineHeight: 1.5 } }, "¿Qué emoción intensa estás sintiendo (o sueles sentir) y quieres trabajar?"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6 } },
+                URGENCIAS_OPUESTAS.map((u, i) => React.createElement("button", { key: i, onClick: () => { sfx.tap(); setEmoIdx(i); setStep(1); },
+                    style: { padding: "12px 14px", background: "#fff", border: `2px solid ${C.primary}`, borderRadius: 12, cursor: "pointer",
+                        fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "inherit" } }, u.emo)))),
+        emoIdx !== null && committed && React.createElement("div", { style: { padding: 24, textAlign: "center" } },
+            React.createElement("div", { style: { fontSize: 60, marginBottom: 8 } }, "✓"),
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: C.success } }, "¡Buen trabajo! Has comprometido la acción opuesta.")),
+        emoIdx !== null && !committed && React.createElement("div", null,
+            React.createElement("div", { style: { padding: 14, background: `${C.error}11`, borderLeft: `4px solid ${C.error}`, borderRadius: 10, marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.error, marginBottom: 4, textTransform: "uppercase" } }, "Emoción"),
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 6 } }, e.emo),
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.error, marginBottom: 4, textTransform: "uppercase" } }, "Urgencia que te empuja"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.5 } }, e.urge)),
+            step >= 2 && React.createElement("div", { style: { padding: 14, background: `${C.success}11`, borderLeft: `4px solid ${C.success}`, borderRadius: 10, marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.success, marginBottom: 4, textTransform: "uppercase" } }, "Acción Opuesta"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 8 } }, e.opp),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, fontStyle: "italic", lineHeight: 1.5, paddingTop: 6, borderTop: `1px solid ${C.success}44` } }, e.help)),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "flex-end" } },
+                React.createElement(Btn, { color: C.textL, onClick: () => { setEmoIdx(null); setStep(0); }, small: true, outline: true }, "← Otra emoción"),
+                step === 1 && React.createElement(Btn, { color: C.primary, onClick: () => setStep(2), small: true }, "Ver acción opuesta →"),
+                step === 2 && React.createElement(Btn, { color: C.success, onClick: commit, small: true }, "✓ Comprometerme"))));
+}
+
 function TomaTurno({ patient }) {
     const bank = TOMA_TURNO_BANK;
     const [order, setOrder] = useState(() => shuffle(bank.map((_, i) => i)));
@@ -31848,6 +33939,8 @@ const AREA_ACTIVITIES = {
         { id: "cancel_dual", label: "Cancelación Dual", desc: "Dos targets simultáneos en colores distintos", comp: CancelacionDual, complex: true },
         { id: "busqueda_critica", label: "Búsqueda Crítica", desc: "Distractores casi idénticos al target", comp: BusquedaCritica, complex: true },
         { id: "atencion_dividida", label: "Atención Dividida", desc: "Vigila dos series a la vez", comp: AtencionDividida, complex: true },
+        { id: "est_temporal", label: "Estimación Temporal", desc: "Reproduce duraciones (déficit en TDAH)", comp: EstimacionTemporal },
+        { id: "stop_signal", label: "Stop Signal", desc: "Frena una respuesta ya iniciada (Logan & Cowan)", comp: StopSignal, complex: true },
     ],
     memoria: [
         { id: "simon", label: "Simon Dice", desc: "Repite la secuencia", comp: SimonDice },
@@ -31861,6 +33954,8 @@ const AREA_ACTIVITIES = {
         { id: "rutas", label: "Memorización de Rutas", desc: "Memoria espacial visual", comp: MemoriaRutas, complex: true },
         { id: "cara_nombre", label: "Cara-Nombre", desc: "Memoria asociativa de personas", comp: CaraNombre, complex: true },
         { id: "lista_compra", label: "Lista de la Compra", desc: "Memoria episódica verbal", comp: ListaCompra, complex: true },
+        { id: "prospectiva", label: "Memoria Prospectiva", desc: "Recordar una intención embebida (déficit en TDAH)", comp: MemoriaProspectiva, complex: true },
+        { id: "corsi", label: "Span Visoespacial (Corsi)", desc: "Memoria espacial visual (WMS)", comp: CorsiBlocks, complex: true },
     ],
     emocional: [
         { id: "identifica", label: "Identifica Emoción", desc: "¿Qué emoción sentirías?", comp: IdentificaEmocion, hasAI: true },
@@ -31878,6 +33973,12 @@ const AREA_ACTIVITIES = {
         { id: "guia_interior", label: "Mi Guía Interior", desc: "Entrena tu voz interior para hacer tareas paso a paso", comp: GuiaInterior, hasAI: true, complex: true },
         { id: "detective_pensamientos", label: "Detective de Pensamientos", desc: "Investiga y cambia los pensamientos que te frustran", comp: DetectivePensamientos, hasAI: true, complex: true },
         { id: "diario_personal", label: "Diario Personal", desc: "Tu espacio privado para escribir lo que quieras", comp: DiarioPersonal, adolescentOnly: true, personal: true },
+        { id: "mixtas", label: "Emociones Mixtas", desc: "Reconoce ambivalencia: dos emociones a la vez", comp: EmocionesMixtas },
+        { id: "termo_corporal", label: "Termómetro Corporal", desc: "Mapa corporal de emociones (interocepción)", comp: TermometroCorporal },
+        { id: "respiracion_simple", label: "Respiración Cuadrada / 4-7-8", desc: "Respiración pautada sin narrativa", comp: RespiracionSimple },
+        { id: "pens_auto", label: "Registro de Pensamientos", desc: "Autorregistro TCC (Beck)", comp: PensamientosAutomaticos, hasAI: true, adolescentOnly: true, complex: true },
+        { id: "rueda_emo", label: "Rueda de Emociones", desc: "3 niveles de granularidad (Plutchik / Geneva)", comp: RuedaEmociones, complex: true },
+        { id: "dbt_skills", label: "Habilidades DBT", desc: "TIPP (crisis) y Acción Opuesta (Linehan)", comp: DBTSkills, adolescentOnly: true, complex: true },
     ],
     social: [
         { id: "escenarios", label: "Escenarios Sociales", desc: "Elige la mejor respuesta", comp: EscenariosSociales, hasAI: true },
@@ -31893,6 +33994,12 @@ const AREA_ACTIVITIES = {
         { id: "entrevista_trabajo", label: "Simulador de Entrevista", desc: "Practica entrevistas de trabajo con IA (estilo VR-JIT)", comp: EntrevistaTrabajo, hasAI: true, complex: true, adolescentOnly: true },
         { id: "subtexto", label: "Decodifica el Subtexto", desc: "Identifica intenciones bajo formas educadas del mundo adulto", comp: DecodificaSubtexto, adolescentOnly: true },
         { id: "identidad", label: "Mi Identidad y Autoabogacía", desc: "Reflexión sobre la propia experiencia autista", comp: MiIdentidadAutista, adolescentOnly: true },
+        { id: "faux_pas", label: "Paso en Falso", desc: "Detecta meteduras de pata (TdM avanzada)", comp: FauxPas },
+        { id: "eyes_test", label: "Lectura de la Mirada", desc: "Identifica emociones desde los ojos (estilo Baron-Cohen)", comp: EyesTest },
+        { id: "secuencia_eventos", label: "Secuencia de Eventos", desc: "Ordena los pasos de un guion cotidiano", comp: SecuenciaEventos },
+        { id: "prediccion_social", label: "Predicción Social", desc: "¿Qué pasa después? Inferencia social", comp: PrediccionSocial },
+        { id: "empatia_dual", label: "Sentir vs Pensar", desc: "Empatía afectiva y cognitiva (separadas)", comp: EmpatiaTask },
+        { id: "peabody", label: "Palabra e Imagen", desc: "Vocabulario receptivo (estilo Peabody)", comp: PeabodyTest },
     ],
     lectoescritura: [
         { id: "forma", label: "Forma Palabras", desc: "Une sílabas", comp: FormaPalabras, hasAI: true },
@@ -31928,7 +34035,7 @@ const AREA_ACTIVITIES = {
         { id: "caligrafia", label: "Caligrafía", desc: "Traza con lápiz táctil", comp: Caligrafia, complex: true },
     ],
     discalculia: [
-        { id: "subitizacion", label: "Subitización", desc: "Reconoce cantidades sin contar (1-9 puntos)", comp: Subitizacion },
+        { id: "subitizacion", label: "Subitización", desc: "Reconoce cantidades sin contar (1-9 puntos)", comp: SubitizacionTest },
         { id: "magnitudes", label: "Más Grande / Más Pequeño", desc: "Comparación de magnitudes (sentido numérico)", comp: ComparacionMagnitudes },
         { id: "recta_numerica", label: "Recta Numérica", desc: "Estimación de números en la recta mental", comp: RectaNumerica },
         { id: "descomposicion", label: "Descompón el Número", desc: "Centenas, decenas y unidades", comp: Descomposicion },
@@ -31949,6 +34056,9 @@ const AREA_ACTIVITIES = {
         { id: "cambio_regla", label: "Cambio de Regla", desc: "Flexibilidad cognitiva (estilo Wisconsin)", comp: CambioRegla, complex: true },
         { id: "othello", label: "Reversi (Othello)", desc: "Visión estratégica y captura territorial", comp: OthelloMini, complex: true },
         { id: "decision", label: "Tomar una Decisión", desc: "Analiza pros y contras de una decisión real", comp: TomaDecision, adolescentOnly: true, complex: true },
+        { id: "matrices", label: "Matrices", desc: "Razonamiento fluido (estilo Raven)", comp: Matrices, complex: true },
+        { id: "analogias", label: "Analogías", desc: "Razonamiento analógico verbal", comp: Analogias },
+        { id: "soluc_prob", label: "Solución de Problemas", desc: "5 pasos guiados (D'Zurilla)", comp: SolucionProblemas, hasAI: true, adolescentOnly: true, complex: true },
     ],
     autoestima: [
         { id: "pizarra", label: "Pizarra Creativa", desc: "Dibuja y expresa", comp: PizarraDibujo, hasAI: true },
@@ -31987,6 +34097,13 @@ const ACTIVITY_DX = {
     span_digitos: ["tdah", "dislexia"],
     subitizacion: ["discalculia"],
     trazos: [], conecta_puntos: ["tdah"], copia_formas: ["dislexia"],
+    faux_pas: ["tea"], mixtas: ["tea"], eyes_test: ["tea"],
+    est_temporal: ["tdah"], prospectiva: ["tdah"],
+    matrices: [], analogias: [],
+    termo_corporal: ["tea", "ansiedad"], respiracion_simple: ["ansiedad", "tdah"],
+    pens_auto: ["ansiedad"], soluc_prob: ["tdah", "ansiedad"],
+    rueda_emo: ["tea"], stop_signal: ["tdah"], corsi: ["tdah", "dislexia"], secuencia_eventos: ["tea"],
+    prediccion_social: ["tea"], empatia_dual: ["tea"], peabody: ["tea"], dbt_skills: ["ansiedad", "tdah"],
     cara_nombre: ["tdah", "tea"], lista_compra: ["tdah"],
     // Reg. Emocional
     identifica: ["tea", "ansiedad"], termometro: ["ansiedad", "tea", "tdah"], respiracion: ["ansiedad"],
@@ -32044,6 +34161,13 @@ const ACTIVITY_AGE = {
     span_digitos: [6, 17],
     subitizacion: [5, 14],
     trazos: [5, 10], conecta_puntos: [5, 12], copia_formas: [6, 14],
+    faux_pas: [9, 17], mixtas: [10, 17], eyes_test: [8, 17],
+    est_temporal: [7, 17], prospectiva: [8, 17],
+    matrices: [6, 17], analogias: [7, 17],
+    termo_corporal: [6, 14], respiracion_simple: [6, 17],
+    pens_auto: [12, 17], soluc_prob: [11, 17],
+    rueda_emo: [8, 17], stop_signal: [8, 17], corsi: [6, 17], secuencia_eventos: [5, 10],
+    prediccion_social: [9, 17], empatia_dual: [10, 17], peabody: [5, 12], dbt_skills: [13, 17],
     cara_nombre: [8, 16], lista_compra: [7, 14],
     // Reg. emocional
     identifica: [5, 11], como_se_siente: [7, 14], termometro: [6, 14],
@@ -32082,6 +34206,65 @@ const ACTIVITY_AGE = {
     carta: [9, 17], mapa: [10, 17], linea_vida: [11, 17], espejo: [9, 17],
     mis_valores: [12, 17], carta_futuro: [12, 17],
 };
+// ═══════════════════════════════════════════════════════════════
+// Scientific evidence tags
+// Activities with strong, recognized research backing get a 📖 marker
+// and a brief description for parent-facing reports.
+// ═══════════════════════════════════════════════════════════════
+const ACTIVITY_EVIDENCE = {
+    // ── Atención & FE ──
+    stroop: { ref: "Stroop (1935)", parents: "El test de Stroop, en uso desde 1935, mide control atencional e inhibición de respuesta automática. Está ampliamente validado para evaluar y entrenar funciones ejecutivas." },
+    stroop_num: { ref: "Henik & Tzelgov (1982)", parents: "Versión numérica del Stroop. Evalúa la inhibición de información numérica automática, especialmente útil en discalculia." },
+    gonogo: { ref: "Donders (1969); Barkley (1997)", parents: "Tarea Go/No-Go: paradigma clásico para evaluar control inhibitorio. Déficit nuclear en TDAH según Barkley." },
+    cpt: { ref: "Rosvold (1956); Conners CPT", parents: "Continuous Performance Test, el estándar de oro para evaluar atención sostenida en TDAH desde hace décadas." },
+    trail: { ref: "Reitan (1958)", parents: "Trail Making Test, prueba neuropsicológica clásica para evaluar atención dividida y flexibilidad mental." },
+    cancelacion: { ref: "Toulouse-Pieron (1904)", parents: "Tarea de cancelación, en uso desde principios del siglo XX para medir atención sostenida y resistencia a la fatiga." },
+    cambio_regla: { ref: "Berg (1948); WCST", parents: "Inspirada en el Wisconsin Card Sorting Test, mide flexibilidad cognitiva — capacidad de cambiar de regla mental cuando el contexto lo exige." },
+    est_temporal: { ref: "Barkley; Toplak (2013)", parents: "La estimación de tiempo es un déficit nuclear documentado en TDAH. Esta tarea no requiere conteo verbal y revela sesgos sistemáticos." },
+    // ── Memoria ──
+    nback: { ref: "Kirchner (1958); Jaeggi et al. (2008)", parents: "Tarea N-back, paradigma estándar para evaluar y entrenar la memoria de trabajo." },
+    span_digitos: { ref: "Wechsler (WISC/WAIS)", parents: "Subtest clásico de las escalas Wechsler. El modo directo mide span de memoria inmediata; el modo inverso mide memoria operativa (manipulación mental)." },
+    prospectiva: { ref: "Einstein & McDaniel (1990); McCauley", parents: "La memoria prospectiva (recordar realizar una acción futura) es un déficit muy marcado en TDAH y se trabaja específicamente con este tipo de tareas." },
+    cara_nombre: { ref: "Wechsler Memory Scale", parents: "Memoria asociativa de personas, paradigma clásico de aprendizaje pareado." },
+    lista_compra: { ref: "Rey AVLT", parents: "Inspirada en el Auditory Verbal Learning Test de Rey, evalúa memoria episódica verbal por listas de palabras." },
+    // ── Reg. Emocional ──
+    termo_corporal: { ref: "Craig (2009); Mehling (MAIA)", parents: "Trabajo de interocepción y mapa corporal de emociones, especialmente útil en alexitimia (frecuente en TEA) y somatización." },
+    respiracion_simple: { ref: "Brown & Gerbarg (2005)", parents: "Patrones de respiración pautada con evidencia para regular el sistema nervioso autónomo. La respiración cuadrada calma; 4-7-8 activa el parasimpático profundo." },
+    pens_auto: { ref: "Beck (1976)", parents: "Registro de pensamientos automáticos, técnica nuclear de la Terapia Cognitivo-Conductual (Beck). Pilar del tratamiento de ansiedad y depresión." },
+    mindfulness: { ref: "Kabat-Zinn; MBSR", parents: "Mindfulness con base en MBSR (Reducción de Estrés Basada en Mindfulness), con evidencia consolidada para ansiedad y regulación emocional." },
+    catastroficos: { ref: "Beck; reestructuración cognitiva", parents: "Reestructuración cognitiva — paso a paso para desmontar pensamientos catastróficos. Técnica TCC con evidencia robusta para ansiedad." },
+    exposicion: { ref: "Wolpe (1958); exposición jerárquica", parents: "Exposición gradual con jerarquía, tratamiento de elección para fobias y ansiedad. La evidencia data de Wolpe (años 50)." },
+    // ── Hab. Sociales ──
+    faux_pas: { ref: "Stone & Baron-Cohen (1998)", parents: "Test del Paso en Falso, prueba clásica de Teoría de la Mente avanzada. Mide la atribución de creencias de segundo orden (qué cree que cree el otro)." },
+    eyes_test: { ref: "Baron-Cohen et al. (2001)", parents: "Adaptación ilustrada del Reading the Mind in the Eyes Test, una de las pruebas más usadas en investigación sobre TEA. Mide mentalización a partir de la mirada." },
+    que_piensa: { ref: "Wimmer & Perner (1983); falsa creencia", parents: "Tareas de Teoría de la Mente (falsa creencia). Marca el desarrollo de la capacidad de atribuir estados mentales distintos a los propios." },
+    entrevista_trabajo: { ref: "Smith et al. (2014, 2015) — VR-JIT", parents: "Inspirada en el Virtual Reality Job Interview Training, intervención con evidencia de mejora real en empleabilidad de personas con TEA." },
+    mixtas: { ref: "Larsen & McGraw (2011)", parents: "Reconocimiento de emociones mixtas/ambivalentes. La capacidad de identificar emociones simultáneas opuestas es un marcador de granularidad emocional." },
+    // ── Razonamiento ──
+    matrices: { ref: "Raven (1938)", parents: "Inspirada en las Matrices Progresivas de Raven, una de las pruebas de razonamiento fluido no verbal más usadas. Identificar la regla relacional implícita." },
+    soluc_prob: { ref: "D'Zurilla & Nezu (1971)", parents: "Modelo de solución de problemas en 5 pasos. Técnica TCC clásica con evidencia para TDAH (planificación), ansiedad e impulsividad adolescente." },
+    // ── Discalculia ──
+    subitizacion: { ref: "Mandler & Shebo (1982); Butterworth (2005)", parents: "Reconocimiento rápido de cantidades pequeñas sin contar. Marcador nuclear del 'sentido numérico'. Su déficit está documentado como signo central de discalculia." },
+    recta_numerica: { ref: "Siegler & Opfer (2003)", parents: "Estimación en recta numérica. El paso de representación logarítmica a lineal entre 6-9 años es un marcador clave del desarrollo numérico." },
+    magnitudes: { ref: "Moyer & Landauer (1967); Dehaene", parents: "Comparación numérica con efecto distancia. Procesamiento de magnitud aproximada (Sentido Numérico de Dehaene)." },
+    // ── Dislexia ──
+    rimas: { ref: "Bradley & Bryant (1983)", parents: "Conciencia fonológica, predictor clave de la lectura. Su entrenamiento en preescolar mejora la lectura posterior." },
+    silabas: { ref: "Liberman et al. (1974)", parents: "Conciencia silábica, base de la decodificación lectora." },
+    cazador_sonidos: { ref: "Conciencia fonémica; NRP (2000)", parents: "Conciencia fonémica, uno de los cinco pilares de la lectura según el National Reading Panel." },
+    nombra_rapido: { ref: "Wolf & Bowers (1999) — RAN", parents: "Rapid Automatized Naming. La velocidad de denominación es uno de los mejores predictores de la fluidez lectora." },
+    pseudopalabras: { ref: "Coltheart — ruta fonológica", parents: "Lectura de pseudopalabras, evalúa la ruta fonológica de lectura. Déficit típico en dislexia." },
+    // ── Grafomotricidad ──
+    copia_formas: { ref: "Bender (1938); Beery VMI", parents: "Copia de formas geométricas. Inspirada en el Bender Gestalt y el Beery VMI, evalúa integración visomotora." },
+    rueda_emo: { ref: "Plutchik (1980); Geneva Emotion Wheel", parents: "Rueda de emociones con anillos de granularidad creciente. La capacidad de identificar emociones con precisión (granularidad emocional) es un factor protector documentado y suele estar reducida en TEA y alexitimia." },
+    stop_signal: { ref: "Logan & Cowan (1984)", parents: "Tarea Stop-Signal. Estima el SSRT (tiempo necesario para cancelar una respuesta ya iniciada), el indicador más sensible del control inhibitorio impulsivo, central en TDAH." },
+    corsi: { ref: "Corsi (1972); WMS-IV", parents: "Span visoespacial de Corsi. Subtest clásico de la Escala de Memoria de Wechsler para evaluar memoria de trabajo visoespacial. Complemento del Span de Dígitos." },
+    prediccion_social: { ref: "Inferencia social; Frith & Happé", parents: "Inferencia y razonamiento causal social. Predecir consecuencias sociales a partir de claves implícitas (tono, postura, fórmulas) es una capacidad que en TEA frecuentemente requiere explicitación." },
+    empatia_dual: { ref: "Smith (2009); Baron-Cohen", parents: "Disociación entre empatía afectiva (qué siente) y cognitiva (qué piensa). En TEA la afectiva suele estar relativamente preservada; la cognitiva muestra más dificultad. Esta tarea las separa." },
+    peabody: { ref: "Dunn & Dunn (Peabody PPVT)", parents: "Vocabulario receptivo, inspirada en el Peabody Picture Vocabulary Test. Mide comprensión léxica pasiva, útil en TEA con retraso del lenguaje y en niños pequeños." },
+    dbt_skills: { ref: "Linehan (1993) — DBT", parents: "Dos habilidades del Manual de Habilidades de la Terapia Dialéctico-Conductual: TIPP para crisis emocional aguda y Acción Opuesta para urgencias emocionales no adaptativas. Con evidencia en regulación emocional intensa." },
+};
+// Returns evidence object for an activity or null
+const getEvidence = (activityId) => ACTIVITY_EVIDENCE[activityId] || null;
 // Returns true if the patient's age falls within (or near) the activity's range.
 const ageMatches = (activityId, patient) => {
     const range = ACTIVITY_AGE[activityId];
@@ -32415,6 +34598,37 @@ function GuiaDislexia({ onClose }) {
 // Lets families/patients send suggestions or rate the therapist.
 // Data stored locally with timestamp; therapist views from PatientRegistry.
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// EVIDENCE MODAL — Shows scientific reference + parent-facing
+// description for an activity. Triggered by tapping the 📖 badge.
+// ═══════════════════════════════════════════════════════════════
+function EvidenceModal({ activityId, onClose }) {
+    const ev = getEvidence(activityId);
+    // Look up label across areas
+    let label = activityId;
+    for (const a of Object.keys(AREA_ACTIVITIES)) {
+        const found = AREA_ACTIVITIES[a].find(x => x.id === activityId);
+        if (found) { label = found.label; break; }
+    }
+    if (!ev) return null;
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 20, overflowY: "auto" } },
+        React.createElement("div", { style: { background: C.bg, borderRadius: 18, padding: 22, maxWidth: 520, width: "100%", marginTop: 60 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 } },
+                    React.createElement("span", null, "📖"),
+                    React.createElement("span", null, "Base científica")),
+                React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar")),
+            React.createElement("div", { style: { padding: 14, background: "#fff", borderRadius: 12, borderLeft: `4px solid #6E8B3D`, marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: "#6E8B3D", textTransform: "uppercase", marginBottom: 4 } }, "Actividad"),
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 10, color: C.text } }, label),
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, textTransform: "uppercase", marginBottom: 4 } }, "Referencia"),
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14, fontStyle: "italic" } }, ev.ref),
+                React.createElement("div", { style: { fontSize: 11, fontWeight: 800, color: C.textL, textTransform: "uppercase", marginBottom: 4 } }, "Qué mide / por qué importa"),
+                React.createElement("div", { style: { fontSize: 13.5, lineHeight: 1.6, color: C.text } }, ev.parents)),
+            React.createElement("div", { style: { fontSize: 11, color: C.textL, fontStyle: "italic", textAlign: "center", lineHeight: 1.5 } },
+                "Este texto se puede incluir en los informes a familias activando la sección 'Base científica' en el menú del informe.")));
+}
+
 function FeedbackModal({ onClose, patient }) {
     const [tab, setTab] = useState("sugerencia");
     const [text, setText] = useState("");
@@ -32743,6 +34957,7 @@ function SessionReport({ patient, onClose }) {
         { id: "resumen", label: "Resumen de actividad" },
         { id: "rendimiento", label: "Evolución del rendimiento (gráfico)" },
         { id: "areas", label: "Trabajo realizado por área" },
+        { id: "evidencia", label: "Evidencia científica de las actividades", defaultOff: true },
         { id: "emocional", label: "Evolución y registro emocional" },
         { id: "notas", label: "Notas de sesión" },
         { id: "fortalezas", label: "Cualidades reconocidas" },
@@ -32755,7 +34970,7 @@ function SessionReport({ patient, onClose }) {
     ];
     const [sections, setSections] = useState(() => {
         const s = {};
-        ALL_SECTIONS.forEach(sec => { s[sec.id] = true; });
+        ALL_SECTIONS.forEach(sec => { s[sec.id] = !sec.defaultOff; });
         return s;
     });
     const toggleSection = (id) => setSections(s => ({ ...s, [id]: !s[id] }));
@@ -32768,6 +34983,8 @@ function SessionReport({ patient, onClose }) {
             case "datos": return true;
             case "resumen": case "rendimiento": case "areas":
                 return sessions.length > 0;
+            case "evidencia":
+                return sessions.some(s => ACTIVITY_EVIDENCE[s.activity]);
             case "emocional": return L("termometro").length > 0;
             case "objetivos": return (storeLoad("objetivos:" + patient.id) || []).length > 0;
             case "notas": return L("notas_sesion").length > 0;
@@ -32957,7 +35174,30 @@ function SessionReport({ patient, onClose }) {
 </div>`;
         }).join("");
 
-        // Format strengths
+        // ── Evidencia científica de las actividades trabajadas ──
+        // Build a list of unique activities used in this scope that have evidence.
+        const usedActIds = new Set();
+        sessions.forEach(s => { if (s.activity) usedActIds.add(s.activity); });
+        const evidenciaItems = [];
+        usedActIds.forEach(actId => {
+            const ev = ACTIVITY_EVIDENCE[actId];
+            if (!ev) return;
+            // Look up the activity label
+            let label = actId;
+            for (const a of Object.keys(AREA_ACTIVITIES)) {
+                const found = AREA_ACTIVITIES[a].find(x => x.id === actId);
+                if (found) { label = found.label; break; }
+            }
+            evidenciaItems.push({ id: actId, label, ref: ev.ref, parents: ev.parents });
+        });
+        evidenciaItems.sort((a, b) => a.label.localeCompare(b.label));
+        const evidenciaHTML = evidenciaItems.length === 0 ? "" :
+            evidenciaItems.map(ev =>
+                `<div style="padding:8pt 10pt;background:#FAFAF7;border-left:3pt solid #6E8B3D;margin-bottom:6pt;border-radius:3pt">
+                    <div style="font-weight:700;font-size:10pt;color:#2D3B30;margin-bottom:2pt">${esc(ev.label)} <span style="font-weight:400;color:#666;font-size:9pt">· ${esc(ev.ref)}</span></div>
+                    <div style="font-size:9.5pt;line-height:1.5;color:#333">${esc(ev.parents)}</div>
+                </div>`).join("");
+
         const strengthsHTML = strengthsList.map(s => {
             const txt = typeof s === 'string' ? s : s.text;
             return `<span class="print-chip">${esc(txt)}</span>`;
@@ -33323,7 +35563,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.0</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.4</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -33391,6 +35631,13 @@ ${(sections.areas && areasWorkedHTML) ? `
   <div class="print-section-title">Trabajo realizado por área</div>
   <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Detalle de ejercicios trabajados, frecuencia y rendimiento por área terapéutica.</div>
   ${areasWorkedHTML}
+</div>` : ''}
+
+${(sections.evidencia && evidenciaHTML) ? `
+<div class="print-section">
+  <div class="print-section-title">Base científica de las actividades</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:10pt;font-style:italic">Las actividades marcadas con 📖 en la aplicación están basadas en pruebas neuropsicológicas o técnicas terapéuticas con evidencia científica documentada. A continuación, las usadas en este informe:</div>
+  ${evidenciaHTML}
 </div>` : ''}
 
 ${(includeCharts && sections.emocional && termoChartHTML) ? `
@@ -33472,7 +35719,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.0</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.4</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -33779,6 +36026,32 @@ ${(sections.linea && lineaHTML) ? `
                     React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8 } }, Object.entries(bests).map(([act, score]) => (React.createElement("div", { key: act, style: { padding: 10, background: "#f9f9f9", borderRadius: 10 } },
                         React.createElement("div", { style: { fontSize: 11, color: C.textL, fontWeight: 600 } }, act),
                         React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.accentL } }, score))))))),
+                // ── Preview of "Base científica" section (mirrors what will appear in print) ──
+                sections.evidencia && (() => {
+                    const usedIds = new Set();
+                    sessions.forEach(s => { if (s.activity && ACTIVITY_EVIDENCE[s.activity]) usedIds.add(s.activity); });
+                    if (usedIds.size === 0) return null;
+                    const items = [...usedIds].map(id => {
+                        let label = id;
+                        for (const a of Object.keys(AREA_ACTIVITIES)) {
+                            const f = AREA_ACTIVITIES[a].find(x => x.id === id);
+                            if (f) { label = f.label; break; }
+                        }
+                        return { id, label, ...ACTIVITY_EVIDENCE[id] };
+                    }).sort((a, b) => a.label.localeCompare(b.label));
+                    return React.createElement("div", { style: { marginBottom: 18 } },
+                        React.createElement("div", { style: { fontSize: 15, fontWeight: 800, marginBottom: 6 } }, "\uD83D\uDCD6 Base científica de las actividades"),
+                        React.createElement("div", { style: { fontSize: 11, color: C.textL, marginBottom: 10, fontStyle: "italic", lineHeight: 1.5 } },
+                            "Esta sección aparecerá en el informe impreso. Explica para padres qué hay detrás de cada actividad con evidencia (referencia + descripción accesible)."),
+                        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
+                            items.map(it => React.createElement("div", { key: it.id, style: {
+                                padding: 10, background: "#fff", borderLeft: "4px solid #6E8B3D", borderRadius: 8,
+                            } },
+                                React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#2D3B30", marginBottom: 2 } },
+                                    it.label,
+                                    React.createElement("span", { style: { fontWeight: 400, color: C.textL, fontSize: 11, marginLeft: 6, fontStyle: "italic" } }, "· ", it.ref)),
+                                React.createElement("div", { style: { fontSize: 12, lineHeight: 1.5, color: C.text } }, it.parents)))));
+                })(),
                 React.createElement("div", { style: { marginBottom: 16 } },
                     React.createElement("div", { style: { fontSize: 15, fontWeight: 800, marginBottom: 10 } },
                         "\uD83C\uDFC6 Medallas (",
@@ -34134,6 +36407,7 @@ function TerapiAppInner() {
     const [showRegistry, setShowRegistry] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
     const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
+    const [evidenceShown, setEvidenceShown] = useState(null); // activity id whose evidence modal is open
     const [showSettings, setShowSettings] = useState(false);
     const [reportPatient, setReportPatient] = useState(null);
     const [trackingPatient, setTrackingPatient] = useState(null);
@@ -34445,6 +36719,7 @@ function TerapiAppInner() {
             showGuiaDiscalculia && React.createElement(GuiaDiscalculia, { onClose: () => setShowGuiaDiscalculia(false) }),
             showFeedback && React.createElement(FeedbackModal, { onClose: () => setShowFeedback(false), patient: activePatient }),
             showFeedbackAdmin && React.createElement(FeedbackAdmin, { onClose: () => setShowFeedbackAdmin(false) }),
+            evidenceShown && React.createElement(EvidenceModal, { activityId: evidenceShown, onClose: () => setEvidenceShown(null) }),
             showPlanner && React.createElement(SessionPlanner, {
                 onClose: () => setShowPlanner(false),
                 onLaunch: (areaId, activityId) => { setShowPlanner(false); nav(areaId, activityId); },
@@ -34636,6 +36911,11 @@ function TerapiAppInner() {
                                     React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 3 } }, m.label),
                                     React.createElement("div", { style: { fontSize: 11, color: C.textL, lineHeight: 1.3 } }, m.desc),
                                     React.createElement("div", { style: { display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" } },
+                                        getEvidence(m.id) && React.createElement("button", {
+                                            onClick: (e) => { e.stopPropagation(); sfx.tap(); setEvidenceShown(m.id); },
+                                            title: "Ver evidencia científica",
+                                            style: { background: "#6E8B3D", color: "#fff", border: "none", borderRadius: 8, padding: "3px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+                                        }, "\uD83D\uDCD6"),
                                         m.hasAI && React.createElement(Badge, { color: C.purple }, "✨ IA"),
                                         m.complex && React.createElement(Badge, { color: C.blue }, "Avanzada")));
                             })));
@@ -34819,6 +37099,15 @@ function TerapiAppInner() {
                         React.createElement("div", { style: { fontSize: 15, fontWeight: 800, flex: 1, paddingRight: 6 } }, it.label),
                         React.createElement("div", { style: { display: "flex", gap: 4, alignItems: "center" } },
                             it.personal && React.createElement(Badge, { color: C.blue }, "\uD83D\uDD12"),
+                            getEvidence(it.id) && React.createElement("button", {
+                                onClick: (e) => { e.stopPropagation(); sfx.tap(); setEvidenceShown(it.id); },
+                                title: "Ver evidencia científica",
+                                style: {
+                                    background: "#6E8B3D", color: "#fff", border: "none",
+                                    borderRadius: 8, padding: "3px 8px", fontSize: 11, fontWeight: 700,
+                                    cursor: "pointer", fontFamily: "inherit",
+                                },
+                            }, "\uD83D\uDCD6"),
                             it.complex && React.createElement(Badge, { color: C.accent }, "\u26A1"),
                             it.hasAI && React.createElement(Badge, { color: C.purple }, "\u2728"),
                             React.createElement("button", { onClick: (e) => {
@@ -34869,7 +37158,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v24.0"),
+                "© 2026 Todos los derechos reservados · TerapiApp v24.4"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
