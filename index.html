@@ -22864,7 +22864,7 @@ function Subitizacion({ onSwitchMode }) {
                 phase === "result" && (React.createElement("div", { style: { marginTop: 14 } },
                     React.createElement(Btn, { color: C.primary, onClick: start, small: true }, "\u25B6 Siguiente"))))))));
 }
-function PiramideLogica({ onSwitchMode }) {
+function PiramideLogica({ onSwitchMode, patient }) {
     const [rows, setRows] = useState([]);
     const [hiddenIdx, setHiddenIdx] = useState(null);
     const [hiddenRow, setHiddenRow] = useState(null);
@@ -22906,7 +22906,7 @@ function PiramideLogica({ onSwitchMode }) {
             React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Pir\u00E1mide L\u00F3gica"),
             React.createElement("div", { style: { display: "flex", gap: 6 } },
                 React.createElement(DiffSelect, { value: diff, onChange: setDiff }),
-                React.createElement(Btn, { color: C.blue, onClick: () => onSwitchMode("subitize"), small: true, outline: true }, "\u2190 Subitizaci\u00F3n"))),
+                onSwitchMode && React.createElement(Btn, { color: C.blue, onClick: () => onSwitchMode("subitize"), small: true, outline: true }, "\u2190 Subitizaci\u00F3n"))),
         React.createElement(Instructions, null, "Cada n\u00FAmero es la suma de los dos de debajo. Completa el hueco."),
         React.createElement("div", { style: { display: "flex", flexDirection: "column-reverse", alignItems: "center", gap: 8, marginBottom: 16 } }, rows.map((row, r) => (React.createElement("div", { key: r, style: { display: "flex", gap: 8, justifyContent: "center" } }, row.map((n, i) => {
             const hidden = r === hiddenRow && i === hiddenIdx;
@@ -23274,6 +23274,32 @@ function SpanDigitos({ patient }) {
         setUserInput([...userInput, d]);
     };
     const erase = () => { sfx.tap(); setUserInput(userInput.slice(0, -1)); };
+    // Keyboard input — when input phase active, listen for digit keys
+    useEffect(() => {
+        if (phase !== "input") return;
+        const onKey = (e) => {
+            if (e.key >= "0" && e.key <= "9") {
+                e.preventDefault();
+                const d = parseInt(e.key, 10);
+                setUserInput(prev => {
+                    if (prev.length >= sequence.length) return prev;
+                    sfx.tap();
+                    return [...prev, d];
+                });
+            } else if (e.key === "Backspace") {
+                e.preventDefault();
+                setUserInput(prev => { sfx.tap(); return prev.slice(0, -1); });
+            } else if (e.key === "Enter") {
+                e.preventDefault();
+                setUserInput(prev => {
+                    if (prev.length === sequence.length) setTimeout(() => validate(), 0);
+                    return prev;
+                });
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [phase, sequence.length]);
     const validate = () => {
         // Compare with expected order
         const expected = mode === "directo" ? sequence : [...sequence].reverse();
@@ -23792,101 +23818,6 @@ function DiarioPreocupaciones({ patient }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// NEW v12: ComprensionLectora (Lectoescritura) — IA generated text + Qs
-// ═══════════════════════════════════════════════════════════════
-function ComprensionLectora({ patient }) {
-    const [diff, setDiff] = useState("medio");
-    const [data, setData] = useState(null);
-    const [answers, setAnswers] = useState({});
-    const [submitted, setSubmitted] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const generate = async () => {
-        setLoading(true);
-        setSubmitted(false);
-        setAnswers({});
-        const lvl = { "fácil": "8 años", "medio": "11 años", "difícil": "14 años" }[diff];
-        const len = { "fácil": "60-80", "medio": "100-130", "difícil": "150-200" }[diff];
-        const prompt = (typeof PatientContext === 'function' ? PatientContext(patient) : '') + `
-Genera un texto narrativo breve (${len} palabras) apropiado para un paciente de ${lvl}. Tema variado y entretenido. Después haz 4 preguntas de comprensión: 1 literal, 2 inferenciales, 1 de vocabulario. Cada pregunta con 3 opciones (a, b, c) y una respuesta correcta.
-
-Formato JSON:
-{
-  "titulo": "título corto",
-  "texto": "texto narrativo",
-  "preguntas": [
-    {"q": "pregunta", "opciones": ["a", "b", "c"], "correcta": 0, "tipo": "literal|inferencial|vocabulario"}
-  ]
-}`;
-        const result = await callClaude(prompt, "comprension_lectora");
-        setLoading(false);
-        if (result && result.__noKey) { alert("Configura tu API key en ⚙️."); return; }
-        if (result && result.__authError) { alert("API key inválida."); return; }
-        if (result && result.texto && Array.isArray(result.preguntas) && result.preguntas.length >= 3) {
-            setData(result);
-            addToHistory("comprension_lectora", result.titulo);
-        }
-    };
-    const submit = () => {
-        if (!data || Object.keys(answers).length < data.preguntas.length) {
-            alert("Responde todas las preguntas");
-            return;
-        }
-        const correct = data.preguntas.filter((q, i) => answers[i] === q.correcta).length;
-        setSubmitted(true);
-        if (correct === data.preguntas.length) {
-            sfx.success();
-            if (_activePatientId) addStar(_activePatientId, _activeAreaId, true);
-            logCurrentResult(true);
-            setTimeout(() => fireConfetti(true), 200);
-        } else if (correct >= data.preguntas.length * 0.6) {
-            sfx.success();
-            if (_activePatientId) addStar(_activePatientId, _activeAreaId);
-            logCurrentResult(true);
-        } else {
-            sfx.fail();
-            if (_activePatientId) breakStreak(_activePatientId);
-            logCurrentResult(false);
-        }
-    };
-    return React.createElement("div", null,
-        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
-                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Comprensión Lectora"),
-                React.createElement(AIBadge, null)),
-            React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
-        React.createElement(Instructions, null, "Lee con atención el texto y responde las preguntas. Hay literales, de inferencia y de vocabulario."),
-        !data && !loading && React.createElement("div", { style: { textAlign: "center", padding: 30 } },
-            React.createElement(Btn, { color: C.purple, onClick: generate }, "✨ Generar texto con IA")),
-        loading && React.createElement(LoadingCard, { message: "Generando texto..." }),
-        data && React.createElement("div", null,
-            React.createElement("div", { style: { padding: 16, background: "#fff", borderRadius: 12, border: `2px solid ${C.border}`, marginBottom: 16 } },
-                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, marginBottom: 10, color: C.primary } }, data.titulo),
-                React.createElement("div", { style: { fontSize: 15, lineHeight: 1.7, whiteSpace: "pre-wrap" } }, data.texto)),
-            data.preguntas.map((q, qi) => React.createElement("div", { key: qi, style: { marginBottom: 14, padding: 12, background: "#f9f9f9", borderRadius: 12 } },
-                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 8 } },
-                    React.createElement("span", { style: { fontSize: 10, padding: "2px 7px", borderRadius: 10, background: C.purple + "22", color: C.purple, marginRight: 8 } }, q.tipo || "?"),
-                    qi + 1, ". ", q.q),
-                q.opciones.map((o, oi) => {
-                    const sel = answers[qi] === oi;
-                    const correct = submitted && oi === q.correcta;
-                    const wrong = submitted && sel && oi !== q.correcta;
-                    return React.createElement("div", { key: oi, onClick: () => !submitted && setAnswers(a => ({ ...a, [qi]: oi })), style: {
-                        padding: "10px 12px", borderRadius: 10, marginBottom: 6, cursor: submitted ? "default" : "pointer",
-                        background: correct ? C.success : wrong ? C.error : sel ? C.primary + "22" : "#fff",
-                        border: `2px solid ${correct ? C.primary : wrong ? "#E63946" : sel ? C.primary : C.border}`,
-                        fontSize: 13, fontWeight: 600,
-                    } },
-                        String.fromCharCode(97 + oi), ") ", o,
-                        correct && " ✓", wrong && " ✗");
-                }))),
-            !submitted && React.createElement("div", { style: { display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" } },
-                React.createElement(Btn, { color: C.primary, onClick: submit, disabled: Object.keys(answers).length < data.preguntas.length }, "Enviar respuestas")),
-            submitted && React.createElement(React.Fragment, null,
-                React.createElement(Feedback, { success: data.preguntas.filter((q, i) => answers[i] === q.correcta).length >= data.preguntas.length * 0.6, reward: false }, "Acertaste " + data.preguntas.filter((q, i) => answers[i] === q.correcta).length + "/" + data.preguntas.length),
-                React.createElement("div", { style: { display: "flex", justifyContent: "center", marginTop: 14 } },
-                    React.createElement(Btn, { color: C.purple, onClick: generate, loading: loading, small: true }, "✨ Otro texto")))));
-}
-
 // ═══════════════════════════════════════════════════════════════
 // NEW v12: CalculoMental (Instrumentales) — timed mental math
 // ═══════════════════════════════════════════════════════════════
@@ -23927,8 +23858,8 @@ function SubitizacionTest({ patient }) {
         }
         return { n, positions: placed };
     };
-    const nextTrial = () => {
-        if (trial >= cfg.trials) {
+    const nextTrial = (trialIdx) => {
+        if (trialIdx >= cfg.trials) {
             setPhase("done");
             const acc = stats.total > 0 ? stats.correct / stats.total : 0;
             sfx.success();
@@ -23947,7 +23878,7 @@ function SubitizacionTest({ patient }) {
     const start = () => {
         setStats({ correct: 0, total: 0, rtByRange: { sub: [], count: [] } });
         setTrial(0);
-        setTimeout(nextTrial, 100);
+        setTimeout(() => nextTrial(0), 100);
     };
     useEffect(() => { if (phase === "input" || phase === "present") {} }, [phase]);
     const choose = (n) => {
@@ -23965,8 +23896,9 @@ function SubitizacionTest({ patient }) {
             },
         }));
         if (ok) sfx.success(); else sfx.fail();
-        setTrial(t => t + 1);
-        setTimeout(nextTrial, 700);
+        const next = trial + 1;
+        setTrial(next);
+        setTimeout(() => nextTrial(next), 700);
     };
     const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
     return React.createElement("div", null,
@@ -25330,14 +25262,13 @@ function CaraNombre({ patient }) {
         }, 1400);
     };
 
-    const getQuizOptions = () => {
-        if (!people[quizIdx]) return [];
+    const quizOptions = useMemo(() => {
+        if (phase !== "quiz" || !people[quizIdx]) return [];
         const correct = people[quizIdx].name;
         const others = people.filter(p => p.name !== correct).map(p => p.name);
         const distractors = others.sort(() => Math.random() - 0.5).slice(0, 3);
         return [correct, ...distractors].sort(() => Math.random() - 0.5);
-    };
-    const quizOptions = phase === "quiz" ? getQuizOptions() : [];
+    }, [phase, quizIdx, people]);
 
     return React.createElement("div", null,
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 } },
@@ -26745,6 +26676,7 @@ function Tetris({ patient }) {
     const tickRef = useRef(null);
     const audioRef = useRef(null);
     const musicStopRef = useRef(null);
+    const boardSwipeRef = useRef(null);
 
     const baseSpeed = { "fácil": 1000, "medio": 700, "difícil": 450 }[diff];
     const dropSpeed = Math.max(80, baseSpeed - (level - 1) * 60);
@@ -26996,12 +26928,45 @@ function Tetris({ patient }) {
         React.createElement(Instructions, { adoChildren: "Encaja las piezas que caen para completar líneas horizontales. Trabaja planificación, atención sostenida y razonamiento espacial." },
             "Las piezas van cayendo. Muévelas y rótalas para encajarlas y completar filas enteras. Cuantas más filas elimines, más puntos."),
         React.createElement("div", { style: { display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } },
-            // Board
-            React.createElement("div", { style: {
-                background: "#0F1419", padding: 8, borderRadius: 10,
-                display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 1,
-                width: 280, boxSizing: "border-box",
-            } }, display.flatMap((row, r) => row.map((cell, c) => React.createElement(Cell, { key: `${r}-${c}`, value: cell })))),
+            // Board with swipe controls
+            React.createElement("div", {
+                onTouchStart: (e) => {
+                    if (status !== "playing") return;
+                    const t = e.touches[0];
+                    boardSwipeRef.current = { x: t.clientX, y: t.clientY, lastMoveX: 0, lastMoveY: 0, startTime: Date.now() };
+                },
+                onTouchMove: (e) => {
+                    if (status !== "playing" || !boardSwipeRef.current) return;
+                    e.preventDefault();
+                    const t = e.touches[0];
+                    const s = boardSwipeRef.current;
+                    const dx = t.clientX - s.x - s.lastMoveX;
+                    const dy = t.clientY - s.y - s.lastMoveY;
+                    const STEP = 22;
+                    if (Math.abs(dx) > STEP) {
+                        const n = Math.trunc(dx / STEP);
+                        for (let i = 0; i < Math.abs(n); i++) move(n > 0 ? 1 : -1);
+                        s.lastMoveX += n * STEP;
+                    }
+                    if (dy > STEP) {
+                        softDrop();
+                        s.lastMoveY += STEP;
+                    }
+                },
+                onTouchEnd: (e) => {
+                    if (status !== "playing" || !boardSwipeRef.current) return;
+                    const s = boardSwipeRef.current;
+                    const elapsed = Date.now() - s.startTime;
+                    if (elapsed < 200 && Math.abs(s.lastMoveX) < 10 && s.lastMoveY < 10) rotate();
+                    else if (s.lastMoveY > 60 && elapsed < 350) hardDrop();
+                    boardSwipeRef.current = null;
+                },
+                style: {
+                    background: "#0F1419", padding: 8, borderRadius: 10,
+                    display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gap: 1,
+                    width: 280, boxSizing: "border-box", touchAction: "none", userSelect: "none",
+                },
+            }, display.flatMap((row, r) => row.map((cell, c) => React.createElement(Cell, { key: `${r}-${c}`, value: cell })))),
             // Side panel
             React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, minWidth: 110 } },
                 React.createElement("div", { style: { padding: 10, background: "#FAFAF7", borderRadius: 10, textAlign: "center" } },
@@ -27033,7 +26998,7 @@ function Tetris({ patient }) {
             React.createElement(Feedback, { success: lines >= 5, reward: lines >= 10 },
                 `Fin de partida · ${score} puntos · ${lines} líneas · nivel ${level}`)),
         status === "playing" && React.createElement("div", { style: { fontSize: 11, color: C.textL, textAlign: "center", marginTop: 8, fontStyle: "italic" } },
-            "En ordenador: flechas para mover, ↑ para rotar, espacio para caída rápida"));
+            "En táctil: desliza el dedo por el tablero (lateral mueve · abajo baja · toque rota · barrido rápido tira la pieza). En ordenador: flechas para mover, ↑ para rotar, espacio para caída rápida."));
 }
 
 function Mastermind({ patient }) {
@@ -27329,11 +27294,11 @@ function CPT({ patient }) {
 function StroopNumerico({ patient }) {
     const [phase, setPhase] = useState("idle");
     const [trial, setTrial] = useState(0);
-    const [pair, setPair] = useState(null); // { digit, count }
+    const [pair, setPair] = useState(null);
     const [responded, setResponded] = useState(false);
     const [stats, setStats] = useState({ correct: 0, total: 0, rtCongruent: [], rtIncongruent: [] });
+    const [totalTrials, setTotalTrials] = useState(30);
     const startTimeRef = useRef(0);
-    const totalTrials = 30;
     const gen = () => {
         const digit = randInt(1, 9);
         // 50% congruent, 50% incongruent
@@ -27388,8 +27353,15 @@ function StroopNumerico({ patient }) {
         React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Stroop Numérico"),
         React.createElement(Instructions, { adoChildren: "Aparecerán grupos de cifras iguales. Tu tarea es decir CUÁNTAS hay, no qué número son. La interferencia (diferencia de TR entre congruentes e incongruentes) refleja control inhibitorio (MacLeod, 1991)." },
             "Verás varias cifras iguales en pantalla. Dime ", React.createElement("strong", null, "CUÁNTAS hay"), ", no qué número son. ¡Es más difícil de lo que parece cuando la cantidad y el número no coinciden!"),
-        phase === "idle" && React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
-            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")),
+        phase === "idle" && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" } },
+                React.createElement("span", { style: { fontSize: 13, fontWeight: 700, alignSelf: "center", color: C.textL } }, "Rondas:"),
+                [10, 20, 30, 50, 100].map(n => React.createElement("button", { key: n, onClick: () => { sfx.tap(); setTotalTrials(n); },
+                    style: { padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                        background: totalTrials === n ? C.primary : "#fff", color: totalTrials === n ? "#fff" : C.text,
+                        border: `2px solid ${totalTrials === n ? C.primary : C.border}` } }, n))),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar"))),
         phase === "playing" && React.createElement("div", null,
             React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
                 React.createElement(Badge, { color: C.primary }, "Ensayo: ", trial + 1, "/", totalTrials),
@@ -30741,9 +30713,8 @@ function EstimacionTemporal({ patient }) {
     const [startTime, setStartTime] = useState(0);
     const [trials, setTrials] = useState([]);
     const beepRef = useRef(null);
-    const start = () => { setTrials([]); setTrial(0); setTimeout(nextTrial, 200); };
-    const nextTrial = () => {
-        if (trial >= DURATIONS.length) {
+    const nextTrial = (trialIdx) => {
+        if (trialIdx >= DURATIONS.length) {
             setPhase("done");
             sfx.success();
             const errs = trials.map(t => Math.abs(t.error));
@@ -30751,7 +30722,7 @@ function EstimacionTemporal({ patient }) {
             if (_activePatientId) { addStar(_activePatientId, _activeAreaId, mean < 2); logCurrentResult(mean < 4); }
             return;
         }
-        const d = DURATIONS[trial];
+        const d = DURATIONS[trialIdx];
         setTargetDur(d);
         setPhase("listening");
         const beepStart = Date.now();
@@ -30764,6 +30735,7 @@ function EstimacionTemporal({ patient }) {
             }
         }, 50);
     };
+    const start = () => { setTrials([]); setTrial(0); setTimeout(() => nextTrial(0), 200); };
     const stop = () => {
         if (phase !== "waiting") return;
         const elapsed = (Date.now() - startTime) / 1000;
@@ -30771,7 +30743,8 @@ function EstimacionTemporal({ patient }) {
         setTrials(t => [...t, { target: targetDur, given: elapsed, error }]);
         setPhase("feedback");
         sfx.tap();
-        setTimeout(() => { setTrial(t => t + 1); setTimeout(nextTrial, 100); }, 2000);
+        const next = trial + 1;
+        setTimeout(() => { setTrial(next); setTimeout(() => nextTrial(next), 100); }, 2000);
     };
     useEffect(() => () => beepRef.current && clearInterval(beepRef.current), []);
     return React.createElement("div", null,
@@ -31758,10 +31731,10 @@ function StopSignal({ patient }) {
     const ssdRef = useRef(cfg.initialSSD);
     const start = () => {
         setTrials([]); setTrial(0); ssdRef.current = cfg.initialSSD; setSSD(cfg.initialSSD);
-        setTimeout(nextTrial, 300);
+        setTimeout(() => nextTrial(0), 300);
     };
-    const nextTrial = () => {
-        if (trial >= cfg.goTrials) {
+    const nextTrial = (trialIdx) => {
+        if (trialIdx >= cfg.goTrials) {
             setPhase("done");
             // Compute results
             const goTrials = trials.filter(t => t.type === "go");
@@ -31783,34 +31756,31 @@ function StopSignal({ patient }) {
             setArrow(ar); setIsStop(stop);
             goStartRef.current = Date.now();
             setPhase("go");
-            // If stop trial, show stop signal after SSD ms
             if (stop) {
                 setTimeout(() => { if (!responded.current) setStopShown(true); }, ssdRef.current);
             }
-            // Timeout after maxRT
             trialTimeoutRef.current = setTimeout(() => {
                 if (!responded.current) {
-                    // No response: correct stop or miss go
-                    handleNoResponse(ar, stop);
+                    handleNoResponse(ar, stop, trialIdx);
                 }
             }, cfg.maxRT);
         }, 500);
     };
-    const handleNoResponse = (ar, stop) => {
+    const handleNoResponse = (ar, stop, trialIdx) => {
         clearTimeout(trialTimeoutRef.current);
         responded.current = true;
-        const correct = stop; // correct iff was a stop trial
+        const correct = stop;
         const t = { type: stop ? "stop" : "go", correct, rt: null, ssd: stop ? ssdRef.current : null, arrow: ar, response: null };
         setTrials(ts => [...ts, t]);
-        // Staircase: stop trial without response → harder (longer SSD)
         if (stop && correct) {
             ssdRef.current = Math.min(800, ssdRef.current + 50);
             setSSD(ssdRef.current);
         }
         if (correct) sfx.success(); else sfx.fail();
         setPhase("feedback");
-        setTrial(t => t + 1);
-        setTimeout(nextTrial, 600);
+        const next = trialIdx + 1;
+        setTrial(next);
+        setTimeout(() => nextTrial(next), 600);
     };
     const respond = (dir) => {
         if (phase !== "go" || responded.current) return;
@@ -31820,9 +31790,7 @@ function StopSignal({ patient }) {
         const correctDir = dir === arrow;
         let correct, type;
         if (isStop) {
-            // Responded on a stop trial = stop failure
             type = "stop"; correct = false;
-            // Staircase: failed stop → easier next time
             ssdRef.current = Math.max(50, ssdRef.current - 50);
             setSSD(ssdRef.current);
         } else {
@@ -31832,8 +31800,9 @@ function StopSignal({ patient }) {
         setTrials(ts => [...ts, t]);
         if (correct) sfx.success(); else sfx.fail();
         setPhase("feedback");
-        setTrial(t => t + 1);
-        setTimeout(nextTrial, 500);
+        const next = trial + 1;
+        setTrial(next);
+        setTimeout(() => nextTrial(next), 500);
     };
     useEffect(() => () => clearTimeout(trialTimeoutRef.current), []);
     // ── Results computation for done screen ──
@@ -34040,6 +34009,7 @@ const AREA_ACTIVITIES = {
         { id: "recta_numerica", label: "Recta Numérica", desc: "Estimación de números en la recta mental", comp: RectaNumerica },
         { id: "descomposicion", label: "Descompón el Número", desc: "Centenas, decenas y unidades", comp: Descomposicion },
         { id: "calculo", label: "Cálculo", desc: "Subitización y pirámides", comp: Calculo, complex: true },
+        { id: "piramide", label: "Pirámide Aritmética", desc: "Cada número es la suma de los dos de debajo", comp: PiramideLogica },
         { id: "calculo_mental", label: "Cálculo Mental", desc: "Operaciones cronometradas", comp: CalculoMental },
         { id: "tablas", label: "Tablas de Multiplicar", desc: "Practica las tablas (2-9)", comp: TablasMultiplicar },
         { id: "problemas", label: "Problemas con Apoyo Visual", desc: "Resolución de problemas con IA", comp: ProblemasMate, hasAI: true, complex: true },
@@ -34129,7 +34099,7 @@ const ACTIVITY_DX = {
     morfologia: ["dislexia"], familias: ["dislexia"], sinonimos: ["dislexia"],
     comprension_lectora: ["dislexia"], pseudopalabras: ["dislexia"],
     // Instrumentales
-    caligrafia: ["dislexia"], calculo: ["discalculia"],
+    caligrafia: ["dislexia"], calculo: ["discalculia"], piramide: ["discalculia"],
     magnitudes: ["discalculia"], recta_numerica: ["discalculia"], descomposicion: ["discalculia"],
     calculo_mental: ["discalculia"], tablas: ["discalculia"], problemas: ["discalculia"],
     // Razonamiento
@@ -34193,7 +34163,7 @@ const ACTIVITY_AGE = {
     comprension_lectora: [7, 17], pseudopalabras: [7, 14],
     // Discalculia
     magnitudes: [5, 12], recta_numerica: [6, 14], descomposicion: [6, 12],
-    calculo: [5, 12], calculo_mental: [7, 14], tablas: [7, 14], problemas: [7, 14],
+    calculo: [5, 12], piramide: [6, 14], calculo_mental: [7, 14], tablas: [7, 14], problemas: [7, 14],
     // Grafomotricidad
     caligrafia: [5, 10],
     // Razonamiento
@@ -34265,6 +34235,330 @@ const ACTIVITY_EVIDENCE = {
 };
 // Returns evidence object for an activity or null
 const getEvidence = (activityId) => ACTIVITY_EVIDENCE[activityId] || null;
+// ═══════════════════════════════════════════════════════════════
+// PRINTABLE SHEETS · Opción A — HTML preparado para impresión
+// ═══════════════════════════════════════════════════════════════
+// Each generator returns { title, instructionsKid, instructionsTeacher,
+// body, answerKey }. The viewer composes them into a complete A4-ready
+// HTML document, opens it in a new tab/window and triggers print.
+// Generators are deterministic per call but use Math.random so each
+// generated sheet differs from the next — useful for repeated tasks
+// across sessions.
+
+// Shared utilities for content generation
+const PRINT_RANDOM_LETTERS = "BCDFGHJKLMNPQRSTVZ".split("");
+
+const PRINTABLE_GENERATORS = {
+    // ── 1. Cancelación de letras (atención sostenida) ──
+    cancelacion: (opts = {}) => {
+        const ROWS = 16, COLS = 18;
+        const TARGET = "A";
+        const targetRate = 0.18; // ~58 targets per sheet
+        const rows = [];
+        let totalTargets = 0;
+        for (let r = 0; r < ROWS; r++) {
+            const row = [];
+            for (let c = 0; c < COLS; c++) {
+                if (Math.random() < targetRate) { row.push(TARGET); totalTargets++; }
+                else row.push(PRINT_RANDOM_LETTERS[Math.floor(Math.random() * PRINT_RANDOM_LETTERS.length)]);
+            }
+            rows.push(row);
+        }
+        const body = `
+<table style="border-collapse:separate;border-spacing:6pt;margin:0 auto;font-family:'Courier New',monospace;">
+${rows.map(row => `<tr>${row.map(c => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:700;color:#222;">${c}</td>`).join("")}</tr>`).join("")}
+</table>`;
+        const ansRows = rows.map(row => `<tr>${row.map(c => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:${c === TARGET ? 900 : 400};color:${c === TARGET ? '#2D6A4F' : '#bbb'};">${c === TARGET ? '✓' : c}</td>`).join("")}</tr>`).join("");
+        return {
+            title: "Cancelación de letras",
+            instructionsKid: `Rodea con un círculo TODAS las letras <strong>${TARGET}</strong> que veas. Lee de izquierda a derecha, fila a fila, sin saltarte ninguna.`,
+            instructionsTeacher: `Atención sostenida (Toulouse-Pieron, 1904). Marcar el tiempo y el número de aciertos/omisiones/errores. Total de targets en esta ficha: ${totalTargets}. Niños de 7-8 años suelen tardar 3-6 minutos.`,
+            body,
+            answerKey: `<table style="border-collapse:separate;border-spacing:6pt;margin:0 auto;font-family:'Courier New',monospace;">${ansRows}</table><div style="font-size:10pt;color:#666;text-align:center;margin-top:12pt;">${totalTargets} letras objetivo en total.</div>`,
+        };
+    },
+
+    // ── 2. Sopa de números (atención visual selectiva) ──
+    sopa_num: (opts = {}) => {
+        const ROWS = 13, COLS = 14;
+        const TARGET = 7;
+        const targetRate = 0.22;
+        const rows = [];
+        let totalTargets = 0;
+        for (let r = 0; r < ROWS; r++) {
+            const row = [];
+            for (let c = 0; c < COLS; c++) {
+                if (Math.random() < targetRate) { row.push(TARGET); totalTargets++; }
+                else {
+                    let n; do { n = Math.floor(Math.random() * 10); } while (n === TARGET);
+                    row.push(n);
+                }
+            }
+            rows.push(row);
+        }
+        const body = `
+<table style="border-collapse:separate;border-spacing:7pt;margin:0 auto;font-family:'Courier New',monospace;">
+${rows.map(row => `<tr>${row.map(n => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:700;color:#222;">${n}</td>`).join("")}</tr>`).join("")}
+</table>`;
+        const ansRows = rows.map(row => `<tr>${row.map(n => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:${n === TARGET ? 900 : 400};color:${n === TARGET ? '#2D6A4F' : '#bbb'};">${n === TARGET ? '✓' : n}</td>`).join("")}</tr>`).join("");
+        return {
+            title: "Sopa de números — caza al " + TARGET,
+            instructionsKid: `Rodea con un círculo TODOS los números <strong>${TARGET}</strong> que encuentres. Trabaja fila a fila sin saltarte ninguno.`,
+            instructionsTeacher: `Atención visual selectiva. ${totalTargets} sietes en esta ficha. Cronometrar útil. Niños de 7-8 años: 2-5 min.`,
+            body,
+            answerKey: `<table style="border-collapse:separate;border-spacing:7pt;margin:0 auto;font-family:'Courier New',monospace;">${ansRows}</table><div style="font-size:10pt;color:#666;text-align:center;margin-top:12pt;">${totalTargets} sietes en total.</div>`,
+        };
+    },
+
+    // ── 3. Trail Making A (alternancia/secuenciación) ──
+    trail: (opts = {}) => {
+        const N = opts.n || 20;
+        // Place N numbered circles in a grid with some jitter so the path is non-trivial
+        const cells = [];
+        const cols = 5, rows = 4;
+        const w = 480, h = 600;
+        const cellW = w / cols, cellH = h / rows;
+        const positions = [];
+        const order = Array.from({ length: N }, (_, i) => i);
+        // shuffle
+        for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[order[i], order[j]] = [order[j], order[i]]; }
+        for (let i = 0; i < N; i++) {
+            const r = Math.floor(i / cols), c = i % cols;
+            const x = c * cellW + cellW / 2 + (Math.random() * 30 - 15);
+            const y = r * cellH + cellH / 2 + (Math.random() * 30 - 15);
+            positions.push({ n: order[i] + 1, x, y });
+        }
+        const circles = positions.map(p => `
+<circle cx="${p.x}" cy="${p.y}" r="22" fill="white" stroke="#222" stroke-width="2"/>
+<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="20" font-weight="800" fill="#222">${p.n}</text>`).join("");
+        const body = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:480pt;display:block;margin:0 auto;">${circles}</svg>`;
+        // Answer key: same with line connecting 1→2→3→...→N
+        const sorted = [...positions].sort((a, b) => a.n - b.n);
+        const path = sorted.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(" ");
+        const ansCircles = positions.map(p => `
+<circle cx="${p.x}" cy="${p.y}" r="22" fill="#FAFAF7" stroke="#2D6A4F" stroke-width="2"/>
+<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="20" font-weight="800" fill="#222">${p.n}</text>`).join("");
+        return {
+            title: "Conecta los puntos · Camino del 1 al " + N,
+            instructionsKid: `Une los números <strong>en orden</strong>, del 1 al ${N}, con una línea continua. No levantes el lápiz si puedes.`,
+            instructionsTeacher: "Trail Making Test A (Reitan, 1958). Velocidad de procesamiento + atención sostenida. Cronometrar. Niños de 7-8 años: típicamente 30-60 segundos.",
+            body,
+            answerKey: `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:480pt;display:block;margin:0 auto;"><path d="${path}" fill="none" stroke="#2D6A4F" stroke-width="2.5" stroke-dasharray="6 4"/>${ansCircles}</svg>`,
+        };
+    },
+
+    // ── 4. Encuentra las diferencias ──
+    diferencias: (opts = {}) => {
+        // Two scenes that differ in N features. Scene = a house with sun, cloud, tree, dog, flower, door, window, chimney.
+        // Each feature has variants. We render two side-by-side scenes; "B" differs in ~5 features.
+        const features = [
+            { id: "sun", variants: [
+                `<circle cx="80" cy="60" r="30" fill="#F4D03F"/><circle cx="80" cy="60" r="22" fill="#F8E47A"/>`,
+                `<circle cx="80" cy="60" r="30" fill="#E07A5F"/>`, // cloudy/red sun
+            ] },
+            { id: "cloud", variants: [
+                `<ellipse cx="220" cy="50" rx="40" ry="18" fill="#fff" stroke="#888" stroke-width="1.5"/><ellipse cx="190" cy="55" rx="20" ry="14" fill="#fff" stroke="#888" stroke-width="1.5"/>`,
+                ``, // no cloud
+            ] },
+            { id: "house", variants: [
+                `<polygon points="100,180 200,180 200,260 100,260" fill="#DDA15E" stroke="#222"/><polygon points="95,180 205,180 150,130" fill="#BC4749" stroke="#222"/><rect x="130" y="220" width="30" height="40" fill="#5B3A1A" stroke="#222"/><rect x="165" y="200" width="25" height="20" fill="#A8DADC" stroke="#222"/>`,
+                `<polygon points="100,180 200,180 200,260 100,260" fill="#DDA15E" stroke="#222"/><polygon points="95,180 205,180 150,130" fill="#2A9D8F" stroke="#222"/><rect x="130" y="220" width="30" height="40" fill="#5B3A1A" stroke="#222"/><rect x="165" y="200" width="25" height="20" fill="#A8DADC" stroke="#222"/>`, // green roof
+            ] },
+            { id: "tree", variants: [
+                `<rect x="40" y="200" width="14" height="60" fill="#6B4423"/><circle cx="47" cy="190" r="28" fill="#2D6A4F"/>`,
+                `<rect x="40" y="200" width="14" height="60" fill="#6B4423"/><circle cx="47" cy="190" r="28" fill="#E9C46A"/>`, // autumn tree
+            ] },
+            { id: "chimney", variants: [
+                `<rect x="170" y="135" width="12" height="20" fill="#5B3A1A" stroke="#222"/><path d="M 170 130 Q 175 120 180 125 Q 185 115 175 110" fill="none" stroke="#888" stroke-width="1.5"/>`,
+                ``, // no chimney/smoke
+            ] },
+            { id: "flower", variants: [
+                `<rect x="220" y="240" width="3" height="20" fill="#2D6A4F"/><circle cx="221" cy="238" r="6" fill="#E07A5F"/>`,
+                `<rect x="220" y="240" width="3" height="20" fill="#2D6A4F"/><circle cx="221" cy="238" r="6" fill="#7B2D8E"/>`, // purple flower
+            ] },
+            { id: "bird", variants: [
+                `<path d="M 250 80 Q 256 76 262 80 M 262 80 Q 268 76 274 80" fill="none" stroke="#222" stroke-width="2"/>`,
+                ``, // no bird
+            ] },
+        ];
+        // For each feature pick variant 0 for A; with prob 0.5 same in B, otherwise variant 1
+        const diffs = [];
+        let diffCount = 0;
+        const sceneA = [], sceneB = [];
+        features.forEach(f => {
+            sceneA.push(f.variants[0]);
+            const sameInB = Math.random() > 0.55;
+            if (sameInB) sceneB.push(f.variants[0]);
+            else { sceneB.push(f.variants[1]); diffs.push(f.id); diffCount++; }
+        });
+        // Add ground line
+        const ground = `<line x1="0" y1="262" x2="300" y2="262" stroke="#333" stroke-width="2"/>`;
+        const sceneSVG = (els) => `<svg viewBox="0 0 300 300" style="width:48%;border:2px solid #333;border-radius:6pt;background:#FAFAF7;">${els.join("")}${ground}</svg>`;
+        const body = `<div style="display:flex;gap:14pt;justify-content:center;margin:0 auto;">${sceneSVG(sceneA)}${sceneSVG(sceneB)}</div>
+<div style="margin-top:14pt;text-align:center;font-size:12pt;color:#444;">¿Cuántas diferencias hay entre las dos imágenes?</div>`;
+        return {
+            title: "Encuentra las diferencias",
+            instructionsKid: "Compara las dos imágenes con detalle. Rodea con un círculo cada diferencia que encuentres en la segunda imagen. Hay <strong>" + diffCount + " diferencias</strong> en total.",
+            instructionsTeacher: "Atención al detalle, comparación visual. " + diffCount + " diferencias plantadas: " + diffs.join(", ") + ".",
+            body,
+            answerKey: `<div style="font-size:13pt;line-height:1.6;color:#222;"><strong>Diferencias plantadas (${diffCount}):</strong><ul>${diffs.map(d => `<li>${d}</li>`).join("")}</ul></div>`,
+        };
+    },
+
+    // ── 5. Memoria de dibujos (memoria visual diferida) — actividad "Qué ha cambiado" ──
+    cambio: (opts = {}) => {
+        // 10 items in study list (with names); 15 items in recognition page (10 + 5 distractors).
+        // All items rendered as large emojis to be unambiguous in print.
+        const ALL = [
+            { emoji: "🐶", name: "perro" }, { emoji: "🍎", name: "manzana" }, { emoji: "🌳", name: "árbol" },
+            { emoji: "🚗", name: "coche" }, { emoji: "🌞", name: "sol" }, { emoji: "🎈", name: "globo" },
+            { emoji: "📚", name: "libro" }, { emoji: "🐱", name: "gato" }, { emoji: "🏠", name: "casa" },
+            { emoji: "🍌", name: "plátano" }, { emoji: "⚽", name: "pelota" }, { emoji: "🎂", name: "tarta" },
+            { emoji: "🎸", name: "guitarra" }, { emoji: "🐘", name: "elefante" }, { emoji: "🥕", name: "zanahoria" },
+            { emoji: "✏️", name: "lápiz" }, { emoji: "🎩", name: "sombrero" }, { emoji: "🐟", name: "pez" },
+            { emoji: "🍓", name: "fresa" }, { emoji: "🚲", name: "bicicleta" },
+        ];
+        // shuffle, pick 10 as targets and 5 as distractors
+        const shuffled = [...ALL].sort(() => Math.random() - 0.5);
+        const targets = shuffled.slice(0, 10);
+        const distractors = shuffled.slice(10, 15);
+        const recogList = [...targets, ...distractors].sort(() => Math.random() - 0.5);
+        const studyTable = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:18pt;margin:0 auto;max-width:520pt;">${targets.map(t => `<div style="text-align:center;border:2px solid #ddd;border-radius:8pt;padding:10pt;background:#FAFAF7;"><div style="font-size:54pt;">${t.emoji}</div><div style="font-size:11pt;color:#444;font-weight:700;">${t.name}</div></div>`).join("")}</div>`;
+        const recogTable = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14pt;margin:0 auto;max-width:520pt;">${recogList.map(t => `<div style="text-align:center;border:2px solid #ddd;border-radius:8pt;padding:10pt;"><div style="font-size:48pt;">${t.emoji}</div><div style="margin-top:6pt;width:18pt;height:18pt;border:2px solid #888;border-radius:4pt;margin-left:auto;margin-right:auto;"></div></div>`).join("")}</div>`;
+        const body = `
+<div style="margin-bottom:20pt;">
+  <div style="font-size:13pt;font-weight:700;color:#2D6A4F;margin-bottom:8pt;">PARTE 1 — Memoriza estos 10 dibujos</div>
+  <div style="font-size:10pt;color:#666;margin-bottom:14pt;font-style:italic;">El adulto muestra esta página durante 1 minuto. Después la retira y pasa a la parte 2.</div>
+  ${studyTable}
+</div>
+<div style="page-break-before:always;">
+  <div style="font-size:13pt;font-weight:700;color:#2D6A4F;margin-bottom:8pt;">PARTE 2 — ¿Cuáles estaban antes?</div>
+  <div style="font-size:10pt;color:#666;margin-bottom:14pt;font-style:italic;">De los 15 dibujos siguientes, 10 estaban en la página anterior. Marca con una X los que reconozcas.</div>
+  ${recogTable}
+</div>`;
+        const ansList = recogList.map(r => `<li style="${targets.find(t => t.emoji === r.emoji) ? 'color:#2D6A4F;font-weight:700;' : 'color:#999;'}">${r.emoji} ${r.name}${targets.find(t => t.emoji === r.emoji) ? ' ✓' : ' (distractor)'}</li>`).join("");
+        return {
+            title: "Memoria de Dibujos",
+            instructionsKid: "Esta ficha tiene <strong>dos partes</strong>. Primero memoriza con calma los 10 dibujos. Después, sin mirar la primera página, marca con una X los que reconozcas en la segunda.",
+            instructionsTeacher: "Memoria visual de reconocimiento. Estudio 60s, distractor breve, reconocimiento. 10 targets + 5 distractores. Niños 7-8 años: típicamente 7-9 aciertos correctos.",
+            body,
+            answerKey: `<div style="font-size:12pt;"><strong>Targets correctos (10):</strong><ul>${ansList}</ul></div>`,
+        };
+    },
+
+    // ── 6. Orden cronológico (memoria secuencial) — actividad "Secuencia temporal" ──
+    secuencia: (opts = {}) => {
+        // Pick one of several scripts and shuffle the panels. User numbers 1-N.
+        const SCRIPTS = [
+            { name: "Lavarse los dientes", steps: [
+                { emoji: "🪥", text: "Cojo el cepillo" },
+                { emoji: "🧴", text: "Pongo pasta en el cepillo" },
+                { emoji: "💧", text: "Mojo el cepillo" },
+                { emoji: "😬", text: "Me cepillo los dientes" },
+                { emoji: "💦", text: "Me enjuago la boca" },
+                { emoji: "✨", text: "Dientes limpios" },
+            ] },
+            { name: "Una mañana de cole", steps: [
+                { emoji: "⏰", text: "Suena el despertador" },
+                { emoji: "🛏️", text: "Me levanto" },
+                { emoji: "👕", text: "Me visto" },
+                { emoji: "🥣", text: "Desayuno" },
+                { emoji: "🎒", text: "Cojo la mochila" },
+                { emoji: "🏫", text: "Llego al cole" },
+            ] },
+            { name: "Hacer un bocadillo", steps: [
+                { emoji: "🍞", text: "Cojo el pan" },
+                { emoji: "🔪", text: "Lo abro" },
+                { emoji: "🧀", text: "Pongo el relleno" },
+                { emoji: "🥪", text: "Junto las dos partes" },
+                { emoji: "😋", text: "Listo para comer" },
+            ] },
+            { name: "Regar una planta", steps: [
+                { emoji: "🪴", text: "Veo la planta" },
+                { emoji: "💧", text: "Cojo una jarra con agua" },
+                { emoji: "🌱", text: "Echo el agua en la tierra" },
+                { emoji: "✨", text: "Planta regada" },
+            ] },
+        ];
+        const script = SCRIPTS[Math.floor(Math.random() * SCRIPTS.length)];
+        const steps = script.steps;
+        // Shuffle for display, keep the correct order via index
+        const indexed = steps.map((s, i) => ({ ...s, correct: i + 1 }));
+        const shuffled = [...indexed].sort(() => Math.random() - 0.5);
+        const tiles = shuffled.map(s => `
+<div style="border:2px solid #333;border-radius:10pt;padding:14pt;text-align:center;background:#FAFAF7;">
+  <div style="width:38pt;height:38pt;border-radius:50%;border:2px solid #2D6A4F;background:#fff;margin:0 auto 10pt;line-height:34pt;font-size:22pt;font-weight:700;color:#2D6A4F;">&nbsp;</div>
+  <div style="font-size:52pt;line-height:1;margin-bottom:6pt;">${s.emoji}</div>
+  <div style="font-size:12pt;font-weight:600;color:#222;">${s.text}</div>
+</div>`).join("");
+        const ansTiles = shuffled.map(s => `<li style="font-size:13pt;line-height:1.7;">${s.emoji} <strong>${s.text}</strong> → orden correcto: <strong style="color:#2D6A4F;">${s.correct}</strong></li>`).join("");
+        return {
+            title: "Orden Cronológico — " + script.name,
+            instructionsKid: "Las imágenes están desordenadas. Escribe en el círculo blanco de cada una el número del orden correcto, del <strong>1 al " + steps.length + "</strong>.",
+            instructionsTeacher: `Memoria secuencial / razonamiento causal-temporal / guion social. Script: "${script.name}".`,
+            body: `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14pt;max-width:560pt;margin:0 auto;">${tiles}</div>`,
+            answerKey: `<ol style="line-height:1.8;font-size:13pt;list-style:none;padding-left:0;">${ansTiles}</ol>`,
+        };
+    },
+};
+
+// ── Print sheet viewer/launcher ──
+// Opens a new window with the full A4-ready HTML, then triggers print
+// after a small delay so layout/images are ready.
+function openPrintableSheet(activityId, opts) {
+    const gen = PRINTABLE_GENERATORS[activityId];
+    if (!gen) { alert("Esta actividad aún no tiene ficha imprimible."); return; }
+    let sheet;
+    try { sheet = gen(opts || {}); }
+    catch (e) { console.error("Print sheet generator failed:", e); alert("Error al generar la ficha."); return; }
+    const today = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>${sheet.title} — TerapiApp</title>
+<style>
+@page { size: A4; margin: 1.3cm 1.5cm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #222; margin: 0; padding: 0; }
+.controls { position: fixed; top: 12px; right: 12px; background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; gap: 6px; z-index: 100; }
+.controls button { padding: 8px 14px; border-radius: 6px; border: 1px solid #2D6A4F; background: #2D6A4F; color: white; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 13px; }
+.controls button.secondary { background: white; color: #2D6A4F; }
+.header { border-bottom: 2pt solid #2D6A4F; padding-bottom: 10pt; margin-bottom: 14pt; }
+h1 { font-size: 20pt; margin: 0 0 6pt 0; color: #2D6A4F; }
+.meta { display: flex; gap: 22pt; font-size: 11pt; color: #444; margin-top: 8pt; }
+.meta-field { flex: 1; border-bottom: 1pt solid #aaa; padding-bottom: 2pt; min-height: 18pt; }
+.meta-field strong { color: #777; font-weight: 600; }
+.instructions { background: #FAF3E0; border-left: 4pt solid #E9A23B; padding: 10pt 14pt; margin-bottom: 18pt; font-size: 12pt; line-height: 1.55; border-radius: 4pt; }
+.body { font-size: 12pt; line-height: 1.5; }
+.footer { margin-top: 22pt; padding-top: 12pt; border-top: 1pt dashed #ccc; font-size: 9pt; color: #888; font-style: italic; line-height: 1.5; }
+.answer-page { page-break-before: always; }
+.answer-page h2 { color: #2D6A4F; font-size: 16pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
+@media print { .controls { display: none; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head>
+<body>
+<div class="controls">
+  <button onclick="window.print()">🖨 Imprimir</button>
+  <button class="secondary" onclick="window.close()">Cerrar</button>
+</div>
+<div class="header">
+  <h1>${sheet.title}</h1>
+  <div class="meta">
+    <div class="meta-field"><strong>Nombre:</strong> </div>
+    <div class="meta-field"><strong>Fecha:</strong> ${today}</div>
+  </div>
+</div>
+<div class="instructions">${sheet.instructionsKid}</div>
+<div class="body">${sheet.body}</div>
+<div class="footer"><strong>Para el adulto:</strong> ${sheet.instructionsTeacher} — TerapiApp · ${today}</div>
+${sheet.answerKey ? `<div class="answer-page"><h2>Clave de respuestas — para el adulto</h2>${sheet.answerKey}</div>` : ""}
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) { alert("El navegador bloqueó la ventana emergente. Permite popups para esta página."); return; }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+}
+
+const PRINTABLE_IDS = new Set(Object.keys(PRINTABLE_GENERATORS));
+const hasPrintable = (activityId) => PRINTABLE_IDS.has(activityId);
+
 // Returns true if the patient's age falls within (or near) the activity's range.
 const ageMatches = (activityId, patient) => {
     const range = ACTIVITY_AGE[activityId];
@@ -35563,7 +35857,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.4</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.7</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -35719,7 +36013,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.4</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.7</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -37108,6 +37402,15 @@ function TerapiAppInner() {
                                     cursor: "pointer", fontFamily: "inherit",
                                 },
                             }, "\uD83D\uDCD6"),
+                            hasPrintable(it.id) && React.createElement("button", {
+                                onClick: (e) => { e.stopPropagation(); sfx.tap(); openPrintableSheet(it.id); },
+                                title: "Generar ficha imprimible",
+                                style: {
+                                    background: "#5B7C99", color: "#fff", border: "none",
+                                    borderRadius: 8, padding: "3px 8px", fontSize: 11, fontWeight: 700,
+                                    cursor: "pointer", fontFamily: "inherit",
+                                },
+                            }, "\uD83D\uDDA8"),
                             it.complex && React.createElement(Badge, { color: C.accent }, "\u26A1"),
                             it.hasAI && React.createElement(Badge, { color: C.purple }, "\u2728"),
                             React.createElement("button", { onClick: (e) => {
@@ -37158,7 +37461,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v24.4"),
+                "© 2026 Todos los derechos reservados · TerapiApp v24.7"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
