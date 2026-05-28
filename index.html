@@ -21441,8 +21441,10 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
         React.createElement("div", { style: { fontSize: 19, fontWeight: 800, marginBottom: 16 } }, mode === "new" ? "Nuevo paciente" : "Editar paciente"),
         React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
             React.createElement("div", null,
-                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 5 } }, "Nombre (inicial + apellido por RGPD)"),
-                React.createElement("input", { value: form.nombre, onChange: e => setForm({ ...form, nombre: e.target.value }), placeholder: "Ej: M. Garc\u00EDa", style: { width: "100%", padding: "10px 12px", borderRadius: 12, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" } })),
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 5 } }, "Nombre o iniciales — sin apellidos (RGPD)"),
+                React.createElement("input", { value: form.nombre, onChange: e => setForm({ ...form, nombre: e.target.value }), placeholder: "Ej: Marcos  ·  M.  ·  M.G.", style: { width: "100%", padding: "10px 12px", borderRadius: 12, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" } }),
+                React.createElement("div", { style: { fontSize: 11, color: C.textL, marginTop: 5, lineHeight: 1.5 } },
+                    "Usa el nombre de pila o solo iniciales. Evita apellidos: al tratarse de datos de salud de un menor, cuanto menos identificable sea el registro, mejor protegido está.")),
             React.createElement("div", null,
                 React.createElement("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 5 } }, "Edad"),
                 React.createElement("input", { type: "number", value: form.edad, onChange: e => {
@@ -25385,7 +25387,7 @@ function MapaApoyos({ patient }) {
         patient && React.createElement("div", { style: { background: "#f9f9f9", padding: 14, borderRadius: 14, marginBottom: 14 } },
             React.createElement("div", { style: { fontSize: 13, fontWeight: 800, marginBottom: 10 } }, "➕ Añadir persona"),
             React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 } },
-                React.createElement("input", { value: name, onChange: e => setName(e.target.value), placeholder: "Nombre", style: { flex: 2, minWidth: 120, padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } }),
+                React.createElement("input", { value: name, onChange: e => setName(e.target.value), placeholder: "Nombre o inicial", style: { flex: 2, minWidth: 120, padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } }),
                 React.createElement("input", { value: relation, onChange: e => setRelation(e.target.value), placeholder: "Relación (ej: Madre, Profe...)", style: { flex: 2, minWidth: 120, padding: "10px 12px", borderRadius: 10, border: `2px solid ${C.border}`, fontSize: 13, fontFamily: "inherit", outline: "none" } })),
             React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 } },
                 RINGS.map(r => React.createElement("button", { key: r.id, onClick: () => { sfx.tap(); setRing(r.id); }, style: {
@@ -34028,6 +34030,7 @@ const AREA_ACTIVITIES = {
         { id: "decision", label: "Tomar una Decisión", desc: "Analiza pros y contras de una decisión real", comp: TomaDecision, adolescentOnly: true, complex: true },
         { id: "matrices", label: "Matrices", desc: "Razonamiento fluido (estilo Raven)", comp: Matrices, complex: true },
         { id: "analogias", label: "Analogías", desc: "Razonamiento analógico verbal", comp: Analogias },
+        { id: "adivinanzas", label: "Adivinanzas y Acertijos", desc: "Razonamiento verbal y deductivo (ficha imprimible con IA)", comp: AdivinanzasIA, hasAI: true },
         { id: "soluc_prob", label: "Solución de Problemas", desc: "5 pasos guiados (D'Zurilla)", comp: SolucionProblemas, hasAI: true, adolescentOnly: true, complex: true },
     ],
     autoestima: [
@@ -34069,7 +34072,7 @@ const ACTIVITY_DX = {
     trazos: [], conecta_puntos: ["tdah"], copia_formas: ["dislexia"],
     faux_pas: ["tea"], mixtas: ["tea"], eyes_test: ["tea"],
     est_temporal: ["tdah"], prospectiva: ["tdah"],
-    matrices: [], analogias: [],
+    matrices: [], analogias: [], adivinanzas: [],
     termo_corporal: ["tea", "ansiedad"], respiracion_simple: ["ansiedad", "tdah"],
     pens_auto: ["ansiedad"], soluc_prob: ["tdah", "ansiedad"],
     rueda_emo: ["tea"], stop_signal: ["tdah"], corsi: ["tdah", "dislexia"], secuencia_eventos: ["tea"],
@@ -34133,7 +34136,7 @@ const ACTIVITY_AGE = {
     trazos: [5, 10], conecta_puntos: [5, 12], copia_formas: [6, 14],
     faux_pas: [9, 17], mixtas: [10, 17], eyes_test: [8, 17],
     est_temporal: [7, 17], prospectiva: [8, 17],
-    matrices: [6, 17], analogias: [7, 17],
+    matrices: [6, 17], analogias: [7, 17], adivinanzas: [7, 18],
     termo_corporal: [6, 14], respiracion_simple: [6, 17],
     pens_auto: [12, 17], soluc_prob: [11, 17],
     rueda_emo: [8, 17], stop_signal: [8, 17], corsi: [6, 17], secuencia_eventos: [5, 10],
@@ -34248,31 +34251,48 @@ const getEvidence = (activityId) => ACTIVITY_EVIDENCE[activityId] || null;
 // Shared utilities for content generation
 const PRINT_RANDOM_LETTERS = "BCDFGHJKLMNPQRSTVZ".split("");
 
+// Activity that exists primarily as an AI-generated printable sheet.
+// The "🖨 Ficha imprimible" button appears automatically (printable wrapper).
+function AdivinanzasIA({ patient }) {
+    return React.createElement("div", { style: { textAlign: "center", padding: "10px 8px" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 10 } }, "Adivinanzas y Acertijos"),
+        React.createElement("div", { style: { fontSize: 40, marginBottom: 14 } }, "🧩"),
+        React.createElement("div", { style: { fontSize: 14, lineHeight: 1.6, color: C.textL, maxWidth: 460, margin: "0 auto" } },
+            "Esta actividad se trabaja como ", React.createElement("strong", null, "ficha imprimible generada con IA"),
+            ". Pulsa el botón ", React.createElement("strong", null, "🖨 Ficha imprimible"), " de arriba para crear una hoja nueva de adivinanzas y acertijos, elegir el nivel (de 7 a 18 años) y generarla con inteligencia artificial. Cada ficha es distinta."));
+}
+
 const PRINTABLE_GENERATORS = {
     // ── 1. Cancelación de letras (atención sostenida) ──
     cancelacion: (opts = {}) => {
-        const ROWS = 16, COLS = 18;
-        const TARGET = "A";
-        const targetRate = 0.18; // ~58 targets per sheet
+        const level = opts.level || 1;
+        const ROWS = level === 1 ? 14 : level === 2 ? 16 : 18;
+        const COLS = level === 1 ? 16 : level === 2 ? 18 : 20;
+        // Level 3 uses two targets (harder: must track A and E)
+        const TARGETS = level === 3 ? ["A", "E"] : ["A"];
+        const targetRate = level === 1 ? 0.16 : 0.2;
         const rows = [];
         let totalTargets = 0;
+        const isT = (ch) => TARGETS.indexOf(ch) >= 0;
         for (let r = 0; r < ROWS; r++) {
             const row = [];
             for (let c = 0; c < COLS; c++) {
-                if (Math.random() < targetRate) { row.push(TARGET); totalTargets++; }
+                if (Math.random() < targetRate) { const t = TARGETS[Math.floor(Math.random() * TARGETS.length)]; row.push(t); totalTargets++; }
                 else row.push(PRINT_RANDOM_LETTERS[Math.floor(Math.random() * PRINT_RANDOM_LETTERS.length)]);
             }
             rows.push(row);
         }
+        const sz = level === 3 ? 22 : 24;
         const body = `
 <table style="border-collapse:separate;border-spacing:6pt;margin:0 auto;font-family:'Courier New',monospace;">
-${rows.map(row => `<tr>${row.map(c => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:700;color:#222;">${c}</td>`).join("")}</tr>`).join("")}
+${rows.map(row => `<tr>${row.map(c => `<td style="width:${sz}pt;height:${sz}pt;text-align:center;font-size:17pt;font-weight:700;color:#222;">${c}</td>`).join("")}</tr>`).join("")}
 </table>`;
-        const ansRows = rows.map(row => `<tr>${row.map(c => `<td style="width:24pt;height:24pt;text-align:center;font-size:18pt;font-weight:${c === TARGET ? 900 : 400};color:${c === TARGET ? '#2D6A4F' : '#bbb'};">${c === TARGET ? '✓' : c}</td>`).join("")}</tr>`).join("");
+        const ansRows = rows.map(row => `<tr>${row.map(c => `<td style="width:${sz}pt;height:${sz}pt;text-align:center;font-size:17pt;font-weight:${isT(c) ? 900 : 400};color:${isT(c) ? '#2D6A4F' : '#bbb'};">${isT(c) ? '✓' : c}</td>`).join("")}</tr>`).join("");
+        const targetLabel = TARGETS.length > 1 ? `<strong>${TARGETS.join("</strong> y <strong>")}</strong>` : `<strong>${TARGETS[0]}</strong>`;
         return {
             title: "Cancelación de letras",
-            instructionsKid: `Rodea con un círculo TODAS las letras <strong>${TARGET}</strong> que veas. Lee de izquierda a derecha, fila a fila, sin saltarte ninguna.`,
-            instructionsTeacher: `Atención sostenida (Toulouse-Pieron, 1904). Marcar el tiempo y el número de aciertos/omisiones/errores. Total de targets en esta ficha: ${totalTargets}. Niños de 7-8 años suelen tardar 3-6 minutos.`,
+            instructionsKid: `Rodea con un círculo TODAS las letras ${targetLabel} que veas. Lee de izquierda a derecha, fila a fila, sin saltarte ninguna.`,
+            instructionsTeacher: `Atención sostenida (Toulouse-Pieron). ${TARGETS.length > 1 ? "Doble objetivo (mayor carga atencional). " : ""}Cronometrar y anotar aciertos/omisiones/errores. Objetivos en esta ficha: ${totalTargets}. ${PRINT_LEVELS.find(l => l.id === level).age}.`,
             body,
             answerKey: `<table style="border-collapse:separate;border-spacing:6pt;margin:0 auto;font-family:'Courier New',monospace;">${ansRows}</table><div style="font-size:10pt;color:#666;text-align:center;margin-top:12pt;">${totalTargets} letras objetivo en total.</div>`,
         };
@@ -34307,43 +34327,6 @@ ${rows.map(row => `<tr>${row.map(n => `<td style="width:24pt;height:24pt;text-al
             instructionsTeacher: `Atención visual selectiva. ${totalTargets} sietes en esta ficha. Cronometrar útil. Niños de 7-8 años: 2-5 min.`,
             body,
             answerKey: `<table style="border-collapse:separate;border-spacing:7pt;margin:0 auto;font-family:'Courier New',monospace;">${ansRows}</table><div style="font-size:10pt;color:#666;text-align:center;margin-top:12pt;">${totalTargets} sietes en total.</div>`,
-        };
-    },
-
-    // ── 3. Trail Making A (alternancia/secuenciación) ──
-    trail: (opts = {}) => {
-        const N = opts.n || 20;
-        // Place N numbered circles in a grid with some jitter so the path is non-trivial
-        const cells = [];
-        const cols = 5, rows = 4;
-        const w = 480, h = 600;
-        const cellW = w / cols, cellH = h / rows;
-        const positions = [];
-        const order = Array.from({ length: N }, (_, i) => i);
-        // shuffle
-        for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[order[i], order[j]] = [order[j], order[i]]; }
-        for (let i = 0; i < N; i++) {
-            const r = Math.floor(i / cols), c = i % cols;
-            const x = c * cellW + cellW / 2 + (Math.random() * 30 - 15);
-            const y = r * cellH + cellH / 2 + (Math.random() * 30 - 15);
-            positions.push({ n: order[i] + 1, x, y });
-        }
-        const circles = positions.map(p => `
-<circle cx="${p.x}" cy="${p.y}" r="22" fill="white" stroke="#222" stroke-width="2"/>
-<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="20" font-weight="800" fill="#222">${p.n}</text>`).join("");
-        const body = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:480pt;display:block;margin:0 auto;">${circles}</svg>`;
-        // Answer key: same with line connecting 1→2→3→...→N
-        const sorted = [...positions].sort((a, b) => a.n - b.n);
-        const path = sorted.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(" ");
-        const ansCircles = positions.map(p => `
-<circle cx="${p.x}" cy="${p.y}" r="22" fill="#FAFAF7" stroke="#2D6A4F" stroke-width="2"/>
-<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="20" font-weight="800" fill="#222">${p.n}</text>`).join("");
-        return {
-            title: "Conecta los puntos · Camino del 1 al " + N,
-            instructionsKid: `Une los números <strong>en orden</strong>, del 1 al ${N}, con una línea continua. No levantes el lápiz si puedes.`,
-            instructionsTeacher: "Trail Making Test A (Reitan, 1958). Velocidad de procesamiento + atención sostenida. Cronometrar. Niños de 7-8 años: típicamente 30-60 segundos.",
-            body,
-            answerKey: `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:480pt;display:block;margin:0 auto;"><path d="${path}" fill="none" stroke="#2D6A4F" stroke-width="2.5" stroke-dasharray="6 4"/>${ansCircles}</svg>`,
         };
     },
 
@@ -34500,23 +34483,568 @@ ${rows.map(row => `<tr>${row.map(n => `<td style="width:24pt;height:24pt;text-al
             answerKey: `<ol style="line-height:1.8;font-size:13pt;list-style:none;padding-left:0;">${ansTiles}</ol>`,
         };
     },
+    // ── 7. Busca y Cuenta — atención visual + conteo (cluster search) ──
+    busca: (opts = {}) => {
+        // A scene with multiple object types scattered. The child has to
+        // count how many of each. Targets: stars, circles, triangles, hearts, squares.
+        const W = 480, H = 540;
+        const TYPES = [
+            { id: "star", label: "estrellas", svg: (x, y, c) => `<polygon points="${x},${y-12} ${x+3.5},${y-3.7} ${x+12},${y-3.7} ${x+5.5},${y+1.4} ${x+7.4},${y+10} ${x},${y+5} ${x-7.4},${y+10} ${x-5.5},${y+1.4} ${x-12},${y-3.7} ${x-3.5},${y-3.7}" fill="${c}"/>`, color: "#F4A261" },
+            { id: "circle", label: "círculos", svg: (x, y, c) => `<circle cx="${x}" cy="${y}" r="11" fill="${c}"/>`, color: "#4A90D9" },
+            { id: "triangle", label: "triángulos", svg: (x, y, c) => `<polygon points="${x},${y-12} ${x+11},${y+9} ${x-11},${y+9}" fill="${c}"/>`, color: "#2A9D8F" },
+            { id: "heart", label: "corazones", svg: (x, y, c) => `<path d="M ${x} ${y+10} C ${x-12} ${y-2} ${x-12} ${y-12} ${x-6} ${y-12} C ${x-2} ${y-12} ${x} ${y-8} ${x} ${y-5} C ${x} ${y-8} ${x+2} ${y-12} ${x+6} ${y-12} C ${x+12} ${y-12} ${x+12} ${y-2} ${x} ${y+10} Z" fill="${c}"/>`, color: "#E63946" },
+            { id: "square", label: "cuadrados", svg: (x, y, c) => `<rect x="${x-10}" y="${y-10}" width="20" height="20" fill="${c}"/>`, color: "#9B59B6" },
+        ];
+        // Generate counts: 6-12 of each type, distributed in W×H avoiding overlap
+        const placed = [];
+        const elements = [];
+        const counts = {};
+        TYPES.forEach(t => {
+            const n = Math.floor(Math.random() * 7) + 6; // 6-12
+            counts[t.id] = n;
+            let i = 0, tries = 0;
+            while (i < n && tries < 800) {
+                tries++;
+                const x = Math.floor(Math.random() * (W - 60)) + 30;
+                const y = Math.floor(Math.random() * (H - 60)) + 30;
+                if (placed.every(p => Math.hypot(p.x - x, p.y - y) > 32)) {
+                    placed.push({ x, y });
+                    elements.push(t.svg(x, y, t.color));
+                    i++;
+                }
+            }
+        });
+        const body = `
+<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:540pt;display:block;margin:0 auto;border:2pt solid #333;border-radius:8pt;background:#FAFAF7;">${elements.join("")}</svg>
+<table style="margin:14pt auto 0;font-size:13pt;border-collapse:collapse;">
+${TYPES.map(t => `<tr><td style="padding:6pt 12pt;border-bottom:1pt solid #ddd;">
+<svg viewBox="0 0 30 30" style="width:24pt;height:24pt;vertical-align:middle;">${t.svg(15, 15, t.color)}</svg>
+<strong style="margin-left:8pt;">${t.label[0].toUpperCase() + t.label.slice(1)}:</strong></td>
+<td style="padding:6pt 12pt;border-bottom:1pt solid #ddd;border-left:1pt dashed #aaa;min-width:60pt;">&nbsp;</td></tr>`).join("")}
+</table>`;
+        return {
+            title: "Busca y Cuenta",
+            instructionsKid: "Mira la imagen. Sin contar varias veces el mismo, cuenta <strong>cuántas figuras hay de cada tipo</strong> y escribe el número en el recuadro de la derecha.",
+            instructionsTeacher: "Atención visual selectiva + estrategia de conteo (organización espacial). Trabaja también memoria de trabajo si insiste en contar sin marcar. Niños 7-8 años: 3-5 minutos.",
+            body,
+            answerKey: `<table style="margin:0 auto;font-size:13pt;line-height:1.8;">${TYPES.map(t => `<tr><td style="padding:4pt 12pt;"><strong>${t.label[0].toUpperCase() + t.label.slice(1)}:</strong></td><td style="padding:4pt 12pt;color:#2D6A4F;font-weight:800;font-size:16pt;">${counts[t.id]}</td></tr>`).join("")}</table>`,
+        };
+    },
+
+    // ── 8. Trail Making B — alternancia número/letra ──
+    trail: (opts = {}) => {
+        // 10 numbers + 10 letters: 1-A-2-B-3-C-...-10-J. Adapted for kids.
+        const N = 10;
+        const letters = "ABCDEFGHIJ".split("").slice(0, N);
+        const items = [];
+        for (let i = 0; i < N; i++) {
+            items.push({ label: String(i + 1), order: i * 2 + 1, isNum: true });
+            items.push({ label: letters[i], order: i * 2 + 2, isNum: false });
+        }
+        const W = 480, H = 600;
+        const cols = 4, rows = 5;
+        const cellW = W / cols, cellH = H / rows;
+        const positions = [];
+        const shuffled = [...items];
+        for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+        for (let i = 0; i < shuffled.length; i++) {
+            const r = Math.floor(i / cols), c = i % cols;
+            const x = c * cellW + cellW / 2 + (Math.random() * 30 - 15);
+            const y = r * cellH + cellH / 2 + (Math.random() * 30 - 15);
+            positions.push({ ...shuffled[i], x, y });
+        }
+        const circles = positions.map(p => `
+<circle cx="${p.x}" cy="${p.y}" r="22" fill="${p.isNum ? '#fff' : '#FAFAF7'}" stroke="${p.isNum ? '#4A90D9' : '#E07A5F'}" stroke-width="2.5"/>
+<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="18" font-weight="800" fill="${p.isNum ? '#4A90D9' : '#E07A5F'}">${p.label}</text>`).join("");
+        const sorted = [...positions].sort((a, b) => a.order - b.order);
+        const path = sorted.map((p, i) => i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`).join(" ");
+        const ansCircles = positions.map(p => `
+<circle cx="${p.x}" cy="${p.y}" r="22" fill="#FAFAF7" stroke="#2D6A4F" stroke-width="2"/>
+<text x="${p.x}" y="${p.y + 6}" text-anchor="middle" font-size="18" font-weight="800" fill="${p.isNum ? '#4A90D9' : '#E07A5F'}">${p.label}</text>`).join("");
+        return {
+            title: "Conecta el Rastro — números y letras",
+            instructionsKid: "Une los puntos <strong>alternando número y letra</strong>: 1 → A → 2 → B → 3 → C... hasta llegar al 10 → J. Sin levantar el lápiz si puedes.",
+            instructionsTeacher: "Trail Making Test B (Reitan, 1958). Flexibilidad cognitiva, atención alternante. Niños 7-8 años: 60-120 segundos.",
+            body: `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:480pt;display:block;margin:0 auto;">${circles}</svg>`,
+            answerKey: `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:480pt;display:block;margin:0 auto;"><path d="${path}" fill="none" stroke="#2D6A4F" stroke-width="2.5" stroke-dasharray="6 4"/>${ansCircles}</svg>`,
+        };
+    },
+
+    // ── 9. Laberinto — recorrido grafomotor + atención sostenida ──
+    laberinto: (opts = {}) => {
+        // Simple maze generated as a randomized grid. Use DFS to ensure
+        // a single solvable path from start to end.
+        const W_CELLS = 12, H_CELLS = 16;
+        const CELL = 30;
+        const W = W_CELLS * CELL, H = H_CELLS * CELL;
+        // Initialize all cells with all 4 walls
+        const cells = [];
+        for (let y = 0; y < H_CELLS; y++) {
+            const row = [];
+            for (let x = 0; x < W_CELLS; x++) row.push({ N: true, S: true, E: true, W: true, visited: false });
+            cells.push(row);
+        }
+        // DFS to carve passages
+        const stack = [{ x: 0, y: 0 }];
+        cells[0][0].visited = true;
+        while (stack.length) {
+            const cur = stack[stack.length - 1];
+            const neighbors = [];
+            if (cur.y > 0 && !cells[cur.y - 1][cur.x].visited) neighbors.push({ x: cur.x, y: cur.y - 1, dir: "N" });
+            if (cur.y < H_CELLS - 1 && !cells[cur.y + 1][cur.x].visited) neighbors.push({ x: cur.x, y: cur.y + 1, dir: "S" });
+            if (cur.x > 0 && !cells[cur.y][cur.x - 1].visited) neighbors.push({ x: cur.x - 1, y: cur.y, dir: "W" });
+            if (cur.x < W_CELLS - 1 && !cells[cur.y][cur.x + 1].visited) neighbors.push({ x: cur.x + 1, y: cur.y, dir: "E" });
+            if (!neighbors.length) { stack.pop(); continue; }
+            const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+            cells[cur.y][cur.x][next.dir] = false;
+            const opp = { N: "S", S: "N", E: "W", W: "E" }[next.dir];
+            cells[next.y][next.x][opp] = false;
+            cells[next.y][next.x].visited = true;
+            stack.push({ x: next.x, y: next.y });
+        }
+        // Build SVG walls
+        const walls = [];
+        for (let y = 0; y < H_CELLS; y++) {
+            for (let x = 0; x < W_CELLS; x++) {
+                const c = cells[y][x];
+                const px = x * CELL, py = y * CELL;
+                if (c.N) walls.push(`<line x1="${px}" y1="${py}" x2="${px + CELL}" y2="${py}" stroke="#222" stroke-width="2"/>`);
+                if (c.W) walls.push(`<line x1="${px}" y1="${py}" x2="${px}" y2="${py + CELL}" stroke="#222" stroke-width="2"/>`);
+            }
+        }
+        // Outer south/east walls
+        walls.push(`<line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="#222" stroke-width="2"/>`);
+        walls.push(`<line x1="${W}" y1="0" x2="${W}" y2="${H}" stroke="#222" stroke-width="2"/>`);
+        // Solve maze (BFS) for answer key
+        const queue = [{ x: 0, y: 0, path: [{ x: 0, y: 0 }] }];
+        const seen = new Set(["0,0"]);
+        let solution = null;
+        while (queue.length && !solution) {
+            const cur = queue.shift();
+            if (cur.x === W_CELLS - 1 && cur.y === H_CELLS - 1) { solution = cur.path; break; }
+            const c = cells[cur.y][cur.x];
+            const tries = [
+                !c.N && { x: cur.x, y: cur.y - 1 },
+                !c.S && { x: cur.x, y: cur.y + 1 },
+                !c.W && { x: cur.x - 1, y: cur.y },
+                !c.E && { x: cur.x + 1, y: cur.y },
+            ].filter(Boolean);
+            for (const t of tries) {
+                const k = t.x + "," + t.y;
+                if (!seen.has(k)) { seen.add(k); queue.push({ x: t.x, y: t.y, path: [...cur.path, t] }); }
+            }
+        }
+        const solPath = solution ? solution.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x * CELL + CELL / 2} ${p.y * CELL + CELL / 2}`).join(" ") : "";
+        const markers = `
+<text x="${CELL / 2}" y="${CELL * 0.7}" text-anchor="middle" font-size="18" font-weight="800" fill="#2D6A4F">🐭</text>
+<text x="${W - CELL / 2}" y="${H - CELL * 0.3}" text-anchor="middle" font-size="18" font-weight="800" fill="#E63946">🧀</text>`;
+        return {
+            title: "Laberinto — Ayuda al ratón a llegar al queso",
+            instructionsKid: "El ratón quiere llegar al queso 🧀. Dibuja el camino con tu lápiz <strong>sin chocar con las paredes</strong> y sin levantar el lápiz si puedes.",
+            instructionsTeacher: "Laberinto. Atención sostenida + control grafomotor + planificación visoespacial. Niños 7-8 años: 1-3 minutos.",
+            body: `<svg viewBox="0 0 ${W + 2} ${H + 2}" style="width:100%;max-width:380pt;display:block;margin:0 auto;">${walls.join("")}${markers}</svg>`,
+            answerKey: `<svg viewBox="0 0 ${W + 2} ${H + 2}" style="width:100%;max-width:380pt;display:block;margin:0 auto;">${walls.join("")}<path d="${solPath}" fill="none" stroke="#2D6A4F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>${markers}</svg>`,
+        };
+    },
+
+    // ── 10. Encuentra al intruso — categorización + atención ──
+    intruso: (opts = {}) => {
+        // 6 rows of 4 emojis each. One emoji per row doesn't belong to
+        // the category. Child circles the intruder.
+        const ROWS = [
+            { cat: "frutas", same: ["🍎", "🍌", "🍇", "🍓", "🍉", "🍐", "🍊"], intruder: ["🥕", "🥦", "🧀", "🍞"] },
+            { cat: "animales", same: ["🐶", "🐱", "🐰", "🐻", "🦁", "🐯", "🦊"], intruder: ["🚗", "🌳", "⭐", "🏠"] },
+            { cat: "vehículos", same: ["🚗", "🚲", "🚂", "✈️", "🛵", "🚚"], intruder: ["🐶", "🍎", "📚", "🎈"] },
+            { cat: "ropa", same: ["👕", "👖", "👗", "🧦", "🧤", "🧥"], intruder: ["🍕", "🐠", "🌹", "📞"] },
+            { cat: "instrumentos", same: ["🎸", "🎹", "🥁", "🎺", "🎻"], intruder: ["🍰", "🌞", "🐢", "📚"] },
+            { cat: "deportes", same: ["⚽", "🏀", "🏈", "🎾", "🏐", "⚾"], intruder: ["🍎", "🐍", "🌺", "🎩"] },
+            { cat: "muebles", same: ["🛏️", "🪑", "🛋️", "🚪"], intruder: ["🚗", "🌳", "🥕", "🐶"] },
+        ];
+        const selectedRows = [...ROWS].sort(() => Math.random() - 0.5).slice(0, 6);
+        const items = selectedRows.map(r => {
+            const same = [...r.same].sort(() => Math.random() - 0.5).slice(0, 3);
+            const intruder = r.intruder[Math.floor(Math.random() * r.intruder.length)];
+            const items = [...same, intruder].sort(() => Math.random() - 0.5);
+            return { cat: r.cat, items, intruderIdx: items.indexOf(intruder), intruder };
+        });
+        const body = `<table style="border-collapse:collapse;margin:0 auto;">${items.map((row, ri) => `<tr><td style="padding:14pt 18pt;font-size:11pt;color:#666;border-bottom:1pt solid #eee;font-style:italic;">${ri + 1}.</td>${row.items.map(it => `<td style="padding:14pt;text-align:center;border-bottom:1pt solid #eee;"><span style="font-size:42pt;">${it}</span></td>`).join("")}</tr>`).join("")}</table>`;
+        const ans = items.map((row, i) => `<li style="font-size:13pt;line-height:1.7;"><strong>Fila ${i + 1}</strong> (${row.cat}): el intruso es <strong style="font-size:18pt;color:#E63946;">${row.intruder}</strong></li>`).join("");
+        return {
+            title: "Encuentra al Intruso",
+            instructionsKid: "En cada fila hay <strong>3 cosas que se parecen y 1 que no encaja</strong>. Rodea con un círculo la que no pertenece al grupo.",
+            instructionsTeacher: "Categorización semántica + atención selectiva. 6 filas con un intruso cada una. Niños 7-8 años: 1-2 minutos.",
+            body,
+            answerKey: `<ol style="list-style:none;padding-left:0;">${ans}</ol>`,
+        };
+    },
+
+    // ── 11. Trazos básicos — grafomotricidad ──
+    trazos: (opts = {}) => {
+        // Several rows of dotted patterns to trace: lines, waves, zigzags,
+        // loops, spirals. Big and clear for 5-8 yo.
+        const W = 540, H = 80;
+        const patterns = [
+            { name: "Líneas rectas", path: (off) => {
+                const lines = [];
+                for (let x = 30; x < W; x += 70) {
+                    lines.push(`<line x1="${x}" y1="20" x2="${x}" y2="60" stroke="#aaa" stroke-width="2" stroke-dasharray="3 5"/>`);
+                }
+                return lines.join("");
+            }},
+            { name: "Líneas horizontales", path: () => `<line x1="20" y1="40" x2="${W - 20}" y2="40" stroke="#aaa" stroke-width="2" stroke-dasharray="4 6"/>` },
+            { name: "Ondas", path: () => {
+                let d = `M 20 40`;
+                for (let x = 20; x < W - 20; x += 40) d += ` Q ${x + 10} 15 ${x + 20} 40 Q ${x + 30} 65 ${x + 40} 40`;
+                return `<path d="${d}" fill="none" stroke="#aaa" stroke-width="2" stroke-dasharray="3 5"/>`;
+            }},
+            { name: "Zigzags", path: () => {
+                let d = `M 20 60`;
+                for (let x = 20; x < W - 20; x += 30) d += ` L ${x + 15} 20 L ${x + 30} 60`;
+                return `<path d="${d}" fill="none" stroke="#aaa" stroke-width="2" stroke-dasharray="3 5"/>`;
+            }},
+            { name: "Bucles", path: () => {
+                let d = "";
+                for (let x = 40; x < W - 30; x += 50) {
+                    d += ` M ${x} 50 C ${x - 10} 30 ${x + 15} 15 ${x + 25} 40 C ${x + 15} 50 ${x + 5} 50 ${x} 50`;
+                }
+                return `<path d="${d}" fill="none" stroke="#aaa" stroke-width="2" stroke-dasharray="3 5"/>`;
+            }},
+            { name: "Círculos", path: () => {
+                let s = "";
+                for (let x = 40; x < W - 30; x += 60) s += `<circle cx="${x}" cy="40" r="20" fill="none" stroke="#aaa" stroke-width="2" stroke-dasharray="3 5"/>`;
+                return s;
+            }},
+        ];
+        const body = patterns.map(p => `
+<div style="margin-bottom:14pt;">
+  <div style="font-size:11pt;color:#555;margin-bottom:4pt;font-weight:600;">${p.name}</div>
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:540pt;display:block;height:auto;border-bottom:1pt solid #ddd;">${p.path()}</svg>
+</div>`).join("");
+        return {
+            title: "Trazos básicos",
+            instructionsKid: "Repasa con tu lápiz cada uno de los trazos discontinuos, <strong>siguiendo la línea de puntos</strong>. Hazlo despacio y sin levantar el lápiz si puedes.",
+            instructionsTeacher: "Grafomotricidad básica. Control del trazo, presión, dirección y continuidad. Preescritura. Niños 5-8 años.",
+            body,
+            answerKey: null,
+        };
+    },
+
+    // ── 12. Sigue el Patrón — series lógicas (atención + razonamiento) ──
+    patron: (opts = {}) => {
+        const SHAPES = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠"];
+        const makeSeries = () => {
+            const type = Math.floor(Math.random() * 3);
+            let seq = [];
+            if (type === 0) { // ABAB
+                const a = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                let b; do { b = SHAPES[Math.floor(Math.random() * SHAPES.length)]; } while (b === a);
+                for (let i = 0; i < 7; i++) seq.push(i % 2 === 0 ? a : b);
+            } else if (type === 1) { // AABB
+                const a = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                let b; do { b = SHAPES[Math.floor(Math.random() * SHAPES.length)]; } while (b === a);
+                const pat = [a, a, b, b]; for (let i = 0; i < 7; i++) seq.push(pat[i % 4]);
+            } else { // ABC
+                const picks = [...SHAPES].sort(() => Math.random() - 0.5).slice(0, 3);
+                for (let i = 0; i < 7; i++) seq.push(picks[i % 3]);
+            }
+            return seq;
+        };
+        const rows = [];
+        for (let r = 0; r < 6; r++) {
+            const seq = makeSeries();
+            const answer = seq[seq.length - 1];
+            rows.push({ visible: seq.slice(0, seq.length - 1), answer });
+        }
+        const body = rows.map((row, i) => `
+<div style="display:flex;align-items:center;gap:10pt;margin-bottom:16pt;padding-bottom:10pt;border-bottom:1pt solid #eee;">
+  <span style="font-size:11pt;color:#888;width:18pt;">${i + 1}.</span>
+  ${row.visible.map(s => `<span style="font-size:30pt;">${s}</span>`).join("")}
+  <span style="font-size:30pt;width:44pt;height:44pt;border:2pt dashed #E9A23B;border-radius:8pt;display:inline-flex;align-items:center;justify-content:center;">?</span>
+</div>`).join("");
+        const ans = rows.map((row, i) => `<li style="font-size:14pt;line-height:1.8;">Fila ${i + 1}: <span style="font-size:22pt;">${row.answer}</span></li>`).join("");
+        return {
+            title: "Sigue el Patrón",
+            instructionsKid: "Observa cada serie de figuras. <strong>Dibuja o di qué figura va en el hueco</strong> con el signo de interrogación, siguiendo el patrón.",
+            instructionsTeacher: "Razonamiento inductivo + atención a secuencias. Detección de regularidades (ABAB, AABB, ABC). Niños 6-9 años.",
+            body,
+            answerKey: `<ol style="list-style:none;padding-left:0;">${ans}</ol>`,
+        };
+    },
+
+    // ── 13. Matrices — razonamiento abstracto (estilo Raven) ──
+    matrices: (opts = {}) => {
+        // 3x3 grid following two rules: shape varies by column, color/fill
+        // varies by row. Bottom-right cell missing; 4 options below.
+        const SHAPES = ["●", "▲", "■"];
+        const COLORS = ["#E63946", "#4A90D9", "#2A9D8F"];
+        const makeMatrix = () => {
+            const shapeOrder = [...SHAPES].sort(() => Math.random() - 0.5);
+            const colorOrder = [...COLORS].sort(() => Math.random() - 0.5);
+            const grid = [];
+            for (let r = 0; r < 3; r++) {
+                const row = [];
+                for (let c = 0; c < 3; c++) row.push({ shape: shapeOrder[c], color: colorOrder[r] });
+                grid.push(row);
+            }
+            return grid;
+        };
+        const grid = makeMatrix();
+        const answer = grid[2][2];
+        const cell = (cellData, isQ) => `<td style="width:60pt;height:60pt;border:1.5pt solid #888;text-align:center;font-size:34pt;color:${isQ ? '#E9A23B' : cellData.color};">${isQ ? '?' : cellData.shape}</td>`;
+        const gridHTML = `<table style="border-collapse:collapse;margin:0 auto;">${grid.map((row, r) => `<tr>${row.map((c, ci) => cell(c, r === 2 && ci === 2)).join("")}</tr>`).join("")}</table>`;
+        // Options: correct + 3 distractors
+        const distractors = [];
+        while (distractors.length < 3) {
+            const s = SHAPES[Math.floor(Math.random() * 3)], col = COLORS[Math.floor(Math.random() * 3)];
+            if (!(s === answer.shape && col === answer.color) && !distractors.some(d => d.shape === s && d.color === col)) distractors.push({ shape: s, color: col });
+        }
+        const options = [answer, ...distractors].sort(() => Math.random() - 0.5);
+        const ansIdx = options.findIndex(o => o.shape === answer.shape && o.color === answer.color);
+        const optsHTML = `<table style="border-collapse:collapse;margin:14pt auto 0;"><tr>${options.map((o, i) => `<td style="width:54pt;height:54pt;border:1.5pt solid #888;border-radius:8pt;text-align:center;font-size:30pt;color:${o.color};">${o.shape}</td><td style="width:18pt;text-align:center;font-size:11pt;color:#888;">${String.fromCharCode(65 + i)}</td>`).join("")}</tr></table>`;
+        return {
+            title: "Matrices — ¿Qué figura falta?",
+            instructionsKid: "Mira la tabla. Cada fila y cada columna sigue una regla. <strong>Rodea la opción (A, B, C o D)</strong> que debería ir en el hueco con el signo de interrogación.",
+            instructionsTeacher: "Razonamiento abstracto/analógico (estilo Matrices Progresivas de Raven). Regla: la forma varía por columna, el color por fila. Niños 7-9 años.",
+            body: gridHTML + optsHTML,
+            answerKey: `<div style="font-size:15pt;">La respuesta correcta es la opción <strong style="color:#2D6A4F;font-size:20pt;">${String.fromCharCode(65 + ansIdx)}</strong> (<span style="color:${answer.color};font-size:24pt;">${answer.shape}</span>).</div>`,
+        };
+    },
+
+    // ── 14. Analogías verbales ──
+    analogias: (opts = {}) => {
+        const BANK = [
+            { a: "Día", b: "Noche", c: "Blanco", answer: "Negro", opts: ["Negro", "Gris", "Azul", "Claro"] },
+            { a: "Perro", b: "Ladrar", c: "Gato", answer: "Maullar", opts: ["Maullar", "Correr", "Comer", "Saltar"] },
+            { a: "Pájaro", b: "Volar", c: "Pez", answer: "Nadar", opts: ["Nadar", "Andar", "Saltar", "Trepar"] },
+            { a: "Mano", b: "Guante", c: "Pie", answer: "Calcetín", opts: ["Calcetín", "Zapato", "Bota", "Pierna"] },
+            { a: "Sol", b: "Día", c: "Luna", answer: "Noche", opts: ["Noche", "Estrella", "Cielo", "Tarde"] },
+            { a: "Médico", b: "Hospital", c: "Profesor", answer: "Escuela", opts: ["Escuela", "Casa", "Tienda", "Calle"] },
+            { a: "Frío", b: "Caliente", c: "Alto", answer: "Bajo", opts: ["Bajo", "Grande", "Largo", "Ancho"] },
+            { a: "Coche", b: "Carretera", c: "Tren", answer: "Vía", opts: ["Vía", "Aire", "Mar", "Cielo"] },
+            { a: "Abeja", b: "Miel", c: "Vaca", answer: "Leche", opts: ["Leche", "Carne", "Hierba", "Cuero"] },
+            { a: "Libro", b: "Leer", c: "Canción", answer: "Cantar", opts: ["Cantar", "Bailar", "Escribir", "Tocar"] },
+            { a: "Invierno", b: "Frío", c: "Verano", answer: "Calor", opts: ["Calor", "Lluvia", "Viento", "Nieve"] },
+            { a: "Zapato", b: "Pie", c: "Sombrero", answer: "Cabeza", opts: ["Cabeza", "Mano", "Cuello", "Hombro"] },
+        ];
+        const chosen = [...BANK].sort(() => Math.random() - 0.5).slice(0, 8);
+        const body = chosen.map((q, i) => {
+            const shuffled = [...q.opts].sort(() => Math.random() - 0.5);
+            return `<div style="margin-bottom:16pt;padding-bottom:12pt;border-bottom:1pt solid #eee;">
+  <div style="font-size:14pt;margin-bottom:8pt;"><strong>${i + 1}.</strong> ${q.a} es a ${q.b} como ${q.c} es a… <strong style="color:#E9A23B;">______</strong></div>
+  <div style="display:flex;gap:8pt;flex-wrap:wrap;padding-left:20pt;">${shuffled.map(o => `<span style="border:1.5pt solid #aaa;border-radius:20pt;padding:4pt 14pt;font-size:12pt;">${o}</span>`).join("")}</div>
+</div>`;
+        }).join("");
+        const ans = chosen.map((q, i) => `<li style="font-size:13pt;line-height:1.7;">${q.a} → ${q.b}, ${q.c} → <strong style="color:#2D6A4F;">${q.answer}</strong></li>`).join("");
+        return {
+            title: "Analogías",
+            instructionsKid: "Completa cada frase. Piensa qué relación hay entre las dos primeras palabras y busca la palabra que mantiene la misma relación. <strong>Rodea la respuesta correcta.</strong>",
+            instructionsTeacher: "Razonamiento analógico verbal. Relaciones semánticas (opuestos, función, categoría, parte-todo). Niños 7-10 años.",
+            body,
+            answerKey: `<ol style="list-style:none;padding-left:0;">${ans}</ol>`,
+        };
+    },
+
+    // ── 15. Pirámide Aritmética ──
+    piramide: (opts = {}) => {
+        const level = opts.level || 1;
+        const baseN = level === 1 ? 3 : 4; // base of 3 or 4 → 6 or 10 cells
+        const maxVal = level === 1 ? 8 : level === 2 ? 15 : 25;
+        const nBlanks = level === 1 ? 1 : level === 2 ? 2 : 3;
+        const makePyramid = () => {
+            const base = Array.from({ length: baseN }, () => Math.floor(Math.random() * maxVal) + 1);
+            const cells = [base];
+            let cur = base;
+            while (cur.length > 1) { const next = []; for (let i = 0; i < cur.length - 1; i++) next.push(cur[i] + cur[i + 1]); cells.unshift(next); cur = next; }
+            // flat list of all positions
+            const flat = [];
+            cells.forEach((row, r) => row.forEach((v, c) => flat.push({ r, c })));
+            // pick nBlanks distinct positions
+            const blanks = [];
+            const pool = [...flat];
+            for (let i = 0; i < Math.min(nBlanks, pool.length - 1); i++) { const idx = Math.floor(Math.random() * pool.length); blanks.push(pool.splice(idx, 1)[0]); }
+            return { cells, blanks };
+        };
+        const count = level === 1 ? 4 : level === 2 ? 4 : 3;
+        const pyramids = Array.from({ length: count }, makePyramid);
+        const isBlank = (pyr, r, c) => pyr.blanks.some(b => b.r === r && b.c === c);
+        const renderPyr = (pyr, showAns) => pyr.cells.map((row, r) => `<div style="display:flex;justify-content:center;gap:6pt;margin-bottom:6pt;">${row.map((v, c) => {
+            const blank = isBlank(pyr, r, c);
+            const content = blank ? (showAns ? `<span style="color:#2D6A4F;">${v}</span>` : "") : v;
+            return `<div style="width:40pt;height:40pt;border:2pt solid ${blank ? '#E9A23B' : '#888'};border-radius:8pt;display:flex;align-items:center;justify-content:center;font-size:17pt;font-weight:700;background:${blank && !showAns ? '#FFF9E6' : '#fff'};">${content}</div>`;
+        }).join("")}</div>`).join("");
+        const grid = (showAns) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:24pt;max-width:500pt;margin:0 auto;">${pyramids.map((p, i) => `<div style="text-align:center;"><div style="font-size:11pt;color:#888;margin-bottom:8pt;">Pirámide ${i + 1}</div>${renderPyr(p, showAns)}</div>`).join("")}</div>`;
+        return {
+            title: "Pirámides Aritméticas",
+            instructionsKid: "En cada pirámide, <strong>cada número es la suma de los dos de debajo</strong>. Calcula y escribe los números que faltan en las casillas naranjas.",
+            instructionsTeacher: `Cálculo (suma) + razonamiento + memoria de trabajo. Base de ${baseN}, ${nBlanks} hueco(s) por pirámide. ${PRINT_LEVELS.find(l => l.id === level).age}.`,
+            body: grid(false),
+            answerKey: grid(true),
+        };
+    },
+
+    // ── 16. Tablas de Multiplicar ──
+    tablas: (opts = {}) => {
+        // A worksheet of 20 multiplication problems (tables 2-9), mixed order.
+        const problems = [];
+        for (let i = 0; i < 20; i++) {
+            const a = Math.floor(Math.random() * 8) + 2; // 2-9
+            const b = Math.floor(Math.random() * 9) + 1; // 1-9
+            problems.push({ a, b, r: a * b });
+        }
+        const body = `<table style="border-collapse:collapse;margin:0 auto;width:100%;max-width:480pt;">${[0, 1, 2, 3, 4].map(row => `<tr>${[0, 1, 2, 3].map(col => {
+            const p = problems[row * 4 + col];
+            return `<td style="padding:12pt 8pt;font-size:16pt;text-align:center;border-bottom:1pt solid #eee;">${p.a} × ${p.b} = <span style="display:inline-block;width:40pt;border-bottom:2pt solid #888;">&nbsp;</span></td>`;
+        }).join("")}</tr>`).join("")}</table>`;
+        const ans = `<table style="border-collapse:collapse;margin:0 auto;">${[0, 1, 2, 3, 4].map(row => `<tr>${[0, 1, 2, 3].map(col => {
+            const p = problems[row * 4 + col];
+            return `<td style="padding:8pt 12pt;font-size:14pt;">${p.a} × ${p.b} = <strong style="color:#2D6A4F;">${p.r}</strong></td>`;
+        }).join("")}</tr>`).join("")}</table>`;
+        return {
+            title: "Tablas de Multiplicar",
+            instructionsKid: "Resuelve cada multiplicación y escribe el resultado en la línea. Si no te sabes alguna, puedes ayudarte sumando.",
+            instructionsTeacher: "Automatización del cálculo multiplicativo (tablas 2-9). Cronometrar para medir fluidez. Niños 8-11 años.",
+            body,
+            answerKey: ans,
+        };
+    },
+
+    // ── 17. Cálculo Mental — sumas y restas ──
+    calculo_mental: (opts = {}) => {
+        const level = opts.level || 1;
+        const problems = [];
+        for (let i = 0; i < 20; i++) {
+            let a, b, op, r;
+            if (level === 1) {
+                op = Math.random() < 0.5 ? "+" : "-";
+                if (op === "+") { a = Math.floor(Math.random() * 40) + 10; b = Math.floor(Math.random() * 40) + 5; r = a + b; }
+                else { a = Math.floor(Math.random() * 50) + 20; b = Math.floor(Math.random() * a * 0.8); r = a - b; }
+            } else if (level === 2) {
+                const ops = ["+", "-", "×"];
+                op = ops[Math.floor(Math.random() * ops.length)];
+                if (op === "+") { a = Math.floor(Math.random() * 400) + 100; b = Math.floor(Math.random() * 300) + 50; r = a + b; }
+                else if (op === "-") { a = Math.floor(Math.random() * 500) + 200; b = Math.floor(Math.random() * a * 0.9); r = a - b; }
+                else { a = Math.floor(Math.random() * 12) + 6; b = Math.floor(Math.random() * 9) + 3; r = a * b; }
+            } else {
+                const ops = ["+", "-", "×", "÷"];
+                op = ops[Math.floor(Math.random() * ops.length)];
+                if (op === "+") { a = Math.floor(Math.random() * 4000) + 500; b = Math.floor(Math.random() * 3000) + 300; r = a + b; }
+                else if (op === "-") { a = Math.floor(Math.random() * 5000) + 1000; b = Math.floor(Math.random() * a * 0.9); r = a - b; }
+                else if (op === "×") { a = Math.floor(Math.random() * 80) + 12; b = Math.floor(Math.random() * 20) + 6; r = a * b; }
+                else { b = Math.floor(Math.random() * 9) + 2; r = Math.floor(Math.random() * 40) + 5; a = b * r; } // exact division
+            }
+            problems.push({ a, b, op, r });
+        }
+        const body = `<table style="border-collapse:collapse;margin:0 auto;width:100%;max-width:480pt;">${[0, 1, 2, 3, 4].map(row => `<tr>${[0, 1, 2, 3].map(col => {
+            const p = problems[row * 4 + col];
+            return `<td style="padding:12pt 8pt;font-size:16pt;text-align:center;border-bottom:1pt solid #eee;">${p.a} ${p.op} ${p.b} = <span style="display:inline-block;width:48pt;border-bottom:2pt solid #888;">&nbsp;</span></td>`;
+        }).join("")}</tr>`).join("")}</table>`;
+        const ans = `<table style="border-collapse:collapse;margin:0 auto;">${[0, 1, 2, 3, 4].map(row => `<tr>${[0, 1, 2, 3].map(col => {
+            const p = problems[row * 4 + col];
+            return `<td style="padding:8pt 12pt;font-size:14pt;">${p.a} ${p.op} ${p.b} = <strong style="color:#2D6A4F;">${p.r}</strong></td>`;
+        }).join("")}</tr>`).join("")}</table>`;
+        const lvNote = level === 1 ? "sumas y restas (hasta ~90)" : level === 2 ? "sumas, restas y multiplicaciones (hasta millares)" : "las cuatro operaciones, números grandes y división exacta";
+        return {
+            title: "Cálculo Mental",
+            instructionsKid: "Resuelve cada operación y escribe el resultado en la línea. Tómate tu tiempo y revisa al final.",
+            instructionsTeacher: `Fluidez de cálculo — ${lvNote}. Cronometrar opcional. ${PRINT_LEVELS.find(l => l.id === level).age}.`,
+            body,
+            answerKey: ans,
+        };
+    },
+
+    // ── 18. Sopa de Letras — busca palabras ──
+    sopa: (opts = {}) => {
+        const WORD_SETS = [
+            ["SOL", "MAR", "LUZ", "PAN", "FLOR", "GATO"],
+            ["CASA", "MESA", "LIBRO", "AGUA", "RANA", "OSO"],
+            ["ROJO", "AZUL", "VERDE", "ROSA", "NIEVE", "LUNA"],
+        ];
+        const words = WORD_SETS[Math.floor(Math.random() * WORD_SETS.length)];
+        const SIZE = 12;
+        const grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+        const placements = [];
+        const dirs = [[0, 1], [1, 0], [1, 1]]; // right, down, diagonal
+        const tryPlace = (word) => {
+            for (let attempt = 0; attempt < 60; attempt++) {
+                const [dr, dc] = dirs[Math.floor(Math.random() * dirs.length)];
+                const maxR = dr ? SIZE - word.length : SIZE - 1;
+                const maxC = dc ? SIZE - word.length : SIZE - 1;
+                const r0 = Math.floor(Math.random() * (maxR + 1));
+                const c0 = Math.floor(Math.random() * (maxC + 1));
+                let ok = true;
+                for (let i = 0; i < word.length; i++) {
+                    const ch = grid[r0 + dr * i][c0 + dc * i];
+                    if (ch && ch !== word[i]) { ok = false; break; }
+                }
+                if (ok) {
+                    const cells = [];
+                    for (let i = 0; i < word.length; i++) { grid[r0 + dr * i][c0 + dc * i] = word[i]; cells.push([r0 + dr * i, c0 + dc * i]); }
+                    placements.push({ word, cells });
+                    return true;
+                }
+            }
+            return false;
+        };
+        words.forEach(tryPlace);
+        const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (!grid[r][c]) grid[r][c] = LETTERS[Math.floor(Math.random() * 26)];
+        const body = `
+<table style="border-collapse:separate;border-spacing:4pt;margin:0 auto;font-family:'Courier New',monospace;">${grid.map(row => `<tr>${row.map(ch => `<td style="width:22pt;height:22pt;text-align:center;font-size:15pt;font-weight:700;">${ch}</td>`).join("")}</tr>`).join("")}</table>
+<div style="margin-top:14pt;text-align:center;font-size:13pt;"><strong>Palabras a buscar:</strong> ${words.join(" · ")}</div>`;
+        const ansGrid = `<table style="border-collapse:separate;border-spacing:4pt;margin:0 auto;font-family:'Courier New',monospace;">${grid.map((row, r) => `<tr>${row.map((ch, c) => {
+            const inWord = placements.some(p => p.cells.some(([pr, pc]) => pr === r && pc === c));
+            return `<td style="width:22pt;height:22pt;text-align:center;font-size:15pt;font-weight:${inWord ? 900 : 400};color:${inWord ? '#2D6A4F' : '#ccc'};">${ch}</td>`;
+        }).join("")}</tr>`).join("")}</table>`;
+        return {
+            title: "Sopa de Letras",
+            instructionsKid: "Busca y rodea las palabras de la lista. Pueden estar en <strong>horizontal, vertical o diagonal</strong>, siempre de izquierda a derecha o de arriba abajo.",
+            instructionsTeacher: "Atención visual + rastreo + reconocimiento de palabras (apoyo a la lectura). Niños 7-10 años.",
+            body,
+            answerKey: ansGrid,
+        };
+    },
+
+    // ── 19. Copia de Formas — grafomotricidad / percepción ──
+    copia_formas: (opts = {}) => {
+        // Show a model shape on the left half; right half is an empty grid for copying.
+        const FIGS = [
+            `<polygon points="40,10 70,70 10,70" fill="none" stroke="#333" stroke-width="2.5"/>`,
+            `<rect x="15" y="15" width="50" height="50" fill="none" stroke="#333" stroke-width="2.5"/><line x1="15" y1="15" x2="65" y2="65" stroke="#333" stroke-width="2.5"/>`,
+            `<circle cx="40" cy="40" r="28" fill="none" stroke="#333" stroke-width="2.5"/><circle cx="40" cy="40" r="10" fill="none" stroke="#333" stroke-width="2.5"/>`,
+            `<polygon points="40,8 50,32 75,32 55,48 62,72 40,58 18,72 25,48 5,32 30,32" fill="none" stroke="#333" stroke-width="2"/>`,
+            `<path d="M 20 60 L 40 20 L 60 60 Z" fill="none" stroke="#333" stroke-width="2.5"/><line x1="30" y1="40" x2="50" y2="40" stroke="#333" stroke-width="2.5"/>`,
+            `<rect x="20" y="20" width="40" height="40" fill="none" stroke="#333" stroke-width="2.5" transform="rotate(45 40 40)"/>`,
+        ];
+        const chosen = [...FIGS].sort(() => Math.random() - 0.5).slice(0, 4);
+        const dotGrid = `<defs><pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#ccc"/></pattern></defs><rect width="80" height="80" fill="url(#dots)"/>`;
+        const body = chosen.map((fig, i) => `
+<div style="display:flex;align-items:center;gap:20pt;margin-bottom:18pt;padding-bottom:14pt;border-bottom:1pt solid #eee;">
+  <span style="font-size:11pt;color:#888;width:18pt;">${i + 1}.</span>
+  <div style="text-align:center;"><div style="font-size:9pt;color:#888;margin-bottom:4pt;">Modelo</div><svg viewBox="0 0 80 80" style="width:90pt;height:90pt;border:1pt solid #ccc;">${fig}</svg></div>
+  <div style="text-align:center;"><div style="font-size:9pt;color:#888;margin-bottom:4pt;">Cópialo aquí</div><svg viewBox="0 0 80 80" style="width:90pt;height:90pt;border:1pt solid #ccc;">${dotGrid}</svg></div>
+</div>`).join("");
+        return {
+            title: "Copia de Formas",
+            instructionsKid: "Observa cada figura del modelo y <strong>cópiala lo más parecida posible</strong> en el cuadro de puntos de la derecha.",
+            instructionsTeacher: "Integración visomotora (estilo Beery-VMI / Bender). Percepción de forma + planificación motora + grafomotricidad. Niños 5-9 años.",
+            body,
+            answerKey: null,
+        };
+    },
+
 };
 
 // ── Print sheet viewer/launcher ──
 // Opens a new window with the full A4-ready HTML, then triggers print
 // after a small delay so layout/images are ready.
-function openPrintableSheet(activityId, opts) {
-    const gen = PRINTABLE_GENERATORS[activityId];
-    if (!gen) { alert("Esta actividad aún no tiene ficha imprimible."); return; }
-    let sheet;
-    try { sheet = gen(opts || {}); }
-    catch (e) { console.error("Print sheet generator failed:", e); alert("Error al generar la ficha."); return; }
-    const today = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
-    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>${sheet.title} — TerapiApp</title>
+// Builds the full standalone HTML document for a sheet (used for the
+// new-window and download fallbacks).
+function buildSheetDocument(sheet, today) {
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>${sheet.title} — TerapiApp</title>
 <style>
 @page { size: A4; margin: 1.3cm 1.5cm; }
 * { box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #222; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #222; margin: 0; padding: 24px; }
 .controls { position: fixed; top: 12px; right: 12px; background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; gap: 6px; z-index: 100; }
 .controls button { padding: 8px 14px; border-radius: 6px; border: 1px solid #2D6A4F; background: #2D6A4F; color: white; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 13px; }
 .controls button.secondary { background: white; color: #2D6A4F; }
@@ -34530,14 +35058,20 @@ h1 { font-size: 20pt; margin: 0 0 6pt 0; color: #2D6A4F; }
 .footer { margin-top: 22pt; padding-top: 12pt; border-top: 1pt dashed #ccc; font-size: 9pt; color: #888; font-style: italic; line-height: 1.5; }
 .answer-page { page-break-before: always; }
 .answer-page h2 { color: #2D6A4F; font-size: 16pt; border-bottom: 1pt solid #ccc; padding-bottom: 4pt; }
-@media print { .controls { display: none; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+@media print { .controls { display: none; } body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head>
 <body>
 <div class="controls">
   <button onclick="window.print()">🖨 Imprimir</button>
   <button class="secondary" onclick="window.close()">Cerrar</button>
 </div>
-<div class="header">
+${sheetInnerHTML(sheet, today)}
+</body></html>`;
+}
+// The inner HTML (header + instructions + body + footer + answer key),
+// shared between the overlay and the standalone document.
+function sheetInnerHTML(sheet, today) {
+    return `<div class="header">
   <h1>${sheet.title}</h1>
   <div class="meta">
     <div class="meta-field"><strong>Nombre:</strong> </div>
@@ -34547,17 +35081,234 @@ h1 { font-size: 20pt; margin: 0 0 6pt 0; color: #2D6A4F; }
 <div class="instructions">${sheet.instructionsKid}</div>
 <div class="body">${sheet.body}</div>
 <div class="footer"><strong>Para el adulto:</strong> ${sheet.instructionsTeacher} — TerapiApp · ${today}</div>
-${sheet.answerKey ? `<div class="answer-page"><h2>Clave de respuestas — para el adulto</h2>${sheet.answerKey}</div>` : ""}
-</body></html>`;
-    const win = window.open("", "_blank");
-    if (!win) { alert("El navegador bloqueó la ventana emergente. Permite popups para esta página."); return; }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+${sheet.answerKey ? `<div class="answer-page"><h2>Clave de respuestas — para el adulto</h2>${sheet.answerKey}</div>` : ""}`;
 }
 
-const PRINTABLE_IDS = new Set(Object.keys(PRINTABLE_GENERATORS));
+// Global hook registered by the root component so the standalone
+// openPrintableSheet() can trigger the in-app overlay.
+// ── Difficulty levels for printable sheets (cover the 7-18 range) ──
+const PRINT_LEVELS = [
+    { id: 1, label: "Básico", age: "7-9 años" },
+    { id: 2, label: "Intermedio", age: "10-13 años" },
+    { id: 3, label: "Avanzado", age: "14-18 años" },
+];
+function defaultPrintLevel() {
+    const p = _activePatientFull;
+    const age = p && p.edad ? parseInt(p.edad, 10) : null;
+    if (!age || isNaN(age)) return 1;
+    if (age <= 9) return 1;
+    if (age <= 13) return 2;
+    return 3;
+}
+
+// ── AI-generated sheets (variety + challenge, scaled by level) ──
+// These call Claude to produce fresh, level-appropriate content. Each
+// returns a sheet object {title, instructionsKid, instructionsTeacher,
+// body, answerKey} or { __error: "msg" }.
+const AI_SHEET_GENERATORS = {
+    comprension_lectora: async ({ level }) => {
+        const lv = PRINT_LEVELS.find(l => l.id === level) || PRINT_LEVELS[0];
+        const words = level === 1 ? "80-120" : level === 2 ? "160-230" : "280-380";
+        const nq = level === 1 ? 4 : level === 2 ? 5 : 6;
+        const prompt = `Eres un experto en logopedia y psicopedagogía. Crea una ficha de COMPRENSIÓN LECTORA en español de España para una persona de ${lv.age} (nivel ${lv.label}). El texto debe ser original, interesante, con cierto reto léxico y sintáctico apropiado a la edad, y NO infantilizar si es nivel avanzado. Varía el tema (ciencia, historia, naturaleza, relato, actualidad divulgativa).
+Devuelve SOLO un JSON con esta estructura:
+{
+ "titulo": "título breve del texto",
+ "texto": "texto de ${words} palabras",
+ "preguntas": [ {"p":"enunciado", "tipo":"literal|inferencial|idea principal|vocabulario|opinión"} ],
+ "respuestas": ["respuesta orientativa a la pregunta 1", "..."]
+}
+Incluye ${nq} preguntas variando los tipos (al menos una inferencial y una de vocabulario). "respuestas" debe tener la misma longitud que "preguntas".`;
+        const res = await callClaude(prompt, null, null);
+        if (res.__noKey) return { __error: "Para generar fichas con IA necesitas configurar tu API key de Anthropic en Configuración (⚙️)." };
+        if (res.__authError) return { __error: "Tu API key no es válida. Revísala en Configuración." };
+        if (res.__error || !res.texto || !Array.isArray(res.preguntas)) return { __error: "No se pudo generar la ficha. Vuelve a intentarlo en unos segundos." };
+        const paras = String(res.texto).split(/\n+/).map(p => `<p style="margin:0 0 8pt;text-align:justify;">${p}</p>`).join("");
+        const qs = res.preguntas.map((q, i) => `<div style="margin-bottom:14pt;"><div style="font-size:12.5pt;font-weight:600;margin-bottom:3pt;">${i + 1}. ${q.p} <span style="font-size:9pt;color:#999;font-style:italic;">(${q.tipo || ""})</span></div><div style="border-bottom:1pt solid #bbb;height:16pt;margin-bottom:3pt;"></div><div style="border-bottom:1pt solid #bbb;height:16pt;"></div></div>`).join("");
+        const ans = Array.isArray(res.respuestas) ? `<ol style="line-height:1.7;font-size:12pt;">${res.respuestas.map(a => `<li style="margin-bottom:6pt;">${a}</li>`).join("")}</ol>` : "";
+        return {
+            title: "Lectura: " + (res.titulo || "Comprensión lectora"),
+            instructionsKid: "Lee el texto con atención (puedes leerlo dos veces) y responde a las preguntas con tus palabras.",
+            instructionsTeacher: `Comprensión lectora (${lv.label}, ${lv.age}). Texto y preguntas generados con IA. Evalúa literalidad, inferencia, idea principal y vocabulario.`,
+            body: `<div style="font-size:13pt;line-height:1.6;margin-bottom:18pt;padding:14pt;background:#FAFAF7;border-radius:6pt;border:1pt solid #e5e5e5;">${paras}</div><div style="font-size:13pt;font-weight:700;color:#2D6A4F;margin-bottom:10pt;">Preguntas</div>${qs}`,
+            answerKey: ans ? `<div style="font-size:11pt;color:#666;font-style:italic;margin-bottom:8pt;">Respuestas orientativas (la redacción del alumno puede variar):</div>${ans}` : null,
+        };
+    },
+    problemas: async ({ level }) => {
+        const lv = PRINT_LEVELS.find(l => l.id === level) || PRINT_LEVELS[0];
+        const desc = level === 1 ? "sumas y restas, una operación, números hasta 100" : level === 2 ? "dos operaciones, multiplicación/división, números hasta 1000, alguna fracción sencilla" : "varias operaciones, proporciones, porcentajes, fracciones, pequeño razonamiento algebraico";
+        const n = level === 1 ? 5 : 6;
+        const prompt = `Eres profesor de matemáticas. Crea ${n} PROBLEMAS matemáticos con enunciado (problemas de palabras) en español de España para ${lv.age} (nivel ${lv.label}: ${desc}). Contextos variados y cotidianos (compras, juegos, viajes, deporte, cocina). Que supongan un reto adecuado, no triviales.
+Devuelve SOLO un JSON:
+{ "problemas": [ {"enunciado":"...", "solucion":"resultado y breve explicación del procedimiento"} ] }`;
+        const res = await callClaude(prompt, null, null);
+        if (res.__noKey) return { __error: "Para generar fichas con IA necesitas configurar tu API key de Anthropic en Configuración (⚙️)." };
+        if (res.__authError) return { __error: "Tu API key no es válida. Revísala en Configuración." };
+        if (res.__error || !Array.isArray(res.problemas)) return { __error: "No se pudo generar la ficha. Vuelve a intentarlo en unos segundos." };
+        const body = res.problemas.map((p, i) => `<div style="margin-bottom:20pt;padding-bottom:12pt;border-bottom:1pt solid #eee;"><div style="font-size:13pt;line-height:1.55;margin-bottom:10pt;"><strong>${i + 1}.</strong> ${p.enunciado}</div><div style="font-size:10pt;color:#888;">Operaciones y resultado:</div><div style="border:1pt solid #ccc;border-radius:6pt;height:70pt;margin-top:4pt;"></div></div>`).join("");
+        const ans = `<ol style="line-height:1.7;font-size:12.5pt;">${res.problemas.map(p => `<li style="margin-bottom:8pt;">${p.solucion}</li>`).join("")}</ol>`;
+        return {
+            title: "Problemas de matemáticas",
+            instructionsKid: "Lee cada problema con calma, anota las operaciones que necesites y escribe el resultado en el recuadro.",
+            instructionsTeacher: `Resolución de problemas (${lv.label}, ${lv.age}). Generados con IA. Observa comprensión del enunciado, elección de operación y verificación del resultado.`,
+            body,
+            answerKey: ans,
+        };
+    },
+    adivinanzas: async ({ level }) => {
+        const lv = PRINT_LEVELS.find(l => l.id === level) || PRINT_LEVELS[0];
+        const n = 8;
+        const prompt = `Crea ${n} adivinanzas o acertijos de lógica en español de España para ${lv.age} (nivel ${lv.label}). ${level >= 3 ? "Incluye acertijos de razonamiento lógico, no solo adivinanzas de objetos." : "Adivinanzas clásicas de objetos, animales y naturaleza."} Que tengan reto pero sean resolubles.
+Devuelve SOLO un JSON: { "items": [ {"texto":"la adivinanza/acertijo", "respuesta":"la solución"} ] }`;
+        const res = await callClaude(prompt, null, null);
+        if (res.__noKey) return { __error: "Para generar fichas con IA necesitas configurar tu API key de Anthropic en Configuración (⚙️)." };
+        if (res.__authError) return { __error: "Tu API key no es válida. Revísala en Configuración." };
+        if (res.__error || !Array.isArray(res.items)) return { __error: "No se pudo generar la ficha. Vuelve a intentarlo en unos segundos." };
+        const body = res.items.map((it, i) => `<div style="margin-bottom:16pt;padding-bottom:10pt;border-bottom:1pt solid #eee;"><div style="font-size:13pt;line-height:1.55;margin-bottom:8pt;font-style:italic;"><strong>${i + 1}.</strong> ${it.texto}</div><div style="font-size:11pt;color:#888;">Respuesta: <span style="display:inline-block;border-bottom:1pt solid #888;width:200pt;">&nbsp;</span></div></div>`).join("");
+        const ans = `<ol style="line-height:1.8;font-size:13pt;">${res.items.map(it => `<li style="margin-bottom:4pt;"><strong style="color:#2D6A4F;">${it.respuesta}</strong></li>`).join("")}</ol>`;
+        return {
+            title: "Adivinanzas y acertijos",
+            instructionsKid: "Lee cada adivinanza, piensa con calma y escribe la respuesta en la línea.",
+            instructionsTeacher: `Razonamiento verbal y deductivo (${lv.label}, ${lv.age}). Generadas con IA.`,
+            body,
+            answerKey: ans,
+        };
+    },
+};
+const AI_CAPABLE = new Set(Object.keys(AI_SHEET_GENERATORS));
+
+// Generate a sheet (deterministic) for a given activity + level.
+function generateSheet(activityId, level) {
+    const gen = PRINTABLE_GENERATORS[activityId];
+    if (!gen) return null;
+    try { return gen({ level: level || 1 }); }
+    catch (e) { console.error("Sheet generator failed:", e); return null; }
+}
+
+let _showPrintSheet = null;
+
+// Opens the interactive print overlay for an activity. The overlay itself
+// handles level selection, regeneration and (optionally) AI generation.
+function openPrintableSheet(activityId, opts) {
+    const det = PRINTABLE_GENERATORS[activityId];
+    const ai = AI_SHEET_GENERATORS[activityId];
+    if (!det && !ai) { alert("Esta actividad aún no tiene ficha imprimible."); return; }
+    if (_showPrintSheet) { _showPrintSheet({ activityId, level: (opts && opts.level) || defaultPrintLevel() }); return; }
+    // Fallbacks for non-React contexts (deployed app): generate deterministic and open window/download
+    const today = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
+    const sheet = det ? generateSheet(activityId, (opts && opts.level) || 1) : null;
+    if (!sheet) { alert("Esta ficha se genera con IA; ábrela desde la aplicación."); return; }
+    try {
+        const win = window.open("", "_blank");
+        if (win) { win.document.open(); win.document.write(buildSheetDocument(sheet, today)); win.document.close(); return; }
+    } catch (e) {}
+    downloadSheetHTML(sheet, today);
+}
+
+function downloadSheetHTML(sheet, today) {
+    try {
+        const blob = new Blob([buildSheetDocument(sheet, today)], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "ficha-" + sheet.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".html";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { console.error("Download failed:", e); alert("No se pudo generar la ficha."); }
+}
+
+// Interactive overlay: pick level, regenerate, optionally generate with AI.
+function PrintSheetOverlay({ data, onClose }) {
+    const { activityId } = data;
+    const today = new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
+    const hasDet = !!PRINTABLE_GENERATORS[activityId];
+    const isAI = AI_CAPABLE.has(activityId);
+    const [level, setLevel] = useState(data.level || 1);
+    const [sheet, setSheet] = useState(() => hasDet ? generateSheet(activityId, data.level || 1) : null);
+    const [loading, setLoading] = useState(false);
+    const [aiError, setAiError] = useState(null);
+    const regenerate = (lv) => { setAiError(null); if (hasDet) setSheet(generateSheet(activityId, lv)); };
+    const onLevel = (lv) => { sfx.tap(); setLevel(lv); regenerate(lv); };
+    const genAI = async () => {
+        setLoading(true); setAiError(null);
+        try {
+            const result = await AI_SHEET_GENERATORS[activityId]({ level });
+            if (result && result.__error) { setAiError(result.__error); }
+            else if (result) { setSheet(result); }
+        } catch (e) { setAiError("Error inesperado al generar con IA."); }
+        setLoading(false);
+    };
+    // If AI-only sheet and no sheet yet, auto-trigger generation on mount
+    useEffect(() => { if (isAI && !hasDet && !sheet && !loading) genAI(); }, []);
+    const btn = (bg, color, border) => ({ background: bg, color, border: border || "none", borderRadius: 8, padding: "9px 14px", fontWeight: 800, fontSize: 13.5, cursor: "pointer", fontFamily: "inherit" });
+    return React.createElement("div", { className: "print-sheet-overlay", style: { position: "fixed", inset: 0, zIndex: 3000, background: "#fff", overflowY: "auto" } },
+        React.createElement("style", null, `
+        .print-sheet-overlay .ps-header { border-bottom: 2px solid #2D6A4F; padding-bottom: 10px; margin-bottom: 14px; }
+        .print-sheet-overlay h1.ps-title { font-size: 22px; margin: 0 0 6px 0; color: #2D6A4F; }
+        .print-sheet-overlay .ps-meta { display: flex; gap: 22px; font-size: 13px; color: #444; margin-top: 8px; }
+        .print-sheet-overlay .ps-meta-field { flex: 1; border-bottom: 1px solid #aaa; padding-bottom: 2px; min-height: 20px; }
+        .print-sheet-overlay .ps-instructions { background: #FAF3E0; border-left: 4px solid #E9A23B; padding: 10px 14px; margin-bottom: 18px; font-size: 14px; line-height: 1.55; border-radius: 4px; }
+        .print-sheet-overlay .ps-body { font-size: 14px; line-height: 1.5; }
+        .print-sheet-overlay .ps-footer { margin-top: 22px; padding-top: 12px; border-top: 1px dashed #ccc; font-size: 11px; color: #888; font-style: italic; line-height: 1.5; }
+        .print-sheet-overlay .answer-page { margin-top: 28px; padding-top: 14px; border-top: 2px dashed #2D6A4F; }
+        .print-sheet-overlay .answer-page h2 { color: #2D6A4F; font-size: 18px; }
+        @media print {
+            body * { visibility: hidden !important; }
+            .print-sheet-overlay, .print-sheet-overlay * { visibility: visible !important; }
+            .print-sheet-overlay { position: absolute !important; left: 0; top: 0; width: 100%; overflow: visible !important; }
+            .ps-controls, .ps-toolbar { display: none !important; }
+            .answer-page { page-break-before: always; }
+        }`),
+        // Control bar
+        React.createElement("div", { className: "ps-controls", style: { position: "sticky", top: 0, background: "#2D6A4F", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", flexWrap: "wrap", gap: 8 } },
+            React.createElement("div", { style: { color: "#fff", fontWeight: 800, fontSize: 15 } }, "Vista de impresión"),
+            React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                React.createElement("button", { onClick: () => { try { window.print(); } catch (e) { alert("Usa 'Descargar' y abre el archivo para imprimir."); } }, style: btn("#fff", "#2D6A4F"), disabled: !sheet }, "🖨 Imprimir"),
+                React.createElement("button", { onClick: () => sheet && downloadSheetHTML(sheet, today), style: btn("rgba(255,255,255,0.2)", "#fff", "2px solid rgba(255,255,255,0.5)"), disabled: !sheet }, "⬇ Descargar"),
+                React.createElement("button", { onClick: onClose, style: btn("transparent", "#fff", "2px solid rgba(255,255,255,0.5)") }, "✕ Cerrar"))),
+        // Toolbar: level selector + regenerate + AI
+        React.createElement("div", { className: "ps-toolbar", style: { background: "#F2F0EB", padding: "10px 18px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", borderBottom: "1px solid #ddd" } },
+            React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" } },
+                React.createElement("span", { style: { fontSize: 12.5, fontWeight: 800, color: "#555" } }, "Nivel:"),
+                PRINT_LEVELS.map(l => React.createElement("button", { key: l.id, onClick: () => onLevel(l.id), title: l.age, style: { padding: "6px 12px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: `2px solid ${level === l.id ? "#2D6A4F" : "#ccc"}`, background: level === l.id ? "#2D6A4F" : "#fff", color: level === l.id ? "#fff" : "#444" } },
+                    l.label, React.createElement("span", { style: { fontSize: 10, opacity: 0.75, marginLeft: 4 } }, l.age)))),
+            hasDet && React.createElement("button", { onClick: () => { sfx.tap(); regenerate(level); }, style: { padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: "2px solid #5B7C99", background: "#fff", color: "#5B7C99" } }, "🔄 Otra ficha"),
+            isAI && React.createElement("button", { onClick: genAI, disabled: loading, style: { padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 800, cursor: loading ? "default" : "pointer", fontFamily: "inherit", border: "none", background: loading ? "#b9a7d4" : "#7B4F9E", color: "#fff" } }, loading ? "✨ Generando…" : "✨ Generar con IA")),
+        aiError && React.createElement("div", { style: { background: "#FBE9E7", color: "#C0392B", padding: "10px 18px", fontSize: 13, fontWeight: 600 } }, "⚠️ ", aiError),
+        // Body
+        loading
+            ? React.createElement("div", { style: { textAlign: "center", padding: "80px 20px", color: "#777" } },
+                React.createElement("div", { style: { fontSize: 40, marginBottom: 14 } }, "✨"),
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 700 } }, "Generando ficha con IA…"),
+                React.createElement("div", { style: { fontSize: 13, marginTop: 6 } }, "Puede tardar unos segundos. Cada ficha es distinta."))
+            : sheet
+                ? React.createElement("div", { style: { maxWidth: 760, margin: "0 auto", padding: "24px 28px 60px" } },
+                    React.createElement("div", { className: "ps-header" },
+                        React.createElement("h1", { className: "ps-title" }, sheet.title),
+                        React.createElement("div", { className: "ps-meta" },
+                            React.createElement("div", { className: "ps-meta-field" }, React.createElement("strong", { style: { color: "#777" } }, "Nombre: ")),
+                            React.createElement("div", { className: "ps-meta-field" }, React.createElement("strong", { style: { color: "#777" } }, "Fecha: "), today))),
+                    React.createElement("div", { className: "ps-instructions", dangerouslySetInnerHTML: { __html: sheet.instructionsKid } }),
+                    React.createElement("div", { className: "ps-body", dangerouslySetInnerHTML: { __html: sheet.body } }),
+                    React.createElement("div", { className: "ps-footer" }, React.createElement("strong", null, "Para el adulto: "), sheet.instructionsTeacher),
+                    sheet.answerKey && React.createElement("div", { className: "answer-page" },
+                        React.createElement("h2", null, "Clave de respuestas — para el adulto"),
+                        React.createElement("div", { dangerouslySetInnerHTML: { __html: sheet.answerKey } })))
+                : React.createElement("div", { style: { textAlign: "center", padding: "80px 20px", color: "#777", fontSize: 15 } }, "Pulsa “✨ Generar con IA” para crear la ficha."));
+}
+
+const PRINTABLE_IDS = new Set([...Object.keys(PRINTABLE_GENERATORS), ...Object.keys(AI_SHEET_GENERATORS)]);
 const hasPrintable = (activityId) => PRINTABLE_IDS.has(activityId);
+function PrintSheetButton({ activityId, label }) {
+    if (!hasPrintable(activityId)) return null;
+    return React.createElement("button", {
+        onClick: () => { sfx.tap(); openPrintableSheet(activityId); },
+        title: "Generar una ficha imprimible de esta actividad",
+        style: { background: "#5B7C99", color: "#fff", border: "none", borderRadius: 10, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 },
+    }, "\uD83D\uDDA8 ", label || "Ficha imprimible");
+}
 
 // Returns true if the patient's age falls within (or near) the activity's range.
 const ageMatches = (activityId, patient) => {
@@ -35857,7 +36608,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.7</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.11</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -36013,7 +36764,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.7</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.11</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -36450,6 +37201,16 @@ function SettingsModal({ onClose }) {
     const [sound, setSound] = useState(soundEnabled());
     const [backupMsg, setBackupMsg] = useState(null);
     const fileInputRef = useRef(null);
+    const lastBackupInfo = (() => {
+        let iso = null;
+        try { iso = localStorage.getItem(STORAGE_PREFIX + "lastBackup"); } catch (e) {}
+        let patientCount = 0;
+        try { const p = localStorage.getItem(STORAGE_PREFIX + "patients"); patientCount = p ? JSON.parse(p).length : 0; } catch (e) {}
+        if (!iso) return { text: patientCount > 0 ? "Aún no has hecho ninguna copia de seguridad." : null, stale: patientCount > 0 };
+        const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+        const when = days === 0 ? "hoy" : days === 1 ? "ayer" : `hace ${days} días`;
+        return { text: `Última copia: ${when} (${new Date(iso).toLocaleDateString("es-ES")}).`, stale: days >= 14 };
+    })();
     // Export all TerapiApp data (except the API key, for security) as a JSON file
     const exportBackup = () => {
         try {
@@ -36463,7 +37224,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v19.3", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v24.11", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -36474,6 +37235,7 @@ function SettingsModal({ onClose }) {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             sfx.success();
+            try { localStorage.setItem(STORAGE_PREFIX + "lastBackup", new Date().toISOString()); } catch (e) {}
             setBackupMsg({ ok: true, msg: `Copia exportada: ${patientCount} paciente(s) y ${Object.keys(data).length} registros.` });
         } catch (e) {
             setBackupMsg({ ok: false, msg: "No se ha podido generar la copia de seguridad." });
@@ -36629,6 +37391,10 @@ function SettingsModal({ onClose }) {
                     React.createElement("strong", null, "no incluyen nombres de pacientes"),
                     ", solo edad + diagn\u00F3stico gen\u00E9rico",
                     React.createElement("br", null),
+                    "\u2022 Registra a los pacientes ",
+                    React.createElement("strong", null, "con nombre de pila o iniciales, nunca apellidos"),
+                    " \u2014 minimiza datos identificables (principio de minimizaci\u00F3n, Art. 5 RGPD)",
+                    React.createElement("br", null),
                     "\u2022 Si vendes o prestas este iPad, ve a \u2699\uFE0F y pulsa \"Eliminar key\""),
                 React.createElement("hr", { style: { border: "none", borderTop: `1px solid ${C.border}`, margin: "16px 0" } }),
                 // ── Backup / restore ──
@@ -36642,6 +37408,12 @@ function SettingsModal({ onClose }) {
                     padding: 10, borderRadius: 10, marginBottom: 10, fontSize: 12, fontWeight: 700,
                     background: backupMsg.ok ? C.success : C.error,
                 } }, backupMsg.ok ? "✓ " : "✗ ", backupMsg.msg),
+                lastBackupInfo.text && React.createElement("div", { style: {
+                    padding: "8px 12px", borderRadius: 10, marginBottom: 10, fontSize: 11.5, fontWeight: 600, lineHeight: 1.5,
+                    background: lastBackupInfo.stale ? `${C.accentL}22` : "#f3f3f3",
+                    color: lastBackupInfo.stale ? C.accent : C.textL,
+                    border: lastBackupInfo.stale ? `1px solid ${C.accentL}55` : "none",
+                } }, lastBackupInfo.stale ? "⚠️ " : "", lastBackupInfo.text, lastBackupInfo.stale ? " Conviene exportar una copia nueva." : ""),
                 React.createElement("input", { ref: fileInputRef, type: "file", accept: "application/json,.json", style: { display: "none" }, onChange: e => {
                     const f = e.target.files && e.target.files[0];
                     importBackup(f);
@@ -36654,14 +37426,14 @@ function SettingsModal({ onClose }) {
                 React.createElement("div", { style: { fontSize: 13, fontWeight: 700, marginBottom: 6 } }, "🎬 Datos de demostración"),
                 React.createElement("div", { style: { fontSize: 12, color: C.textL, lineHeight: 1.5, marginBottom: 10 } },
                     "TerapiApp viene con un paciente de demostración (",
-                    React.createElement("strong", null, "Lucía R."),
+                    React.createElement("strong", null, "Lucía"),
                     ") con datos completos para que puedas explorar todas las funciones y hacer capturas. Si lo eliminas no se volverá a crear automáticamente."),
                 React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
                     React.createElement(Btn, {
                         color: C.purple, small: true, outline: true,
                         onClick: () => {
                             sfx.click();
-                            if (!confirm("Esto regenerará el paciente de demostración (Lucía R.) con todos sus datos. ¿Continuar?")) return;
+                            if (!confirm("Esto regenerará el paciente de demostración (Lucía) con todos sus datos. ¿Continuar?")) return;
                             // Remove old demo and reseed
                             const allPatients = (storeLoad("patients") || []).filter(p => p.id !== "demo-lucia");
                             storeSave("patients", allPatients);
@@ -36677,7 +37449,7 @@ function SettingsModal({ onClose }) {
                         color: "#E63946", small: true, outline: true,
                         onClick: () => {
                             sfx.click();
-                            if (!confirm("Esto eliminará al paciente de demostración (Lucía R.) y todos sus datos. ¿Continuar?")) return;
+                            if (!confirm("Esto eliminará al paciente de demostración (Lucía) y todos sus datos. ¿Continuar?")) return;
                             const allPatients = (storeLoad("patients") || []).filter(p => p.id !== "demo-lucia");
                             storeSave("patients", allPatients);
                             ["progress:", "sessions:", "bests:", "strengths:", "logros:", "termometro:", "apoyos:", "linea_vida:", "gratitud:", "cartas:", "adaptiveDiff:", "selfPerception:", "worries:", "diario:"].forEach(p => {
@@ -36702,6 +37474,8 @@ function TerapiAppInner() {
     const [showFeedback, setShowFeedback] = useState(false);
     const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
     const [evidenceShown, setEvidenceShown] = useState(null); // activity id whose evidence modal is open
+    const [printSheet, setPrintSheet] = useState(null); // { sheet, today } for the print overlay
+    useEffect(() => { _showPrintSheet = setPrintSheet; return () => { _showPrintSheet = null; }; }, []);
     const [showSettings, setShowSettings] = useState(false);
     const [reportPatient, setReportPatient] = useState(null);
     const [trackingPatient, setTrackingPatient] = useState(null);
@@ -36741,7 +37515,7 @@ function TerapiAppInner() {
         const demoId = "demo-lucia";
         const demoPatient = {
             id: demoId,
-            nombre: "Lucía R. (demo)",
+            nombre: "Lucía (demo)",
             edad: 11,
             diagnosticos: ["TDAH", "Dislexia"],
             areas: ["atencion", "memoria", "lectoescritura", "emocional"],
@@ -37014,6 +37788,7 @@ function TerapiAppInner() {
             showFeedback && React.createElement(FeedbackModal, { onClose: () => setShowFeedback(false), patient: activePatient }),
             showFeedbackAdmin && React.createElement(FeedbackAdmin, { onClose: () => setShowFeedbackAdmin(false) }),
             evidenceShown && React.createElement(EvidenceModal, { activityId: evidenceShown, onClose: () => setEvidenceShown(null) }),
+            printSheet && React.createElement(PrintSheetOverlay, { data: printSheet, onClose: () => setPrintSheet(null) }),
             showPlanner && React.createElement(SessionPlanner, {
                 onClose: () => setShowPlanner(false),
                 onLaunch: (areaId, activityId) => { setShowPlanner(false); nav(areaId, activityId); },
@@ -37453,6 +38228,8 @@ function TerapiAppInner() {
                     });
                 })()))),
             !showRegistry && area && activity && ActComp && (React.createElement("div", { style: { background: C.card, borderRadius: 18, padding: "22px 18px", boxShadow: "0 4px 20px rgba(0,0,0,0.06)" } },
+                hasPrintable(activity) && React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 12 } },
+                    React.createElement(PrintSheetButton, { activityId: activity })),
                 React.createElement(ActComp, { patient: activePatient })))),
         React.createElement("div", { style: { textAlign: "center", padding: "20px 16px 24px", fontSize: 11, color: C.textL, borderTop: `1px solid ${C.border}`, marginTop: 20 } },
             React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8 } },
@@ -37461,7 +38238,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v24.7"),
+                "© 2026 Todos los derechos reservados · TerapiApp v24.11"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
