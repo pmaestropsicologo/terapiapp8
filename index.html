@@ -28855,6 +28855,286 @@ function OthelloMini({ patient }) {
 // ═══════════════════════════════════════════════════════════════
 // AREA CONFIGURATION — All activities wired
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// LOGOPEDIA — Evidence-based speech & language tools for children
+// Core: phonological awareness (rhyme, syllable, initial sound,
+// blending), rapid automatized naming (RAN), verbal fluency.
+// Phonological awareness is one of the strongest predictors of
+// reading acquisition (National Reading Panel 2000; Bradley & Bryant
+// 1983). RAN: Denckla & Rudel (1976); Wolf & Bowers (1999).
+// ═══════════════════════════════════════════════════════════════
+
+// ── 1. Rimas (rhyme identification) ──
+const LG_RIMAS_BANK = [
+    { w: "gato", emoji: "🐈", opts: [{ t: "pato", e: "🦆", ok: true }, { t: "perro", e: "🐕", ok: false }, { t: "mesa", e: "🪑", ok: false }] },
+    { w: "flor", emoji: "🌸", opts: [{ t: "sol", e: "☀️", ok: false }, { t: "tambor", e: "🥁", ok: true }, { t: "luna", e: "🌙", ok: false }] },
+    { w: "ratón", emoji: "🐭", opts: [{ t: "camión", e: "🚚", ok: true }, { t: "casa", e: "🏠", ok: false }, { t: "pez", e: "🐟", ok: false }] },
+    { w: "estrella", emoji: "⭐", opts: [{ t: "botella", e: "🍾", ok: true }, { t: "coche", e: "🚗", ok: false }, { t: "mano", e: "✋", ok: false }] },
+    { w: "pelota", emoji: "⚽", opts: [{ t: "gota", e: "💧", ok: true }, { t: "libro", e: "📚", ok: false }, { t: "silla", e: "🪑", ok: false }] },
+    { w: "corazón", emoji: "❤️", opts: [{ t: "balón", e: "🏀", ok: true }, { t: "árbol", e: "🌳", ok: false }, { t: "nube", e: "☁️", ok: false }] },
+    { w: "ballena", emoji: "🐋", opts: [{ t: "cadena", e: "⛓️", ok: true }, { t: "pollo", e: "🐔", ok: false }, { t: "fuego", e: "🔥", ok: false }] },
+    { w: "zapato", emoji: "👟", opts: [{ t: "plato", e: "🍽️", ok: true }, { t: "reloj", e: "⌚", ok: false }, { t: "globo", e: "🎈", ok: false }] },
+    { w: "campana", emoji: "🔔", opts: [{ t: "manzana", e: "🍎", ok: true }, { t: "tren", e: "🚂", ok: false }, { t: "dedo", e: "👆", ok: false }] },
+    { w: "tortuga", emoji: "🐢", opts: [{ t: "lechuga", e: "🥬", ok: true }, { t: "barco", e: "⛵", ok: false }, { t: "queso", e: "🧀", ok: false }] },
+];
+function LgRimas({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(LG_RIMAS_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ c: 0, t: 0 });
+    const item = LG_RIMAS_BANK[order[pos]];
+    const opts = useMemo(() => shuffle([...item.opts]), [pos, order]);
+    const next = () => { let np = pos + 1, no = order; if (np >= order.length) { no = shuffle(LG_RIMAS_BANK.map((_, i) => i)); np = 0; setOrder(no); } setPos(np); setSel(null); };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = opts[i].ok;
+        setScore(s => ({ c: s.c + (ok ? 1 : 0), t: s.t + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1700);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Rimas"),
+        React.createElement(Instructions, { adoChildren: "Conciencia fonológica — sensibilidad a la rima (Bradley & Bryant, 1983). Predictor temprano del aprendizaje lector. Puedes apoyar pronunciando las palabras en voz alta." },
+            "¿Qué palabra ", React.createElement("strong", null, "rima"), " con la de arriba? (suena parecido al final)"),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 10 } }, React.createElement(Badge, { color: C.success }, score.c, "/", score.t)),
+        React.createElement("div", { style: { textAlign: "center", background: C.warm, borderRadius: 14, padding: 16, marginBottom: 14 } },
+            React.createElement("div", { style: { fontSize: 60 } }, item.emoji),
+            React.createElement("div", { style: { fontSize: 24, fontWeight: 800, marginTop: 4 } }, item.w),
+            ttsSupported() && React.createElement("button", { onClick: () => ttsSpeak(item.w), style: { marginTop: 8, border: "none", background: C.blue, color: "#fff", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "🔊 Escuchar")),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 } },
+            opts.map((o, i) => {
+                let bg = "#fff", border = C.border;
+                if (sel !== null) { if (o.ok) { bg = `${C.success}22`; border = C.success; } else if (i === sel) { bg = `${C.error}22`; border = C.error; } }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null, style: { padding: "16px 8px", borderRadius: 14, border: `2px solid ${border}`, background: bg, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit" } },
+                    React.createElement("div", { style: { fontSize: 38 } }, o.e),
+                    React.createElement("div", { style: { fontSize: 15, fontWeight: 700, marginTop: 4 } }, o.t));
+            })));
+}
+
+// ── 2. Contar Sílabas (syllable segmentation) ──
+const LG_SILABAS_BANK = [
+    { w: "sol", emoji: "☀️", n: 1 }, { w: "pan", emoji: "🍞", n: 1 }, { w: "flor", emoji: "🌸", n: 1 },
+    { w: "casa", emoji: "🏠", n: 2 }, { w: "gato", emoji: "🐈", n: 2 }, { w: "mesa", emoji: "🪑", n: 2 }, { w: "luna", emoji: "🌙", n: 2 },
+    { w: "pelota", emoji: "⚽", n: 3 }, { w: "camisa", emoji: "👕", n: 3 }, { w: "tomate", emoji: "🍅", n: 3 }, { w: "zapato", emoji: "👟", n: 3 },
+    { w: "mariposa", emoji: "🦋", n: 4 }, { w: "chocolate", emoji: "🍫", n: 4 }, { w: "elefante", emoji: "🐘", n: 4 }, { w: "bicicleta", emoji: "🚲", n: 4 },
+    { w: "helicóptero", emoji: "🚁", n: 5 }, { w: "refrigerador", emoji: "🧊", n: 5 },
+];
+function LgSilabas({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(LG_SILABAS_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ c: 0, t: 0 });
+    const item = LG_SILABAS_BANK[order[pos]];
+    const next = () => { let np = pos + 1, no = order; if (np >= order.length) { no = shuffle(LG_SILABAS_BANK.map((_, i) => i)); np = 0; setOrder(no); } setPos(np); setSel(null); };
+    const choose = (n) => {
+        if (sel !== null) return;
+        setSel(n);
+        const ok = n === item.n;
+        setScore(s => ({ c: s.c + (ok ? 1 : 0), t: s.t + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1700);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Contar Sílabas"),
+        React.createElement(Instructions, { adoChildren: "Segmentación silábica — nivel inicial de la conciencia fonológica. Apoya dando palmadas en cada sílaba al pronunciar." },
+            "Di la palabra dando una ", React.createElement("strong", null, "palmada por cada sílaba"), ". ¿Cuántas sílabas tiene?"),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 10 } }, React.createElement(Badge, { color: C.success }, score.c, "/", score.t)),
+        React.createElement("div", { style: { textAlign: "center", background: C.warm, borderRadius: 14, padding: 16, marginBottom: 14 } },
+            React.createElement("div", { style: { fontSize: 60 } }, item.emoji),
+            React.createElement("div", { style: { fontSize: 24, fontWeight: 800, marginTop: 4 } }, item.w),
+            ttsSupported() && React.createElement("button", { onClick: () => ttsSpeak(item.w), style: { marginTop: 8, border: "none", background: C.blue, color: "#fff", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "🔊 Escuchar")),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
+            [1, 2, 3, 4, 5].map(n => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) { if (n === item.n) { bg = `${C.success}22`; border = C.success; color = C.success; } else if (n === sel) { bg = `${C.error}22`; border = C.error; color = C.error; } }
+                return React.createElement("button", { key: n, onClick: () => choose(n), disabled: sel !== null, style: { width: 56, height: 56, borderRadius: 14, border: `2px solid ${border}`, background: bg, color, fontSize: 22, fontWeight: 800, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit" } }, n);
+            })));
+}
+
+// ── 3. Sonido Inicial (initial phoneme identification) ──
+const LG_INICIAL_BANK = [
+    { w: "sol", emoji: "☀️", ini: "s", opts: ["s", "l", "m"] },
+    { w: "pato", emoji: "🦆", ini: "p", opts: ["p", "t", "b"] },
+    { w: "luna", emoji: "🌙", ini: "l", opts: ["l", "n", "r"] },
+    { w: "mesa", emoji: "🪑", ini: "m", opts: ["m", "s", "p"] },
+    { w: "foca", emoji: "🦭", ini: "f", opts: ["f", "c", "j"] },
+    { w: "tigre", emoji: "🐅", ini: "t", opts: ["t", "d", "g"] },
+    { w: "gato", emoji: "🐈", ini: "g", opts: ["g", "c", "j"] },
+    { w: "rana", emoji: "🐸", ini: "r", opts: ["r", "n", "l"] },
+    { w: "dado", emoji: "🎲", ini: "d", opts: ["d", "b", "t"] },
+    { w: "nube", emoji: "☁️", ini: "n", opts: ["n", "m", "l"] },
+    { w: "bota", emoji: "👢", ini: "b", opts: ["b", "p", "d"] },
+    { w: "casa", emoji: "🏠", ini: "c", opts: ["c", "g", "q"] },
+];
+function LgInicial({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(LG_INICIAL_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [sel, setSel] = useState(null);
+    const [score, setScore] = useState({ c: 0, t: 0 });
+    const item = LG_INICIAL_BANK[order[pos]];
+    const opts = useMemo(() => shuffle([...item.opts]), [pos, order]);
+    const next = () => { let np = pos + 1, no = order; if (np >= order.length) { no = shuffle(LG_INICIAL_BANK.map((_, i) => i)); np = 0; setOrder(no); } setPos(np); setSel(null); };
+    const choose = (i) => {
+        if (sel !== null) return;
+        setSel(i);
+        const ok = opts[i] === item.ini;
+        setScore(s => ({ c: s.c + (ok ? 1 : 0), t: s.t + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1700);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Sonido Inicial"),
+        React.createElement(Instructions, { adoChildren: "Identificación del fonema inicial — nivel avanzado de conciencia fonémica, muy ligado al inicio lector. Pronuncia el sonido aislado, no el nombre de la letra ('sss', no 'ese')." },
+            "¿Por qué ", React.createElement("strong", null, "sonido"), " empieza la palabra? Fíjate en el primer sonido al pronunciarla."),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 10 } }, React.createElement(Badge, { color: C.success }, score.c, "/", score.t)),
+        React.createElement("div", { style: { textAlign: "center", background: C.warm, borderRadius: 14, padding: 16, marginBottom: 14 } },
+            React.createElement("div", { style: { fontSize: 60 } }, item.emoji),
+            React.createElement("div", { style: { fontSize: 24, fontWeight: 800, marginTop: 4 } }, item.w),
+            ttsSupported() && React.createElement("button", { onClick: () => ttsSpeak(item.w), style: { marginTop: 8, border: "none", background: C.blue, color: "#fff", borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "🔊 Escuchar")),
+        React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center" } },
+            opts.map((o, i) => {
+                let bg = "#fff", border = C.border, color = C.text;
+                if (sel !== null) { if (o === item.ini) { bg = `${C.success}22`; border = C.success; color = C.success; } else if (i === sel) { bg = `${C.error}22`; border = C.error; color = C.error; } }
+                return React.createElement("button", { key: i, onClick: () => choose(i), disabled: sel !== null, style: { width: 64, height: 64, borderRadius: 14, border: `2px solid ${border}`, background: bg, color, fontSize: 28, fontWeight: 800, cursor: sel === null ? "pointer" : "default", fontFamily: "inherit", textTransform: "uppercase" } }, o);
+            })));
+}
+
+// ── 4. Síntesis Fonémica (phoneme blending) ──
+// Sounds are presented one by one (TTS), child blends them into a word.
+const LG_SINTESIS_BANK = [
+    { w: "sol", ph: ["s", "o", "l"], emoji: "☀️" },
+    { w: "pan", ph: ["p", "a", "n"], emoji: "🍞" },
+    { w: "mar", ph: ["m", "a", "r"], emoji: "🌊" },
+    { w: "luz", ph: ["l", "u", "z"], emoji: "💡" },
+    { w: "pez", ph: ["p", "e", "z"], emoji: "🐟" },
+    { w: "casa", ph: ["c", "a", "s", "a"], emoji: "🏠" },
+    { w: "gato", ph: ["g", "a", "t", "o"], emoji: "🐈" },
+    { w: "rosa", ph: ["r", "o", "s", "a"], emoji: "🌹" },
+    { w: "luna", ph: ["l", "u", "n", "a"], emoji: "🌙" },
+    { w: "dedo", ph: ["d", "e", "d", "o"], emoji: "👆" },
+];
+function LgSintesis({ patient }) {
+    const [order, setOrder] = useState(() => shuffle(LG_SINTESIS_BANK.map((_, i) => i)));
+    const [pos, setPos] = useState(0);
+    const [revealed, setRevealed] = useState(false);
+    const [result, setResult] = useState(null);
+    const [score, setScore] = useState({ c: 0, t: 0 });
+    const item = LG_SINTESIS_BANK[order[pos]];
+    const playSounds = () => {
+        if (!ttsSupported()) return;
+        let i = 0;
+        const speakNext = () => { if (i >= item.ph.length) return; ttsSpeak(item.ph[i], () => { i++; setTimeout(speakNext, 350); }); };
+        speakNext();
+    };
+    const next = () => { let np = pos + 1, no = order; if (np >= order.length) { no = shuffle(LG_SINTESIS_BANK.map((_, i) => i)); np = 0; setOrder(no); } setPos(np); setRevealed(false); setResult(null); };
+    const judge = (ok) => {
+        setResult(ok);
+        setScore(s => ({ c: s.c + (ok ? 1 : 0), t: s.t + 1 }));
+        if (ok) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+        else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        setTimeout(next, 1600);
+    };
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Síntesis Fonémica"),
+        React.createElement(Instructions, { adoChildren: "Síntesis (blending) de fonemas — habilidad fonémica de alto nivel, central en la decodificación lectora. El profesional pronuncia los sonidos separados y el niño los une en una palabra." },
+            "Escucha los sonidos por separado y ", React.createElement("strong", null, "júntalos"), " para descubrir qué palabra forman."),
+        React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 12 } }, React.createElement(Badge, { color: C.success }, score.c, "/", score.t)),
+        React.createElement("div", { style: { textAlign: "center", background: C.warm, borderRadius: 14, padding: 20, marginBottom: 14 } },
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14, flexWrap: "wrap" } },
+                item.ph.map((p, i) => React.createElement("div", { key: i, style: { width: 46, height: 46, borderRadius: 10, background: "#fff", border: `2px solid ${C.blue}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: C.blue } }, p))),
+            ttsSupported() && React.createElement("button", { onClick: playSounds, style: { border: "none", background: C.blue, color: "#fff", borderRadius: 22, padding: "8px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "🔊 Escuchar los sonidos"),
+            !ttsSupported() && React.createElement("div", { style: { fontSize: 12, color: C.textL, fontStyle: "italic" } }, "Pronuncia tú los sonidos separados: " + item.ph.join(" — "))),
+        !revealed
+            ? React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => { sfx.tap(); setRevealed(true); } }, "Ver la palabra"))
+            : React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 30 } }, item.emoji),
+                React.createElement("div", { style: { fontSize: 30, fontWeight: 900, color: C.primary, marginBottom: 12 } }, item.w),
+                result === null && React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 8 } }, "¿Lo ha dicho bien?"),
+                    React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center" } },
+                        React.createElement(Btn, { color: C.success, onClick: () => judge(true), small: true }, "✓ Sí"),
+                        React.createElement(Btn, { color: C.error, onClick: () => judge(false), small: true, outline: true }, "✗ Todavía no")))));
+}
+
+// ── 5. Velocidad de Denominación (RAN) ──
+// Grid of repeating items; child names them aloud left-to-right as fast
+// as possible; professional times it. Denckla & Rudel (1976).
+function LgRAN({ patient }) {
+    const [mode, setMode] = useState("colores"); // colores | objetos
+    const [grid, setGrid] = useState(null);
+    const [phase, setPhase] = useState("idle"); // idle | running | done
+    const [elapsed, setElapsed] = useState(0);
+    const startRef = useRef(0);
+    const timerRef = useRef(null);
+    const SETS = {
+        colores: [{ t: "rojo", c: "#E63946" }, { t: "azul", c: "#4A90D9" }, { t: "verde", c: "#2A9D8F" }, { t: "amarillo", c: "#E9C46A" }, { t: "negro", c: "#333" }],
+        objetos: [{ t: "perro", e: "🐕" }, { t: "casa", e: "🏠" }, { t: "sol", e: "☀️" }, { t: "pez", e: "🐟" }, { t: "mano", e: "✋" }],
+    };
+    const makeGrid = (m) => { const items = SETS[m]; const cells = []; for (let i = 0; i < 50; i++) cells.push(items[Math.floor(Math.random() * items.length)]); return cells; };
+    const start = () => { const g = makeGrid(mode); setGrid(g); setPhase("running"); startRef.current = Date.now(); setElapsed(0); timerRef.current = setInterval(() => setElapsed((Date.now() - startRef.current) / 1000), 100); };
+    const stop = () => { clearInterval(timerRef.current); setPhase("done"); sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, false); logCurrentResult(true); saveBest && saveBest(_activePatientId, "ran_" + mode, Math.round((Date.now() - startRef.current) / 1000)); } };
+    useEffect(() => () => clearInterval(timerRef.current), []);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Velocidad de Denominación"),
+        React.createElement(Instructions, { adoChildren: "RAN — Rapid Automatized Naming (Denckla & Rudel, 1976; Wolf & Bowers, 1999). La velocidad de denominación es, junto con la conciencia fonológica, uno de los predictores más robustos de la fluidez lectora (modelo del doble déficit). Cronometra cuánto tarda en nombrar toda la matriz en voz alta, de izquierda a derecha." },
+            "Nombra en voz alta ", React.createElement("strong", null, "lo más rápido que puedas, sin saltarte ninguno"), ", de izquierda a derecha y de arriba abajo. El profesional toma el tiempo."),
+        phase === "idle" && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+                ["colores", "objetos"].map(m => React.createElement("button", { key: m, onClick: () => { sfx.tap(); setMode(m); }, style: { padding: "8px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: `2px solid ${mode === m ? C.primary : C.border}`, background: mode === m ? C.primary : "#fff", color: mode === m ? "#fff" : C.text, textTransform: "capitalize" } }, m))),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar y cronometrar"))),
+        (phase === "running" || phase === "done") && grid && React.createElement("div", null,
+            React.createElement("div", { style: { textAlign: "center", fontSize: 30, fontWeight: 900, color: phase === "done" ? C.success : C.primary, marginBottom: 10 } }, elapsed.toFixed(1), "s"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4, background: "#fff", padding: 10, borderRadius: 12, border: `1px solid ${C.border}`, marginBottom: 12 } },
+                grid.map((cell, i) => React.createElement("div", { key: i, style: { textAlign: "center", fontSize: mode === "objetos" ? 22 : 0 } },
+                    mode === "colores" ? React.createElement("div", { style: { width: "100%", paddingBottom: "100%", background: cell.c, borderRadius: 6 } }) : cell.e))),
+            phase === "running" && React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.error, onClick: stop }, "⏹ Ha terminado")),
+            phase === "done" && React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 14, color: C.textL, marginBottom: 10 } }, "Tiempo: ", React.createElement("strong", null, elapsed.toFixed(1), " segundos"), " para 50 elementos (", (elapsed / 50).toFixed(2), "s por elemento)."),
+                React.createElement(Btn, { color: C.primary, onClick: () => setPhase("idle"), small: true }, "Otra vez"))));
+}
+
+// ── 6. Fluidez Verbal (verbal fluency) ──
+function LgFluidez({ patient }) {
+    const [type, setType] = useState("semantica"); // semantica | fonologica
+    const [prompt, setPrompt] = useState(null);
+    const [phase, setPhase] = useState("idle"); // idle | running | done
+    const [count, setCount] = useState(0);
+    const [timeLeft, setTimeLeft] = useState(60);
+    const timerRef = useRef(null);
+    const CATS = ["animales", "frutas", "cosas de la cocina", "partes del cuerpo", "ropa", "juguetes", "colores", "medios de transporte"];
+    const LETTERS = ["P", "M", "S", "T", "L", "C", "B", "D"];
+    const start = () => {
+        const p = type === "semantica" ? CATS[Math.floor(Math.random() * CATS.length)] : LETTERS[Math.floor(Math.random() * LETTERS.length)];
+        setPrompt(p); setPhase("running"); setCount(0); setTimeLeft(60);
+        timerRef.current = setInterval(() => setTimeLeft(t => { if (t <= 1) { clearInterval(timerRef.current); setPhase("done"); sfx.success(); return 0; } return t - 1; }), 1000);
+    };
+    useEffect(() => () => clearInterval(timerRef.current), []);
+    useEffect(() => { if (phase === "done" && _activePatientId) { addStar(_activePatientId, _activeAreaId, count >= 10); logCurrentResult(count >= 6); saveBest && saveBest(_activePatientId, "fluidez_" + type, count); } }, [phase]);
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Fluidez Verbal"),
+        React.createElement(Instructions, { adoChildren: "Fluidez verbal semántica (categorías) y fonológica (por letra). Evalúa acceso léxico, organización semántica y funciones ejecutivas. Sensible en TEL, TDAH y dificultades del lenguaje. Cuenta las palabras válidas (sin repeticiones ni nombres propios) en 60 s." },
+            "Di ", React.createElement("strong", null, "todas las palabras que puedas"), " en 1 minuto. El profesional cuenta con el botón ", React.createElement("strong", null, "+1"), " cada palabra válida."),
+        phase === "idle" && React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 } },
+                React.createElement("button", { onClick: () => { sfx.tap(); setType("semantica"); }, style: { padding: "8px 16px", borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: `2px solid ${type === "semantica" ? C.primary : C.border}`, background: type === "semantica" ? C.primary : "#fff", color: type === "semantica" ? "#fff" : C.text } }, "Por categoría"),
+                React.createElement("button", { onClick: () => { sfx.tap(); setType("fonologica"); }, style: { padding: "8px 16px", borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: `2px solid ${type === "fonologica" ? C.primary : C.border}`, background: type === "fonologica" ? C.primary : "#fff", color: type === "fonologica" ? "#fff" : C.text } }, "Por letra")),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar (60 s)"))),
+        (phase === "running" || phase === "done") && React.createElement("div", { style: { textAlign: "center" } },
+            React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 4 } }, type === "semantica" ? "Categoría:" : "Palabras que empiecen por:"),
+            React.createElement("div", { style: { fontSize: 26, fontWeight: 800, color: C.primary, marginBottom: 12, textTransform: type === "fonologica" ? "uppercase" : "none" } }, prompt),
+            React.createElement("div", { style: { fontSize: 40, fontWeight: 900, color: timeLeft <= 10 && phase === "running" ? C.error : C.text, marginBottom: 6 } }, phase === "done" ? "¡Tiempo!" : timeLeft + "s"),
+            React.createElement("div", { style: { fontSize: 56, fontWeight: 900, color: C.accentL, marginBottom: 12 } }, count),
+            phase === "running" && React.createElement("button", { onClick: () => { setCount(c => c + 1); sfx.tap(); }, style: { width: 120, height: 120, borderRadius: 60, border: "none", background: C.primary, color: "#fff", fontSize: 28, fontWeight: 900, cursor: "pointer", fontFamily: "inherit" } }, "+1"),
+            phase === "done" && React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 15, marginBottom: 12 } }, "Total: ", React.createElement("strong", null, count, " palabras"), " en 60 segundos."),
+                React.createElement(Btn, { color: C.primary, onClick: () => setPhase("idle"), small: true }, "Otra vez"))));
+}
+
+
 const AREAS = [
     { id: "atencion", label: "Atención", color: C.accent, desc: "Búsqueda visual y concentración", illo: "estrella" },
     { id: "memoria", label: "Memoria", color: C.blue, desc: "Memoria de trabajo y visual", illo: "libro" },
@@ -28866,6 +29146,7 @@ const AREAS = [
     { id: "instrumentales", label: "Grafomotricidad", color: "#8DB39B", desc: "Caligrafía y trazo", illo: "libro" },
     { id: "razonamiento", label: "Razonamiento", color: "#5A4FCF", desc: "Lógica y planificación", illo: "libro" },
     { id: "autoestima", label: "Autoestima", color: C.accentL, desc: "Fortalezas y logros", illo: "sol" },
+    { id: "logopedia", label: "Logopedia", color: "#D88C9A", desc: "Conciencia fonológica y lenguaje", illo: "libro" },
 ];
 // ═══════════════════════════════════════════════════════════════
 // ADOLESCENT — Mis Valores (priorización de valores personales)
@@ -34045,6 +34326,14 @@ const AREA_ACTIVITIES = {
         { id: "mis_valores", label: "Mis Valores", desc: "Identifica y ordena lo que te importa de verdad", comp: MisValores, adolescentOnly: true, complex: true },
         { id: "carta_futuro", label: "Carta a mi yo de 25 años", desc: "Escribe a tu futuro y gana perspectiva", comp: CartaYoFuturo, adolescentOnly: true },
     ],
+    logopedia: [
+        { id: "lg_rimas", label: "Rimas", desc: "Conciencia fonológica: identificar palabras que riman", comp: LgRimas },
+        { id: "lg_silabas", label: "Contar Sílabas", desc: "Segmentación silábica con palmadas", comp: LgSilabas },
+        { id: "lg_inicial", label: "Sonido Inicial", desc: "Identificar el fonema inicial de la palabra", comp: LgInicial },
+        { id: "lg_sintesis", label: "Síntesis Fonémica", desc: "Unir sonidos para formar una palabra (con audio)", comp: LgSintesis },
+        { id: "lg_ran", label: "Velocidad de Denominación", desc: "Nombrar series rápido (RAN) — predictor de fluidez lectora", comp: LgRAN, complex: true },
+        { id: "lg_fluidez", label: "Fluidez Verbal", desc: "Decir palabras de una categoría o letra en 60 s", comp: LgFluidez },
+    ],
 };
 // ── Diagnosis tags ──
 // Mark which clinical profiles each activity is most useful for, shown in
@@ -34117,6 +34406,7 @@ const ACTIVITY_DX = {
     pizarra: ["autoestima"], arbol: ["autoestima"], frasco: ["autoestima"], gratitud: ["autoestima", "ansiedad"],
     carta: ["autoestima"], mapa: ["autoestima", "ansiedad"], linea_vida: ["autoestima"], espejo: ["autoestima"],
     mis_valores: ["autoestima"], carta_futuro: ["autoestima"],
+    lg_rimas: ["dislexia"], lg_silabas: ["dislexia"], lg_inicial: ["dislexia"], lg_sintesis: ["dislexia"], lg_ran: ["dislexia", "tdah"], lg_fluidez: ["tdah", "tea"],
 };
 // Recommended age range [min, max] per activity. Used to display a badge
 // in the activity card so the professional sees at a glance whether it
@@ -34178,6 +34468,7 @@ const ACTIVITY_AGE = {
     pizarra: [5, 17], arbol: [7, 14], frasco: [6, 14], gratitud: [5, 14],
     carta: [9, 17], mapa: [10, 17], linea_vida: [11, 17], espejo: [9, 17],
     mis_valores: [12, 17], carta_futuro: [12, 17],
+    lg_rimas: [5, 9], lg_silabas: [5, 9], lg_inicial: [5, 10], lg_sintesis: [5, 10], lg_ran: [6, 12], lg_fluidez: [6, 17],
 };
 // ═══════════════════════════════════════════════════════════════
 // Scientific evidence tags
@@ -34235,6 +34526,13 @@ const ACTIVITY_EVIDENCE = {
     empatia_dual: { ref: "Smith (2009); Baron-Cohen", parents: "Disociación entre empatía afectiva (qué siente) y cognitiva (qué piensa). En TEA la afectiva suele estar relativamente preservada; la cognitiva muestra más dificultad. Esta tarea las separa." },
     peabody: { ref: "Dunn & Dunn (Peabody PPVT)", parents: "Vocabulario receptivo, inspirada en el Peabody Picture Vocabulary Test. Mide comprensión léxica pasiva, útil en TEA con retraso del lenguaje y en niños pequeños." },
     dbt_skills: { ref: "Linehan (1993) — DBT", parents: "Dos habilidades del Manual de Habilidades de la Terapia Dialéctico-Conductual: TIPP para crisis emocional aguda y Acción Opuesta para urgencias emocionales no adaptativas. Con evidencia en regulación emocional intensa." },
+    // ── Logopedia ──
+    lg_rimas: { ref: "Bradley & Bryant (1983); National Reading Panel (2000)", parents: "La sensibilidad a la rima es una de las primeras manifestaciones de la conciencia fonológica, y esta a su vez uno de los mejores predictores del aprendizaje de la lectura. Entrenarla en edad temprana tiene efecto preventivo sobre las dificultades lectoras." },
+    lg_silabas: { ref: "Jiménez & Ortiz; National Reading Panel (2000)", parents: "La segmentación silábica es el nivel inicial de la conciencia fonológica, accesible desde preescolar. Base sobre la que se construye después la conciencia fonémica." },
+    lg_inicial: { ref: "National Reading Panel (2000); Defior", parents: "Identificar el fonema inicial es una habilidad fonémica de alto valor predictivo para la lectura. Trabaja el sonido (no el nombre de la letra), que es lo que sustenta la decodificación." },
+    lg_sintesis: { ref: "National Reading Panel (2000)", parents: "La síntesis fonémica (unir sonidos para formar palabras) es una de las dos habilidades fonémicas con mayor transferencia a la lectura, junto con la segmentación. Central en la decodificación." },
+    lg_ran: { ref: "Denckla & Rudel (1976); Wolf & Bowers (1999)", parents: "La velocidad de denominación (RAN) es, junto con la conciencia fonológica, uno de los predictores más robustos de la fluidez lectora. El modelo del doble déficit identifica a los niños con déficit en ambas como los de mayor riesgo de dislexia." },
+    lg_fluidez: { ref: "Fluidez verbal — semántica y fonológica", parents: "La fluidez verbal evalúa el acceso al léxico, la organización semántica y las funciones ejecutivas. Es sensible en el Trastorno del Desarrollo del Lenguaje (TEL), el TDAH y diversas dificultades del lenguaje." },
 };
 // Returns evidence object for an activity or null
 const getEvidence = (activityId) => ACTIVITY_EVIDENCE[activityId] || null;
@@ -35344,7 +35642,7 @@ function AchievementsPanel({ patientId, refreshKey }) {
     const AREA_LABELS = {
         atencion: "Atención", memoria: "Memoria", emocional: "Reg. Emocional",
         social: "Hab. Sociales", lectoescritura: "Lectoescritura", dislexia: "Dislexia",
-        instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima",
+        instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima", logopedia: "Logopedia",
     };
     const groups = { generales: [] };
     ACHIEVEMENTS.forEach(a => {
@@ -36608,7 +36906,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.11</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.12</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -36764,7 +37062,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v24.11</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v24.12</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -36807,7 +37105,7 @@ ${(sections.linea && lineaHTML) ? `
     const AREA_LABELS = {
         atencion: "Atención", memoria: "Memoria", emocional: "Reg. Emocional",
         social: "Hab. Sociales", lectoescritura: "Lectoescritura", dislexia: "Dislexia",
-        instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima",
+        instrumentales: "Instrumentales", razonamiento: "Razonamiento", autoestima: "Autoestima", logopedia: "Logopedia",
     };
     return (React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }, className: "no-print" },
         React.createElement("style", null, `
@@ -37224,7 +37522,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v24.11", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v24.12", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -38238,7 +38536,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v24.11"),
+                "© 2026 Todos los derechos reservados · TerapiApp v24.12"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
