@@ -17571,6 +17571,7 @@ const logCurrentResult = (correct, attempts = 1) => {
     logSession(_activePatientId, _activeAreaId, _activeActivityId, {
         correct, attempts, stars: correct ? 1 : 0,
     });
+    try { if (typeof window !== "undefined" && window.dispatchEvent) window.dispatchEvent(new CustomEvent("terapiapp-companion-react", { detail: { correct: correct, patientId: _activePatientId, areaId: _activeAreaId, activityId: _activeActivityId } })); } catch (e) { }
 };
 // ═══════════════════════════════════════════════════════════════
 // PERSONAL BESTS — track highest scores per activity
@@ -38144,6 +38145,491 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
+// ── Compañero / mascota (v25.11) ──
+// ── Compañero / mascota (v25.11) ── diseños + monedas + tienda de accesorios
+const COMPANION_DESIGNS = [
+    { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
+    { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
+    { id: "lavanda", name: "Lila", body: "#C3B0E6", cheek: "#F4B6C2", shape: "blob" },
+    { id: "melocoton", name: "Melocotón", body: "#F6B89A", cheek: "#E78C8C", shape: "blob" },
+    { id: "limon", name: "Limoncito", body: "#F2D26B", cheek: "#F2A1A1", shape: "blob" },
+    { id: "menta", name: "Menta", body: "#9FE0CE", cheek: "#F7A8A8", shape: "blob" },
+    { id: "gatito", name: "Gatito", body: "#F4A95C", cheek: "#F08C8C", shape: "gato" },
+    { id: "conejin", name: "Conejín", body: "#F3EAD9", cheek: "#F4B6C2", shape: "conejo" },
+    { id: "osito", name: "Osito", body: "#C79A6B", cheek: "#E59999", shape: "oso" },
+    { id: "pajarito", name: "Pajarito", body: "#F2D26B", cheek: "#F2A1A1", shape: "ave" },
+    { id: "ranita", name: "Ranita", body: "#A6D96A", cheek: "#F2A1A1", shape: "gato" },
+    { id: "fresa", name: "Fresita", body: "#F08C9E", cheek: "#E36B7E", shape: "oso" },
+];
+const COMPANION_SHOP = [
+    { id: "gorro", name: "Gorro de lana", slot: "hat", cost: 10, emoji: "\uD83E\uDDE2" },
+    { id: "fiesta", name: "Gorro de fiesta", slot: "hat", cost: 12, emoji: "\uD83C\uDF89" },
+    { id: "flor", name: "Flor", slot: "hat", cost: 8, emoji: "\uD83C\uDF38" },
+    { id: "corona", name: "Corona", slot: "hat", cost: 20, emoji: "\uD83D\uDC51" },
+    { id: "mago", name: "Sombrero de mago", slot: "hat", cost: 16, emoji: "\uD83E\uDDD9" },
+    { id: "diadema", name: "Diadema", slot: "hat", cost: 12, emoji: "\uD83D\uDC8E" },
+    { id: "aureola", name: "Aureola", slot: "hat", cost: 16, emoji: "\uD83D\uDE07" },
+    { id: "cuernos", name: "Cuernitos", slot: "hat", cost: 12, emoji: "\uD83D\uDE08" },
+    { id: "gorra", name: "Gorra", slot: "hat", cost: 10, emoji: "\uD83E\uDDE2" },
+    { id: "boina", name: "Boina", slot: "hat", cost: 10, emoji: "\uD83C\uDFA8" },
+    { id: "gafas", name: "Gafas", slot: "face", cost: 10, emoji: "\uD83D\uDC53" },
+    { id: "gafas_sol", name: "Gafas de sol", slot: "face", cost: 14, emoji: "\uD83D\uDD76\uFE0F" },
+    { id: "bigote", name: "Bigote", slot: "face", cost: 8, emoji: "\uD83E\uDD78" },
+    { id: "antifaz", name: "Antifaz", slot: "face", cost: 12, emoji: "\uD83E\uDD7D" },
+    { id: "parche", name: "Parche pirata", slot: "face", cost: 10, emoji: "\uD83C\uDff4" },
+    { id: "monoculo", name: "Monóculo", slot: "face", cost: 12, emoji: "\uD83E\uDDD0" },
+    { id: "bufanda", name: "Bufanda", slot: "neck", cost: 12, emoji: "\uD83E\uDDE3" },
+    { id: "pajarita", name: "Pajarita", slot: "neck", cost: 10, emoji: "\uD83C\uDF80" },
+    { id: "medalla", name: "Medalla", slot: "neck", cost: 18, emoji: "\uD83C\uDFC5" },
+    { id: "capa", name: "Capa", slot: "neck", cost: 16, emoji: "\uD83E\uDDE5" },
+    { id: "corbata", name: "Corbata", slot: "neck", cost: 10, emoji: "\uD83D\uDC54" },
+    { id: "collar", name: "Collar", slot: "neck", cost: 14, emoji: "\uD83D\uDCFF" },
+    { id: "globo", name: "Globo", slot: "held", cost: 8, emoji: "\uD83C\uDF88" },
+    { id: "varita", name: "Varita mágica", slot: "held", cost: 14, emoji: "\uD83E\uDE84" },
+    { id: "helado", name: "Helado", slot: "held", cost: 10, emoji: "\uD83C\uDF66" },
+    { id: "libro", name: "Libro", slot: "held", cost: 8, emoji: "\uD83D\uDCD8" },
+    { id: "pelota", name: "Pelota", slot: "held", cost: 8, emoji: "\u26BD" },
+];
+
+function accessorySVG(slot, id, cx, cy, s) {
+    const top = cy - s * 0.92;
+    const ex = s * 0.40, ey = cy - s * 0.34;
+    // ── nuevos (por id) ──
+    if (id === "aureola") return `<ellipse cx="${cx}" cy="${top - 14}" rx="${(s * 0.42).toFixed(1)}" ry="7" fill="none" stroke="#FFD45E" stroke-width="4"/>`;
+    if (id === "cuernos") return `<path d="M${cx - s * 0.34} ${top + 12} q-7 -18 3 -23 q1 13 8 17 Z" fill="#B23A48" stroke="#7d2531" stroke-width="1.5"/><path d="M${cx + s * 0.34} ${top + 12} q7 -18 -3 -23 q-1 13 -8 17 Z" fill="#B23A48" stroke="#7d2531" stroke-width="1.5"/>`;
+    if (id === "gorra") return `<path d="M${cx - s * 0.5} ${top + 13} a ${(s * 0.5).toFixed(1)} ${(s * 0.5).toFixed(1)} 0 0 1 ${s} 0 Z" fill="#3F7CAC" stroke="#2c5a7d" stroke-width="2"/><path d="M${cx + s * 0.12} ${top + 13} q${s * 0.5} 1 ${s * 0.56} 8 l-${s * 0.42} 0 Z" fill="#2c5a7d"/>`;
+    if (id === "boina") return `<ellipse cx="${cx}" cy="${top + 7}" rx="${(s * 0.5).toFixed(1)}" ry="${(s * 0.24).toFixed(1)}" fill="#C0392B" stroke="#7d2531" stroke-width="2"/><circle cx="${cx}" cy="${top - 5}" r="3" fill="#7d2531"/>`;
+    if (id === "parche") return `<ellipse cx="${cx - ex}" cy="${ey}" rx="${(s * 0.2).toFixed(1)}" ry="${(s * 0.17).toFixed(1)}" fill="#222"/><line x1="${(cx - ex - s * 0.22).toFixed(1)}" y1="${(ey - s * 0.18).toFixed(1)}" x2="${(cx + ex + s * 0.1).toFixed(1)}" y2="${(ey - s * 0.3).toFixed(1)}" stroke="#222" stroke-width="2.5"/>`;
+    if (id === "monoculo") return `<circle cx="${cx + ex}" cy="${ey}" r="${(s * 0.2).toFixed(1)}" fill="rgba(255,255,255,0.22)" stroke="#C9A227" stroke-width="2.5"/><path d="M${cx + ex} ${(ey + s * 0.2).toFixed(1)} q5 ${(s * 0.4).toFixed(1)} -6 ${(s * 0.52).toFixed(1)}" fill="none" stroke="#C9A227" stroke-width="1.5"/>`;
+    if (id === "corbata") { const ny = cy + s * 0.5; return `<path d="M${cx} ${ny - 7} l-7 7 l7 7 l7 -7 Z" fill="#C0392B"/><path d="M${cx - 6} ${ny + 7} l12 0 l-3 ${(s * 0.5).toFixed(1)} l-6 0 Z" fill="#C0392B" stroke="#8e2b2b" stroke-width="1"/>`; }
+    if (id === "collar") { const ny = cy + s * 0.5; const beads = [-3, -2, -1, 0, 1, 2, 3].map(k => `<circle cx="${(cx + k * 9).toFixed(1)}" cy="${(ny + Math.abs(k) * 2).toFixed(1)}" r="3.6" fill="#EFE7D2" stroke="#c9bfa3" stroke-width="0.8"/>`).join(""); return `<g>${beads}</g>`; }
+    if (id === "libro") { const hx = cx + s * 1.0, hy = cy + s * 0.15; return `<g><rect x="${(hx - 12).toFixed(1)}" y="${(hy - 9).toFixed(1)}" width="24" height="18" rx="2" fill="#3F7CAC" stroke="#2c5a7d" stroke-width="1.5"/><line x1="${hx}" y1="${(hy - 9).toFixed(1)}" x2="${hx}" y2="${(hy + 9).toFixed(1)}" stroke="#fff" stroke-width="1.5"/></g>`; }
+    if (id === "pelota") { const hx = cx + s * 1.02, hy = cy + s * 0.22; return `<g><circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="13" fill="#fff" stroke="#333" stroke-width="1.5"/><path d="M${hx} ${hy - 13} l4 9 l-8 0 Z" fill="#333"/><path d="M${hx - 13} ${hy} l9 -3 l0 8 Z" fill="#333"/><path d="M${hx + 13} ${hy} l-9 3 l0 -8 Z" fill="#333"/></g>`; }
+    // ── existentes ──
+    if (slot === "hat") {
+        if (id === "gorro") return `<path d="M${cx - s * 0.62} ${top + 12} Q${cx} ${top - s * 0.55} ${cx + s * 0.62} ${top + 12} Z" fill="#E15554" stroke="#9e2b2b" stroke-width="2"/><circle cx="${cx}" cy="${(top - s * 0.5)}" r="6" fill="#fff"/><rect x="${cx - s * 0.66}" y="${top + 9}" width="${s * 1.32}" height="9" rx="4" fill="#fff" stroke="#9e2b2b" stroke-width="1.5"/>`;
+        if (id === "fiesta") return `<path d="M${cx - s * 0.42} ${top + 10} L${cx} ${top - s * 0.62} L${cx + s * 0.42} ${top + 10} Z" fill="#F4A261" stroke="#c97b33" stroke-width="2"/><circle cx="${cx}" cy="${top - s * 0.62}" r="5" fill="#E76F51"/><circle cx="${cx - s * 0.18}" cy="${top - s * 0.1}" r="2.5" fill="#fff"/><circle cx="${cx + s * 0.18}" cy="${top - s * 0.25}" r="2.5" fill="#fff"/>`;
+        if (id === "flor") { const pet = [0, 72, 144, 216, 288].map(a => { const x = cx + Math.cos(a * Math.PI / 180) * 9; const y = (top + 2) + Math.sin(a * Math.PI / 180) * 9; return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="#F7A8C4"/>`; }).join(""); return `<g>${pet}<circle cx="${cx}" cy="${top + 2}" r="5" fill="#FFD45E"/></g>`; }
+        if (id === "corona") return `<path d="M${cx - 22} ${top + 6} L${cx - 22} ${top - 10} L${cx - 11} ${top + 1} L${cx} ${top - 14} L${cx + 11} ${top + 1} L${cx + 22} ${top - 10} L${cx + 22} ${top + 6} Z" fill="#FFD45E" stroke="#E0A82E" stroke-width="2"/><circle cx="${cx}" cy="${top - 6}" r="2.5" fill="#E15554"/>`;
+        if (id === "mago") return `<path d="M${cx - s * 0.44} ${top + 10} L${cx + s * 0.1} ${top - s * 0.8} L${cx + s * 0.18} ${top + 8} Z" fill="#5B5BA6" stroke="#3b3b73" stroke-width="2"/><rect x="${cx - s * 0.5}" y="${top + 7}" width="${s * 0.8}" height="8" rx="4" fill="#474782"/><circle cx="${cx - s * 0.05}" cy="${top - s * 0.3}" r="3" fill="#FFD45E"/>`;
+        if (id === "diadema") return `<path d="M${cx - s * 0.5} ${top + 12} Q${cx} ${top - 8} ${cx + s * 0.5} ${top + 12}" fill="none" stroke="#E7B6D0" stroke-width="5" stroke-linecap="round"/><path d="M${cx - 7} ${top + 2} l7 -9 l7 9 l-7 5 Z" fill="#9AD0E8" stroke="#5FA8C9" stroke-width="1.5"/>`;
+    }
+    if (slot === "face") {
+        if (id === "gafas") return `<g fill="rgba(255,255,255,0.25)" stroke="#444" stroke-width="3"><circle cx="${cx - ex}" cy="${ey}" r="${(s * 0.20).toFixed(1)}"/><circle cx="${cx + ex}" cy="${ey}" r="${(s * 0.20).toFixed(1)}"/><line x1="${cx - ex + s * 0.2}" y1="${ey}" x2="${cx + ex - s * 0.2}" y2="${ey}" stroke="#444"/></g>`;
+        if (id === "gafas_sol") return `<g><rect x="${(cx - ex - s * 0.22).toFixed(1)}" y="${(ey - s * 0.13).toFixed(1)}" width="${(s * 0.44).toFixed(1)}" height="${(s * 0.30).toFixed(1)}" rx="6" fill="#222"/><rect x="${(cx + ex - s * 0.22).toFixed(1)}" y="${(ey - s * 0.13).toFixed(1)}" width="${(s * 0.44).toFixed(1)}" height="${(s * 0.30).toFixed(1)}" rx="6" fill="#222"/><line x1="${cx - ex + s * 0.22}" y1="${ey}" x2="${cx + ex - s * 0.22}" y2="${ey}" stroke="#222" stroke-width="3"/></g>`;
+        if (id === "bigote") { const my = cy - s * 0.02; return `<path d="M${cx} ${my - 7} q-10 -6 -20 0 q8 7 20 3 q12 4 20 -3 q-10 -6 -20 0" fill="#5A3A22"/>`; }
+        if (id === "antifaz") return `<path d="M${cx - ex - s * 0.24} ${ey} q${s * 0.24} -${s * 0.18} ${s * 0.48} 0 q${s * 0.24} -${s * 0.18} ${s * 0.48} 0 q0 ${s * 0.28} -${s * 0.24} ${s * 0.24} q-${s * 0.12} -${s * 0.05} -${s * 0.24} -${s * 0.12} q-${s * 0.12} ${s * 0.07} -${s * 0.24} ${s * 0.12} q-${s * 0.24} ${s * 0.04} -${s * 0.24} -${s * 0.24} Z" fill="#3A3A55" opacity="0.92"/>`;
+    }
+    if (slot === "neck") {
+        const ny = cy + s * 0.52;
+        if (id === "bufanda") return `<g><path d="M${cx - s * 0.66} ${ny - 4} q${s * 0.66} ${s * 0.34} ${s * 1.32} 0 l0 11 q-${s * 0.66} ${s * 0.34} -${s * 1.32} 0 Z" fill="#E76F51" stroke="#b5482f" stroke-width="2"/><rect x="${cx - 7}" y="${ny + 4}" width="14" height="${(s * 0.5).toFixed(1)}" rx="4" fill="#E76F51" stroke="#b5482f" stroke-width="2"/></g>`;
+        if (id === "pajarita") return `<g><path d="M${cx} ${ny} l-17 -10 l0 20 Z" fill="#5B6CB5" stroke="#3f4d85" stroke-width="1.5"/><path d="M${cx} ${ny} l17 -10 l0 20 Z" fill="#5B6CB5" stroke="#3f4d85" stroke-width="1.5"/><circle cx="${cx}" cy="${ny}" r="5" fill="#3f4d85"/></g>`;
+        if (id === "medalla") return `<g><line x1="${cx - 12}" y1="${(cy + s * 0.35).toFixed(1)}" x2="${cx}" y2="${ny + 8}" stroke="#C9A227" stroke-width="3"/><line x1="${cx + 12}" y1="${(cy + s * 0.35).toFixed(1)}" x2="${cx}" y2="${ny + 8}" stroke="#C9A227" stroke-width="3"/><circle cx="${cx}" cy="${ny + 14}" r="11" fill="#FFD45E" stroke="#C9A227" stroke-width="2.5"/><text x="${cx}" y="${ny + 18}" text-anchor="middle" font-size="12" fill="#C9A227">\u2605</text></g>`;
+        if (id === "capa") return `<g><path d="M${cx - s * 0.55} ${ny - 6} q${s * 0.55} ${s * 0.22} ${s * 1.1} 0 l-${s * 0.18} 7 q-${s * 0.37} ${s * 0.14} -${s * 0.74} 0 Z" fill="#B23A48" stroke="#7d2531" stroke-width="2"/></g>`;
+    }
+    if (slot === "held") {
+        const hx = cx + s * 1.02, hy = cy + s * 0.1;
+        if (id === "globo") return `<g><line x1="${hx}" y1="${hy}" x2="${hx - 4}" y2="${hy - s * 0.7}" stroke="#999" stroke-width="1.5"/><ellipse cx="${hx - 6}" cy="${hy - s * 0.95}" rx="14" ry="17" fill="#E15554" stroke="#b5333a" stroke-width="1.5"/><path d="M${hx - 6} ${hy - s * 0.78} l-3 5 l6 0 Z" fill="#E15554"/></g>`;
+        if (id === "varita") return `<g><line x1="${hx - 14}" y1="${hy + 14}" x2="${hx + 4}" y2="${hy - s * 0.5}" stroke="#8a5a2b" stroke-width="4" stroke-linecap="round"/><path d="M${hx + 6} ${hy - s * 0.62} l3 8 l8 1 l-6 6 l2 8 l-7 -4 l-7 4 l2 -8 l-6 -6 l8 -1 Z" fill="#FFD45E" stroke="#E0A82E" stroke-width="1"/></g>`;
+        if (id === "helado") return `<g><path d="M${hx - 8} ${hy - 4} l8 22 l8 -22 Z" fill="#E6B800" stroke="#b58e00" stroke-width="1"/><circle cx="${hx - 3}" cy="${hy - 8}" r="8" fill="#F49AC2"/><circle cx="${hx + 4}" cy="${hy - 8}" r="8" fill="#9AD0E8"/><circle cx="${hx}" cy="${hy - 15}" r="8" fill="#F7E36B"/></g>`;
+    }
+    return "";
+}
+
+function companionSVG(opts) {
+    opts = opts || {};
+    const stage = Math.max(1, Math.min(3, opts.stage || 1));
+    const mood = opts.mood || "feliz";
+    const acc = opts.accessories || {};
+    const design = COMPANION_DESIGNS.find(d => d.id === opts.design) || COMPANION_DESIGNS[0];
+    const body = design.body, cheek = design.cheek, shape = design.shape || "blob";
+    const dark = "#2D6A4F", ink = "#2B3A33";
+    const s = stage === 1 ? 46 : stage === 2 ? 55 : 63;
+    const cx = 100, cy = 130;
+    const ex = s * 0.40, ey = cy - s * 0.34, er = Math.max(4, s * 0.11);
+    const top = cy - s * 0.92;
+    // shape-specific features
+    let earsBehind = "", faceExtra = "", topExtra = "";
+    if (shape === "gato") earsBehind = `<path d="M${cx - s * 0.52} ${top + 16} l-4 -26 l24 12 Z" fill="${body}" stroke="${dark}" stroke-width="3"/><path d="M${cx + s * 0.52} ${top + 16} l4 -26 l-24 12 Z" fill="${body}" stroke="${dark}" stroke-width="3"/>`;
+    else if (shape === "conejo") earsBehind = `<ellipse cx="${cx - s * 0.3}" cy="${top - 12}" rx="9" ry="26" fill="${body}" stroke="${dark}" stroke-width="3"/><ellipse cx="${cx + s * 0.3}" cy="${top - 12}" rx="9" ry="26" fill="${body}" stroke="${dark}" stroke-width="3"/><ellipse cx="${cx - s * 0.3}" cy="${top - 12}" rx="4" ry="16" fill="#F7C9D6"/><ellipse cx="${cx + s * 0.3}" cy="${top - 12}" rx="4" ry="16" fill="#F7C9D6"/>`;
+    else if (shape === "oso") { earsBehind = `<circle cx="${cx - s * 0.6}" cy="${top + 8}" r="14" fill="${body}" stroke="${dark}" stroke-width="3"/><circle cx="${cx + s * 0.6}" cy="${top + 8}" r="14" fill="${body}" stroke="${dark}" stroke-width="3"/>`; faceExtra = `<ellipse cx="${cx}" cy="${cy + s * 0.14}" rx="${s * 0.32}" ry="${s * 0.24}" fill="#FFF7EE" opacity="0.95"/>`; }
+    else if (shape === "ave") { topExtra = `<path d="M${cx} ${top + 2} q-7 -18 5 -22 q-1 12 7 18 Z" fill="#F2C14E" stroke="${dark}" stroke-width="2"/>`; faceExtra = `<path d="M${cx - 8} ${ey + s * 0.22} l16 0 l-8 13 Z" fill="#F2A33A" stroke="${dark}" stroke-width="1.5"/>`; }
+    // eyes
+    let eyes;
+    if (mood === "calma") eyes = `<path d="M${cx - ex - 7} ${ey} q7 6 14 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M${cx + ex - 7} ${ey} q7 6 14 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+    else if (mood === "fiesta") eyes = `<circle cx="${cx - ex}" cy="${ey}" r="${er + 1}" fill="${ink}"/><circle cx="${cx - ex + 2}" cy="${ey - 2}" r="2" fill="#fff"/><circle cx="${cx + ex}" cy="${ey}" r="${er + 1}" fill="${ink}"/><circle cx="${cx + ex + 2}" cy="${ey - 2}" r="2" fill="#fff"/>`;
+    else eyes = `<circle cx="${cx - ex}" cy="${ey}" r="${er}" fill="${ink}"/><circle cx="${cx - ex + 1.5}" cy="${ey - 1.5}" r="1.6" fill="#fff"/><circle cx="${cx + ex}" cy="${ey}" r="${er}" fill="${ink}"/><circle cx="${cx + ex + 1.5}" cy="${ey - 1.5}" r="1.6" fill="#fff"/>`;
+    const my = cy - s * 0.02;
+    let mouth;
+    if (mood === "fiesta") mouth = `<path d="M${cx - 12} ${my} q12 16 24 0 z" fill="#C0392B" stroke="${ink}" stroke-width="2"/>`;
+    else if (mood === "animo") mouth = `<path d="M${cx - 9} ${my} q9 11 18 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+    else mouth = `<path d="M${cx - 8} ${my} q8 7 16 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+    const crown = stage === 3 ? `<path d="M${cx - 18} ${top - 1} L${cx - 11} ${top - 16} L${cx} ${top - 4} L${cx + 11} ${top - 16} L${cx + 18} ${top - 1} Z" fill="#FFD45E" stroke="#E0A82E" stroke-width="2"/>` : "";
+    const ay = cy + s * 0.18;
+    const arms = mood === "animo"
+        ? `<path d="M${cx - s} ${ay} q-16 -10 -10 -26" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M${cx + s} ${ay} q16 6 12 22" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/>`
+        : `<path d="M${cx - s} ${ay} q-14 6 -10 18" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M${cx + s} ${ay} q14 6 10 18" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+    const sp = mood === "fiesta" ? `<g stroke="#FFD45E" stroke-width="3" stroke-linecap="round"><path d="M40 60 l0 12 M34 66 l12 0"/><path d="M164 70 l0 12 M158 76 l12 0"/><path d="M150 40 l0 10 M145 45 l10 0"/></g>` : "";
+    const neck = acc.neck ? accessorySVG("neck", acc.neck, cx, cy, s) : "";
+    const face = acc.face ? accessorySVG("face", acc.face, cx, cy, s) : "";
+    const hat = acc.hat ? accessorySVG("hat", acc.hat, cx, cy, s) : "";
+    const held = acc.held ? accessorySVG("held", acc.held, cx, cy, s) : "";
+    return `<svg viewBox="0 0 200 215" width="100%" style="max-width:220px;height:auto;display:block;margin:0 auto;">
+  ${sp}
+  ${earsBehind}
+  ${topExtra}
+  ${crown}
+  ${arms}
+  <ellipse cx="${cx}" cy="${cy}" rx="${s}" ry="${s * 0.92}" fill="${body}" stroke="${dark}" stroke-width="3.5"/>
+  <ellipse cx="${cx}" cy="${cy + s * 0.22}" rx="${s * 0.62}" ry="${s * 0.5}" fill="#FFFFFF" opacity="0.5"/>
+  ${faceExtra}
+  ${neck}
+  <ellipse cx="${cx - ex}" cy="${ey + s * 0.22}" rx="${s * 0.16}" ry="${s * 0.10}" fill="${cheek}" opacity="0.8"/>
+  <ellipse cx="${cx + ex}" cy="${ey + s * 0.22}" rx="${s * 0.16}" ry="${s * 0.10}" fill="${cheek}" opacity="0.8"/>
+  ${eyes}
+  ${mouth}
+  ${face}
+  <ellipse cx="${cx - s * 0.5}" cy="${cy + s * 0.85}" rx="13" ry="7" fill="${dark}"/>
+  <ellipse cx="${cx + s * 0.5}" cy="${cy + s * 0.85}" rx="13" ry="7" fill="${dark}"/>
+  ${held}
+  ${hat}
+</svg>`;
+}
+
+const COMPANION_MSGS = {
+    bienvenida: ["\u00a1Hola! Me alegro de verte otra vez.", "\u00a1Qu\u00e9 bien que has vuelto! \u00bfEmpezamos?", "\u00a1Aqu\u00ed estoy, listo para acompa\u00f1arte!"],
+    animo: ["No importa si fallas: lo importante es que lo intentas.", "Cada intento te hace m\u00e1s fuerte. \u00a1Sigue!", "Equivocarse es parte de aprender, \u00a1tú puedes!", "Vas a tu ritmo, y est\u00e1 perfecto.", "Me encanta lo mucho que te esfuerzas."],
+    logro: ["\u00a1Lo conseguiste! Cu\u00e1nto has trabajado para esto.", "\u00a1Bien hecho! Has crecido un poquito m\u00e1s.", "\u00a1Qu\u00e9 orgulloso estoy de tu esfuerzo!"],
+};
+
+function companionStage(stars) { stars = stars || 0; if (stars >= 60) return 3; if (stars >= 20) return 2; return 1; }
+function companionNext(stars) { if (stars >= 60) return null; return stars >= 20 ? 60 : 20; }
+
+function Mascota({ patient, onClose }) {
+    const pid = patient ? patient.id : "_demo";
+    const stored = (typeof storeLoad === "function" && storeLoad("companion:" + pid)) || {};
+    const [name, setName] = useState(stored.name || "");
+    const [editing, setEditing] = useState(!stored.name);
+    const [draft, setDraft] = useState(stored.name || "");
+    const [design, setDesign] = useState(stored.design || "brote");
+    const [owned, setOwned] = useState(Array.isArray(stored.owned) ? stored.owned : []);
+    const [equipped, setEquipped] = useState(stored.equipped || {});
+    const [spent, setSpent] = useState(stored.spent || 0);
+    const [tab, setTab] = useState("inicio");
+    const [msgKey, setMsgKey] = useState("bienvenida");
+    const [reactionsOn, setReactionsOn] = useState(stored.reactions !== false);
+
+    const prog = (typeof getPatientProgress === "function") ? getPatientProgress(patient ? patient.id : null) : { stars: 0 };
+    const stars = prog.stars || 0;
+    const stage = companionStage(stars);
+    const next = companionNext(stars);
+    const coins = Math.max(0, stars - spent);
+    const mood = msgKey === "logro" ? "fiesta" : msgKey === "animo" ? "animo" : "feliz";
+    const msgs = COMPANION_MSGS[msgKey] || COMPANION_MSGS.bienvenida;
+    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+    const displayName = name || "tu compa\u00f1ero";
+    const pct = next ? Math.min(100, Math.round(100 * stars / next)) : 100;
+
+    const persist = (over) => { try { storeSave("companion:" + pid, Object.assign({ name: name, design: design, owned: owned, equipped: equipped, spent: spent, reactions: reactionsOn }, over || {})); } catch (e) { } };
+    const saveName = (nm) => { setName(nm); setEditing(false); persist({ name: nm }); };
+    const pickDesign = (id) => { setDesign(id); persist({ design: id }); };
+    const buy = (item) => { if (owned.indexOf(item.id) >= 0 || coins < item.cost) return; const o2 = owned.concat([item.id]); const sp2 = spent + item.cost; const eq2 = Object.assign({}, equipped); eq2[item.slot] = item.id; setOwned(o2); setSpent(sp2); setEquipped(eq2); persist({ owned: o2, spent: sp2, equipped: eq2 }); };
+    const toggleEquip = (item) => { const eq2 = Object.assign({}, equipped); eq2[item.slot] = (eq2[item.slot] === item.id) ? null : item.id; setEquipped(eq2); persist({ equipped: eq2 }); };
+
+    const coinBadge = React.createElement("div", { style: { display: "inline-flex", alignItems: "center", gap: 4, background: "#FFF6DC", border: "1.5px solid #E9C766", borderRadius: 20, padding: "4px 12px", fontWeight: 800, color: "#9A7B1A" } }, "\uD83E\uDE99 " + coins);
+
+    const tabBtn = (id, label) => React.createElement("button", { key: id, onClick: () => { try { sfx.tap(); } catch (e) { } setTab(id); }, style: { flex: 1, padding: "8px 6px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", background: tab === id ? "#2D6A4F" : "#fff", color: tab === id ? "#fff" : "#2D6A4F", border: "2px solid " + (tab === id ? "#2D6A4F" : "#cdddd4") } }, label);
+
+    let content;
+    if (tab === "diseno") {
+        content = React.createElement("div", { style: { marginTop: 12 } },
+            React.createElement("div", { style: { fontSize: 13, color: "#555", marginBottom: 8, textAlign: "center" } }, "Elige el aspecto de tu compa\u00f1ero (gratis):"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 } },
+                COMPANION_DESIGNS.map(d => React.createElement("div", { key: d.id, onClick: () => { try { sfx.tap(); } catch (e) { } pickDesign(d.id); }, style: { cursor: "pointer", border: "2px solid " + (design === d.id ? "#2D6A4F" : "#e5e5e5"), borderRadius: 12, padding: 6, textAlign: "center", background: design === d.id ? "#EAF7F0" : "#fff" } },
+                    React.createElement("div", { dangerouslySetInnerHTML: { __html: companionSVG({ stage: 1, mood: "feliz", design: d.id }) } }),
+                    React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#444" } }, d.name)
+                ))
+            )
+        );
+    } else if (tab === "tienda") {
+        content = React.createElement("div", { style: { marginTop: 12 } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 13, color: "#555" } }, "Gana \uD83E\uDE99 practicando y c\u00e1mbialas por accesorios:"),
+                coinBadge),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 } },
+                COMPANION_SHOP.map(item => {
+                    const isOwned = owned.indexOf(item.id) >= 0;
+                    const isEq = equipped[item.slot] === item.id;
+                    return React.createElement("div", { key: item.id, style: { border: "2px solid " + (isEq ? "#2D6A4F" : "#e5e5e5"), borderRadius: 12, padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, background: isEq ? "#EAF7F0" : "#fff" } },
+                        React.createElement("div", { style: { fontSize: 13 } }, item.emoji + " " + item.name),
+                        isOwned
+                            ? React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } toggleEquip(item); }, style: { padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: isEq ? "#2D6A4F" : "#cde6da", color: isEq ? "#fff" : "#2D6A4F" } }, isEq ? "Puesto" : "Poner")
+                            : React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } buy(item); }, disabled: coins < item.cost, style: { padding: "5px 10px", borderRadius: 8, border: "none", cursor: coins < item.cost ? "default" : "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 12, background: coins < item.cost ? "#eee" : "#FFD45E", color: coins < item.cost ? "#aaa" : "#7A5E00" } }, "\uD83E\uDE99 " + item.cost)
+                    );
+                })
+            ),
+            React.createElement("div", { style: { fontSize: 11, color: "#999", marginTop: 8, textAlign: "center" } }, "Los accesorios son solo para divertirse. Las monedas se ganan esfor\u00e1ndose, no compitiendo.")
+        );
+    } else {
+        content = React.createElement("div", null,
+            React.createElement("div", { dangerouslySetInnerHTML: { __html: companionSVG({ stage: stage, mood: mood, design: design, accessories: equipped }) } }),
+            editing
+                ? React.createElement("div", { style: { textAlign: "center", margin: "10px 0" } },
+                    React.createElement("div", { style: { fontSize: 13, color: "#555", marginBottom: 6 } }, "\u00bfC\u00f3mo quieres llamarlo?"),
+                    React.createElement("input", { value: draft, maxLength: 18, onChange: (e) => setDraft(e.target.value), placeholder: "Su nombre...", style: { padding: "8px 12px", borderRadius: 10, border: "2px solid #cdddd4", fontSize: 15, fontFamily: "inherit", textAlign: "center" } }),
+                    React.createElement("button", { onClick: () => { if (draft.trim()) { try { sfx.tap(); } catch (e) { } saveName(draft.trim()); } }, style: { marginLeft: 8, padding: "8px 14px", borderRadius: 10, border: "none", background: "#2D6A4F", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "\u00a1Listo!")
+                )
+                : React.createElement("div", { style: { textAlign: "center", margin: "8px 0 4px" } },
+                    React.createElement("span", { style: { fontSize: 20, fontWeight: 800, color: "#333" } }, displayName),
+                    React.createElement("button", { onClick: () => { setDraft(name); setEditing(true); }, style: { marginLeft: 8, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13, fontFamily: "inherit" } }, "\u270f\ufe0f")
+                ),
+            React.createElement("div", { style: { background: "#EAF7F0", border: "1.5px solid #BFE6D2", borderRadius: 14, padding: "10px 14px", margin: "10px 0", textAlign: "center", color: "#2D5C46", fontSize: 14, fontWeight: 600 } }, "\u201c" + msg + "\u201d"),
+            React.createElement("div", { style: { margin: "12px 0 4px" } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginBottom: 4 } },
+                    React.createElement("span", null, "Nivel " + stage + (stage === 3 ? " \u00b7 \u00a1m\u00e1ximo!" : "")),
+                    React.createElement("span", null, next ? (stars + " / " + next + " \u2b50") : (stars + " \u2b50"))),
+                React.createElement("div", { style: { background: "#eee", borderRadius: 8, height: 12, overflow: "hidden" } },
+                    React.createElement("div", { style: { width: pct + "%", height: 12, background: "#7FD1A6", borderRadius: 8 } }))
+            ),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginTop: 12 } },
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setMsgKey("animo"); }, style: { padding: "8px 14px", borderRadius: 10, border: "2px solid #BFE6D2", background: "#fff", color: "#2D6A4F", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "\uD83D\uDCAC \u00c1nimo"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setMsgKey("logro"); }, style: { padding: "8px 14px", borderRadius: 10, border: "none", background: "#7FD1A6", color: "#13412C", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "\uD83C\uDF89 \u00a1Lo logr\u00e9!")
+            )
+        );
+    }
+
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { style: { background: "#fff", borderRadius: 20, padding: 20, maxWidth: 440, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: "#2D6A4F" } }, "\uD83D\uDC23 Mi compa\u00f1ero"),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } }, coinBadge,
+                    React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } onClose && onClose(); }, style: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#999" } }, "\u00d7"))
+            ),
+            React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 4 } }, tabBtn("inicio", "\uD83C\uDFE0 Inicio"), tabBtn("diseno", "\uD83C\uDFA8 Dise\u00f1o"), tabBtn("tienda", "\uD83D\uDED2 Tienda")),
+            content,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, paddingTop: 12, borderTop: "1px solid #eee", fontSize: 12.5, color: "#555" } },
+                React.createElement("span", { style: { flex: 1, paddingRight: 8 } }, "Reacciones del compa\u00f1ero durante las actividades"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } const nv = !reactionsOn; setReactionsOn(nv); persist({ reactions: nv }); }, style: { padding: "5px 12px", borderRadius: 14, border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, background: reactionsOn ? "#7FD1A6" : "#ddd", color: reactionsOn ? "#13412C" : "#777" } }, reactionsOn ? "Activadas" : "Desactivadas")
+            )
+        )
+    );
+}
+
+const COMPANION_REACT_MSGS = {
+    bien: ["\u00a1Bien hecho!", "\u00a1Lo lograste!", "\u00a1Genial!", "\u00a1Qu\u00e9 bien!", "\u00a1Sigue as\u00ed!"],
+    animo: ["\u00a1Casi! Sigue.", "\u00a1Buen intento!", "\u00a1T\u00fa puedes!", "No pasa nada, sigue.", "\u00a1Vas mejorando!"],
+};
+function CompanionReactions() {
+    const [toast, setToast] = React.useState(null);
+    React.useEffect(() => {
+        const handler = (e) => {
+            const det = (e && e.detail) || {};
+            const pid = det.patientId;
+            if (!pid) return;
+            try { if (typeof advanceAdventure === "function") advanceAdventure(pid, det.areaId, det.activityId, det.correct); } catch (er) { }
+            let data = {};
+            try { data = (typeof storeLoad === "function" && storeLoad("companion:" + pid)) || {}; } catch (er) { }
+            if (data.reactions === false) return;
+            const ok = !!det.correct;
+            const bank = ok ? COMPANION_REACT_MSGS.bien : COMPANION_REACT_MSGS.animo;
+            const msg = bank[Math.floor(Math.random() * bank.length)];
+            let stars = 0;
+            try { stars = ((typeof getPatientProgress === "function" ? getPatientProgress(pid) : {}).stars) || 0; } catch (er) { }
+            setToast({ msg: msg, mood: ok ? "fiesta" : "animo", design: data.design || "brote", equipped: data.equipped || {}, stage: companionStage(stars), id: Date.now() });
+        };
+        window.addEventListener("terapiapp-companion-react", handler);
+        return () => window.removeEventListener("terapiapp-companion-react", handler);
+    }, []);
+    React.useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(null), 2600);
+        return () => clearTimeout(t);
+    }, [toast]);
+    if (!toast) return null;
+    return React.createElement("div", { key: toast.id, style: { position: "fixed", right: 16, bottom: 16, zIndex: 130, width: 150, background: "#fff", borderRadius: 16, boxShadow: "0 8px 26px rgba(0,0,0,0.18)", border: "2px solid #BFE6D2", padding: 10, textAlign: "center", pointerEvents: "none" } },
+        React.createElement("div", { style: { maxWidth: 92, margin: "0 auto" }, dangerouslySetInnerHTML: { __html: companionSVG({ stage: toast.stage, mood: toast.mood, design: toast.design, accessories: toast.equipped }) } }),
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: "#2D5C46", marginTop: 2 } }, toast.msg)
+    );
+}
+
+function buildAdventureMapHTML(plan, current, completed, AREAS, ACTS, weak) {
+    completed = completed || [];
+    weak = weak || [];
+    const steps = (plan && plan.steps) || [];
+    const colOf = id => { const a = (AREAS || []).find(x => x.id === id); return (a && typeof a.color === "string" && a.color[0] === "#") ? a.color : "#457B9D"; };
+    const actLabel = (area, act) => { const list = (ACTS && ACTS[area]) || []; const o = list.find(x => x.id === act); return (o && o.label) || act; };
+    const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const W = 600, perRow = 3, rowH = 132, padX = 70, padTop = 54;
+    const rows = Math.max(1, Math.ceil(steps.length / perRow));
+    const H = padTop + rows * rowH + 20;
+    const gapX = (W - padX * 2) / (perRow - 1);
+    const pos = steps.map((s, i) => { const r = Math.floor(i / perRow); let col = i % perRow; if (r % 2 === 1) col = perRow - 1 - col; return { x: padX + col * gapX, y: padTop + r * rowH + 36, i }; });
+    let path = "";
+    for (let i = 1; i < pos.length; i++) path += `<line x1="${pos[i - 1].x}" y1="${pos[i - 1].y}" x2="${pos[i].x}" y2="${pos[i].y}" stroke="#cfd8d3" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 12"/>`;
+    let nodes = `<text x="${pos.length ? pos[0].x : W / 2}" y="28" text-anchor="middle" font-size="13" fill="#2D6A4F" font-weight="800">\uD83C\uDFE0 Salida</text>`;
+    pos.forEach(p => {
+        const s = steps[p.i]; const done = completed.indexOf(p.i) >= 0; const isCur = p.i === current && !done; const col = colOf(s.area);
+        const r = isCur ? 26 : 21; const fill = done ? "#2D6A4F" : isCur ? col : "#EDEFEE"; const txtFill = (done || isCur) ? "#fff" : "#9aa3a0";
+        const ring = isCur ? `<circle cx="${p.x}" cy="${p.y}" r="${r + 6}" fill="none" stroke="${col}" stroke-width="3" opacity="0.5"/>` : "";
+        const label = done ? "\u2713" : String(p.i + 1);
+        nodes += ring + `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="#fff" stroke-width="3"/><text x="${p.x}" y="${p.y + 5}" text-anchor="middle" font-size="${isCur ? 18 : 15}" font-weight="800" fill="${txtFill}">${label}</text><text x="${p.x}" y="${p.y + r + 15}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3a4742">${esc(actLabel(s.area, s.activity)).slice(0, 16)}</text><text x="${p.x}" y="${p.y + r + 28}" text-anchor="middle" font-size="9" fill="#9aa3a0">${s.duration} min</text>`;
+        if (weak.indexOf(s.area) >= 0) nodes += `<text x="${p.x + r + 2}" y="${p.y - r + 4}" font-size="14">\uD83D\uDCAA</text>`;
+        if (isCur) nodes += `<text x="${p.x}" y="${p.y - r - 8}" text-anchor="middle" font-size="14">\uD83D\uDCCD</text>`;
+    });
+    if (pos.length) { const last = pos[pos.length - 1]; nodes += `<text x="${last.x + 30}" y="${last.y - 18}" font-size="18">\uD83C\uDFC1</text>`; }
+    const legend = weak.length ? `<text x="${W / 2}" y="${H - 4}" text-anchor="middle" font-size="9.5" fill="#9aa3a0">\uD83D\uDCAA = \u00e1rea a reforzar seg\u00fan el historial</text>` : "";
+    return `<div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:340px;height:auto;background:#F7FAF8;border:1px solid #e3ece7;border-radius:14px;">${path}${nodes}${legend}</svg></div>`;
+}
+function advanceAdventure(patientId, areaId, activityId, correct) {
+    if (!patientId || !areaId || !activityId) return;
+    var THRESHOLD = 3;
+    let adv;
+    try { adv = (typeof storeLoad === "function") && storeLoad("adventure:" + patientId); } catch (e) { return; }
+    if (!adv || !adv.plan || !adv.plan.steps) return;
+    const steps = adv.plan.steps;
+    const cur = adv.current || 0;
+    if (cur >= steps.length) return;
+    const st = steps[cur];
+    if (!(st && st.area === areaId && st.activity === activityId)) return;
+    adv.tally = adv.tally || {};
+    const t = adv.tally[cur] || { correct: 0, total: 0 };
+    t.total += 1; if (correct) t.correct += 1;
+    adv.tally[cur] = t;
+    const tries = (adv.tries || 0) + 1;
+    if (tries >= THRESHOLD) {
+        const completed = Array.isArray(adv.completed) ? adv.completed : [];
+        if (completed.indexOf(cur) < 0) completed.push(cur);
+        adv.completed = completed;
+        adv.current = cur + 1;
+        adv.tries = 0;
+    } else { adv.tries = tries; }
+    try { storeSave("adventure:" + patientId, adv); } catch (e) { }
+}
+
+function AventuraView({ patient, onClose, onLaunch }) {
+    const pid = patient ? patient.id : "_demo";
+    const comp = (typeof storeLoad === "function" && storeLoad("companion:" + pid)) || {};
+    const stars = (typeof getPatientProgress === "function" ? (getPatientProgress(patient ? patient.id : null).stars || 0) : 0);
+    const stage = (typeof companionStage === "function") ? companionStage(stars) : 2;
+    const [phase, setPhase] = useState("config");
+    const [needs, setNeeds] = useState([]);
+    const [minutes, setMinutes] = useState(45);
+    const [plan, setPlan] = useState(null);
+    const [current, setCurrent] = useState(0);
+    const [completed, setCompleted] = useState([]);
+    const [addOpen, setAddOpen] = useState(false);
+    const [addArea, setAddArea] = useState(null);
+
+    const clearAdv = () => { try { storeSave("adventure:" + pid, null); } catch (e) { } };
+    React.useEffect(() => { if (phase === "map" && plan) { try { storeSave("adventure:" + pid, { plan: plan, current: current, completed: completed, tally: (storeLoad("adventure:" + pid) || {}).tally || {} }); } catch (e) { } } }, [phase, plan, current, completed]);
+    React.useEffect(() => { let a; try { a = storeLoad("adventure:" + pid); } catch (e) { } if (a && a.plan && a.plan.steps && a.plan.steps.length) { setPlan(a.plan); setCurrent(a.current || 0); setCompleted(a.completed || []); setPhase((a.current || 0) >= a.plan.steps.length ? "done" : "map"); } }, []);
+    React.useEffect(() => { if (phase !== "map") return; const h = (e) => { const det = (e && e.detail) || {}; if (det.patientId !== pid) return; let a; try { a = storeLoad("adventure:" + pid); } catch (er) { } if (!a || !a.plan || !a.plan.steps) return; setCompleted(a.completed || []); if ((a.current || 0) >= a.plan.steps.length) { setPhase("done"); } else { setCurrent(a.current || 0); } }; window.addEventListener("terapiapp-companion-react", h); return () => window.removeEventListener("terapiapp-companion-react", h); }, [phase, pid]);
+
+    const AREAS_ = (typeof AREAS !== "undefined") ? AREAS : [];
+    const areaLabel = id => { const a = AREAS_.find(x => x.id === id); return a ? a.label : id; };
+    const areaColor = id => { const a = AREAS_.find(x => x.id === id); return (a && typeof a.color === "string" && a.color[0] === "#") ? a.color : "#457B9D"; };
+    const actLabel = (area, act) => { const o = (AREA_ACTIVITIES[area] || []).find(x => x.id === act); return (o && o.label) || act; };
+    const mascot = (mood) => React.createElement("div", { style: { maxWidth: 110, margin: "0 auto" }, dangerouslySetInnerHTML: { __html: companionSVG({ stage: stage, mood: mood || "feliz", design: comp.design || "brote", accessories: comp.equipped || {} }) } });
+    const toggleNeed = (id) => { setNeeds(needs.indexOf(id) >= 0 ? needs.filter(x => x !== id) : needs.concat([id])); };
+    const dxList = (patient && Array.isArray(patient.diagnosticos) && patient.diagnosticos.length) ? patient.diagnosticos.join(", ") : "\u2014";
+
+    // historial de aciertos por \u00e1rea
+    const accByArea = (function () { try { const sess = (typeof getSessions === "function" ? getSessions(patient ? patient.id : null) : []) || []; const agg = {}; sess.forEach(s => { if (!s || !s.result || typeof s.result.correct !== "boolean") return; agg[s.area] = agg[s.area] || { n: 0, ok: 0 }; agg[s.area].n++; if (s.result.correct) agg[s.area].ok++; }); const o = {}; Object.keys(agg).forEach(a => { if (agg[a].n >= 3) o[a] = agg[a].ok / agg[a].n; }); return o; } catch (e) { return {}; } })();
+    const weakAreas = Object.keys(accByArea).filter(a => accByArea[a] < 0.6);
+    const runAdv = (phase === "done") ? ((function () { try { return storeLoad("adventure:" + pid); } catch (e) { return null; } })() || {}) : null;
+    let summaryRows = [];
+    if (phase === "done" && plan) { const tally = (runAdv && runAdv.tally) || {}; const byArea = {}; plan.steps.forEach((s, i) => { byArea[s.area] = byArea[s.area] || { stops: 0, correct: 0, total: 0 }; byArea[s.area].stops++; const t = tally[i]; if (t) { byArea[s.area].correct += t.correct || 0; byArea[s.area].total += t.total || 0; } }); summaryRows = Object.keys(byArea).map(a => ({ area: a, stops: byArea[a].stops, correct: byArea[a].correct, total: byArea[a].total })); }
+
+    const setSteps = (ns) => { setPlan(Object.assign({ id: "__manual__", name: "Aventura de " + ((patient && patient.nombre) || "paciente"), emoji: "\uD83D\uDDFA\uFE0F", color: "#457B9D", desc: "Aventura personalizada" }, plan || {}, { steps: ns })); };
+    const move = (i, d) => { const ns = (plan.steps || []).slice(); const j = i + d; if (j < 0 || j >= ns.length) return; const t = ns[i]; ns[i] = ns[j]; ns[j] = t; setSteps(ns); };
+    const removeStep = (i) => { const ns = (plan.steps || []).slice(); ns.splice(i, 1); setSteps(ns); };
+    const setDur = (i, delta) => { const ns = (plan.steps || []).slice(); ns[i] = Object.assign({}, ns[i], { duration: Math.max(3, Math.min(30, (ns[i].duration || 10) + delta)) }); setSteps(ns); };
+    const addStop = (area, activity) => { const ns = (plan.steps || []).slice(); ns.push({ area: area, activity: activity, duration: 10, why: "" }); setSteps(ns); setAddOpen(false); setAddArea(null); };
+
+    let body;
+    if (phase === "config") {
+        body = React.createElement("div", null,
+            React.createElement("div", { style: { background: "#F4FAF7", border: "1px solid #d8e6df", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#3a4742", marginBottom: 14 } },
+                React.createElement("div", null, React.createElement("strong", null, (patient && patient.nombre) || "Paciente")),
+                React.createElement("div", { style: { color: "#6a756f", marginTop: 2 } }, "Edad: " + ((patient && patient.edad) || "\u2014") + " \u00b7 Diagn\u00f3sticos: " + dxList),
+                React.createElement("div", { style: { color: "#6a756f", marginTop: 2, fontSize: 12 } }, "El borrador se adapta a la edad, el diagn\u00f3stico y el historial de aciertos. Elige qu\u00e9 trabajar (o m\u00f3ntala t\u00fa mismo despu\u00e9s):")),
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 } },
+                AREAS_.map(a => { const on = needs.indexOf(a.id) >= 0; const isWeak = weakAreas.indexOf(a.id) >= 0; return React.createElement("button", { key: a.id, onClick: () => { try { sfx.tap(); } catch (e) { } toggleNeed(a.id); }, style: { padding: "6px 12px", borderRadius: 16, border: "2px solid " + (on ? areaColor(a.id) : "#dde5e1"), background: on ? areaColor(a.id) : "#fff", color: on ? "#fff" : "#3a4742", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" } }, a.label + (isWeak ? " \uD83D\uDCAA" : "")); })),
+            React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 16 } },
+                React.createElement("span", { style: { fontSize: 13, color: "#3a4742", fontWeight: 700 } }, "Duraci\u00f3n:"),
+                [30, 45, 60].map(mn => React.createElement("button", { key: mn, onClick: () => { try { sfx.tap(); } catch (e) { } setMinutes(mn); }, style: { padding: "6px 14px", borderRadius: 10, border: "2px solid " + (minutes === mn ? "#2D6A4F" : "#dde5e1"), background: minutes === mn ? "#2D6A4F" : "#fff", color: minutes === mn ? "#fff" : "#3a4742", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, mn + " min"))),
+            weakAreas.length ? React.createElement("div", { style: { fontSize: 11.5, color: "#9aa3a0", marginBottom: 12 } }, "\uD83D\uDCAA seg\u00fan el historial, conviene reforzar: " + weakAreas.map(areaLabel).join(", ")) : null,
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } const p = buildSuggestedPlan(patient, { areas: needs, minutes: minutes }); if (p && p.steps.length) { setPlan(p); setPhase("edit"); } }, style: { flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#2D6A4F", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" } }, "\u2728 Generar borrador"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setPlan({ id: "__manual__", name: "Aventura de " + ((patient && patient.nombre) || "paciente"), emoji: "\uD83D\uDDFA\uFE0F", color: "#457B9D", desc: "Aventura personalizada", steps: [] }); setPhase("edit"); }, style: { flex: 1, padding: "12px", borderRadius: 12, border: "2px solid #2D6A4F", background: "#fff", color: "#2D6A4F", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" } }, "\u270F\uFE0F Montar desde cero")));
+    } else if (phase === "edit") {
+        const steps = (plan && plan.steps) || [];
+        const total = steps.reduce((a, b) => a + (b.duration || 0), 0);
+        body = React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: "#2D6A4F" } }, "Monta la aventura a tu gusto"),
+                React.createElement("div", { style: { fontSize: 12, color: "#6a756f" } }, steps.length + " paradas \u00b7 " + total + " min")),
+            steps.length === 0 ? React.createElement("div", { style: { textAlign: "center", color: "#9aa3a0", fontSize: 13, padding: "16px 0" } }, "A\u00f1ade paradas con el bot\u00f3n de abajo.") : null,
+            React.createElement("div", null, steps.map((s, i) => React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, border: "1px solid #e3ece7", borderRadius: 10, padding: "7px 9px", marginBottom: 6 } },
+                React.createElement("div", { style: { width: 10, height: 10, borderRadius: 5, background: areaColor(s.area), flexShrink: 0 } }),
+                React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: "#2D3A33", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, (i + 1) + ". " + actLabel(s.area, s.activity)),
+                    React.createElement("div", { style: { fontSize: 11, color: "#8a948f" } }, areaLabel(s.area) + (weakAreas.indexOf(s.area) >= 0 ? " \uD83D\uDCAA" : ""))),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 2 } },
+                    React.createElement("button", { onClick: () => setDur(i, -1), style: { width: 22, height: 22, borderRadius: 6, border: "1px solid #dde5e1", background: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 } }, "\u2212"),
+                    React.createElement("span", { style: { fontSize: 12, width: 38, textAlign: "center", color: "#3a4742" } }, (s.duration || 10) + "m"),
+                    React.createElement("button", { onClick: () => setDur(i, 1), style: { width: 22, height: 22, borderRadius: 6, border: "1px solid #dde5e1", background: "#fff", cursor: "pointer", fontFamily: "inherit", fontWeight: 700 } }, "+")),
+                React.createElement("button", { onClick: () => move(i, -1), disabled: i === 0, style: { background: "none", border: "none", cursor: i === 0 ? "default" : "pointer", color: i === 0 ? "#ccc" : "#6a756f", fontSize: 15 } }, "\u2191"),
+                React.createElement("button", { onClick: () => move(i, 1), disabled: i === steps.length - 1, style: { background: "none", border: "none", cursor: i === steps.length - 1 ? "default" : "pointer", color: i === steps.length - 1 ? "#ccc" : "#6a756f", fontSize: 15 } }, "\u2193"),
+                React.createElement("button", { onClick: () => removeStep(i), style: { background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 15 } }, "\u2715")))),
+            addOpen
+                ? React.createElement("div", { style: { border: "2px dashed #BFE6D2", borderRadius: 12, padding: 10, marginTop: 6 } },
+                    React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: "#2D6A4F", marginBottom: 6 } }, addArea ? ("Elige actividad de " + areaLabel(addArea) + ":") : "Elige el \u00e1rea:"),
+                    !addArea
+                        ? React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, AREAS_.filter(a => (AREA_ACTIVITIES[a.id] || []).length).map(a => React.createElement("button", { key: a.id, onClick: () => { try { sfx.tap(); } catch (e) { } setAddArea(a.id); }, style: { padding: "5px 10px", borderRadius: 14, border: "2px solid " + areaColor(a.id), background: "#fff", color: "#3a4742", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" } }, a.label)))
+                        : React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, (AREA_ACTIVITIES[addArea] || []).map(act => React.createElement("button", { key: act.id, onClick: () => { try { sfx.tap(); } catch (e) { } addStop(addArea, act.id); }, style: { padding: "5px 10px", borderRadius: 8, border: "1px solid #dde5e1", background: "#fff", color: "#3a4742", fontWeight: 600, fontSize: 12, cursor: "pointer", fontFamily: "inherit" } }, act.label))),
+                    React.createElement("button", { onClick: () => { setAddOpen(false); setAddArea(null); }, style: { marginTop: 8, background: "none", border: "none", color: "#8a948f", cursor: "pointer", fontFamily: "inherit", fontSize: 12 } }, "Cancelar"))
+                : React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setAddOpen(true); }, style: { width: "100%", padding: "9px", borderRadius: 10, border: "2px dashed #BFE6D2", background: "#fff", color: "#2D6A4F", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 } }, "\u2795 A\u00f1adir parada"),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14 } },
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setPhase("config"); }, style: { padding: "11px 14px", borderRadius: 12, border: "2px solid #dde5e1", background: "#fff", color: "#6a756f", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "\u21A9 Volver"),
+                React.createElement("button", { onClick: () => { if (!steps.length) return; try { sfx.tap(); } catch (e) { } clearAdv(); setCurrent(0); setCompleted([]); setPhase("map"); }, disabled: !steps.length, style: { flex: 1, padding: "11px", borderRadius: 12, border: "none", background: steps.length ? "#2D6A4F" : "#cfd8d3", color: "#fff", fontWeight: 800, fontSize: 14, cursor: steps.length ? "pointer" : "default", fontFamily: "inherit" } }, "\u25B6 Empezar la aventura")));
+    } else if (phase === "map") {
+        const step = plan.steps[current];
+        const actObj = (AREA_ACTIVITIES[step.area] || []).find(a => a.id === step.activity);
+        body = React.createElement("div", null,
+            React.createElement("div", { dangerouslySetInnerHTML: { __html: buildAdventureMapHTML(plan, current, completed, AREAS_, AREA_ACTIVITIES, weakAreas) } }),
+            React.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", background: "#F4FAF7", border: "1px solid #d8e6df", borderRadius: 12, padding: 12, marginTop: 12 } },
+                React.createElement("div", { style: { width: 76, flexShrink: 0 } }, mascot("animo")),
+                React.createElement("div", { style: { flex: 1 } },
+                    React.createElement("div", { style: { fontSize: 12, color: "#6a756f" } }, "Parada " + (current + 1) + " de " + plan.steps.length + " \u00b7 " + areaLabel(step.area) + (weakAreas.indexOf(step.area) >= 0 ? " \uD83D\uDCAA" : "")),
+                    React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: "#2D6A4F" } }, (actObj && actObj.label) || step.activity),
+                    step.why ? React.createElement("div", { style: { fontSize: 12, color: "#6a756f", marginTop: 2 } }, step.why) : null)),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } if (onLaunch) onLaunch(step.area, step.activity); }, style: { flex: 1, padding: "11px", borderRadius: 12, border: "none", background: "#457B9D", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" } }, "\u25B6 Empezar esta parada"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } const nc = completed.indexOf(current) >= 0 ? completed : completed.concat([current]); setCompleted(nc); if (current + 1 < plan.steps.length) setCurrent(current + 1); else setPhase("done"); }, style: { padding: "11px 14px", borderRadius: 12, border: "2px solid #BFE6D2", background: "#fff", color: "#2D6A4F", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" } }, "\u2713 Hecha")),
+            React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setPhase("edit"); }, style: { marginTop: 10, background: "none", border: "none", color: "#8a948f", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5 } }, "\u21A9 Editar la aventura"));
+    } else {
+        body = React.createElement("div", { style: { textAlign: "center", padding: "10px 0" } },
+            mascot("fiesta"),
+            React.createElement("div", { style: { fontSize: 24, fontWeight: 800, color: "#2D6A4F", marginTop: 8 } }, "\uD83C\uDF89 \u00a1Misi\u00f3n completada!"),
+            React.createElement("div", { style: { fontSize: 14, color: "#3a4742", marginTop: 6 } }, "Has terminado las " + (plan ? plan.steps.length : 0) + " paradas. \u00a1Cu\u00e1nto has trabajado hoy!"),
+            summaryRows.length ? React.createElement("div", { style: { textAlign: "left", maxWidth: 340, margin: "16px auto 0", background: "#F7FAF8", border: "1px solid #e3ece7", borderRadius: 12, padding: "10px 14px" } },
+                React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: "#2D6A4F", marginBottom: 6 } }, "Resumen de la sesi\u00f3n"),
+                summaryRows.map(r => React.createElement("div", { key: r.area, style: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "#3a4742", padding: "3px 0" } },
+                    React.createElement("span", null, areaLabel(r.area) + " \u00b7 " + r.stops + (r.stops > 1 ? " paradas" : " parada") + (weakAreas.indexOf(r.area) >= 0 ? " \uD83D\uDCAA" : "")),
+                    React.createElement("span", { style: { fontWeight: 700, color: "#2D6A4F" } }, r.total > 0 ? (Math.round(100 * r.correct / r.total) + "% aciertos") : "realizada")))) : null,
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginTop: 18 } },
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } clearAdv(); setPhase("config"); setPlan(null); setCompleted([]); setCurrent(0); }, style: { padding: "10px 16px", borderRadius: 12, border: "2px solid #BFE6D2", background: "#fff", color: "#2D6A4F", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "Otra aventura"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } clearAdv(); onClose && onClose(); }, style: { padding: "10px 16px", borderRadius: 12, border: "none", background: "#2D6A4F", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "Cerrar")));
+    }
+
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { style: { background: "#fff", borderRadius: 20, padding: 20, maxWidth: 560, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: "#2D6A4F" } }, "\uD83D\uDDFA\uFE0F Aventura de la sesi\u00f3n"),
+                React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } onClose && onClose(); }, style: { background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#999" } }, "\u00d7")),
+            body));
+}
 function SeguimientoClinico({ patient, onClose }) {
     const [tab, setTab] = useState("objetivos"); // objetivos | notas
     const [objetivos, setObjetivos] = useState(() => storeLoad("objetivos:" + patient.id) || []);
@@ -38860,7 +39346,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.1</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.11</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -39016,7 +39502,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.1</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.11</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -39476,7 +39962,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.1", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.11", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -39723,6 +40209,8 @@ function TerapiAppInner() {
     const [patients, setPatients] = useState(() => storeLoad("patients") || []);
     const [activePatient, setActivePatient] = useState(null);
     const [showRegistry, setShowRegistry] = useState(false);
+    const [showMascota, setShowMascota] = useState(false);
+    const [showAventura, setShowAventura] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
     const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
     const [evidenceShown, setEvidenceShown] = useState(null); // activity id whose evidence modal is open
@@ -40025,6 +40513,16 @@ function TerapiAppInner() {
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                     }, title: "Biblioteca de fichas imprimibles" }, "🖨 Fichas"),
+                React.createElement("button", { onClick: () => { sfx.tap(); setShowMascota(true); }, style: {
+                        background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                        borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+                    }, title: "Mi compañero" }, "🐣 Compañero"),
+                React.createElement("button", { onClick: () => { sfx.tap(); setShowAventura(true); }, style: {
+                        background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                        borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+                    }, title: "Aventura de la sesión" }, "🗺️ Aventura"),
                 React.createElement("button", { onClick: () => setShowRegistry(true), style: {
                         background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
@@ -40041,6 +40539,9 @@ function TerapiAppInner() {
             showRegistry && (React.createElement(PatientRegistry, { patients: patients, setPatients: setPatients, activePatient: activePatient, setActivePatient: setActivePatient, onClose: () => setShowRegistry(false), onShowReport: (p) => { setShowRegistry(false); setReportPatient(p); }, onShowTracking: (p) => { setShowRegistry(false); setTrackingPatient(p); }, onShowFeedbackAdmin: () => { setShowRegistry(false); setShowFeedbackAdmin(true); } })),
             reportPatient && React.createElement(SessionReport, { patient: reportPatient, onClose: () => setReportPatient(null) }),
             trackingPatient && React.createElement(SeguimientoClinico, { patient: trackingPatient, onClose: () => setTrackingPatient(null) }),
+            showMascota && React.createElement(Mascota, { patient: activePatient, onClose: () => setShowMascota(false) }),
+            React.createElement(CompanionReactions, null),
+            showAventura && React.createElement(AventuraView, { patient: activePatient, onClose: () => setShowAventura(false), onLaunch: (areaId, activityId) => { setShowAventura(false); nav(areaId, activityId); } }),
             showGuiaDislexia && React.createElement(GuiaDislexia, { onClose: () => setShowGuiaDislexia(false) }),
             showGuiaDiscalculia && React.createElement(GuiaDiscalculia, { onClose: () => setShowGuiaDiscalculia(false) }),
             showFeedback && React.createElement(FeedbackModal, { onClose: () => setShowFeedback(false), patient: activePatient }),
@@ -40497,7 +40998,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.1"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.11"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
@@ -40539,67 +41040,51 @@ function buildSuggestedPlan(patient, opts) {
     const edad = parseInt(patient && patient.edad, 10);
     const ageLabel = (!isNaN(edad) && edad >= 14) ? "14-18" : (!isNaN(edad) && edad >= 10) ? "10-13" : "7-9";
     const DIAG_AREAS = {
-        "tdah": ["atencion", "memoria", "emocional", "razonamiento"],
-        "atenci": ["atencion", "memoria"],
-        "tea": ["social", "emocional", "lectoescritura"],
-        "autis": ["social", "emocional"],
-        "asperger": ["social", "emocional"],
-        "dislexia": ["dislexia", "lectoescritura"],
-        "discalculia": ["discalculia"],
-        "ansiedad": ["emocional", "autoestima"],
-        "autoestima": ["autoestima", "emocional"],
-        "lenguaje": ["logopedia", "lectoescritura"],
-        "habla": ["logopedia"],
+        "tdah": ["atencion", "memoria", "emocional", "razonamiento"], "atenci": ["atencion", "memoria"],
+        "tea": ["social", "emocional", "lectoescritura"], "autis": ["social", "emocional"], "asperger": ["social", "emocional"],
+        "dislexia": ["dislexia", "lectoescritura"], "discalculia": ["discalculia"], "ansiedad": ["emocional", "autoestima"],
+        "autoestima": ["autoestima", "emocional"], "lenguaje": ["logopedia", "lectoescritura"], "habla": ["logopedia"],
         "conducta": ["emocional", "social", "razonamiento"],
     };
     let areas = [];
-    if (patient && Array.isArray(patient.areas) && patient.areas.length) areas = patient.areas.slice();
+    if (opts.areas && opts.areas.length) areas = opts.areas.slice();
+    if (!areas.length && patient && Array.isArray(patient.areas) && patient.areas.length) areas = patient.areas.slice();
     if (patient && Array.isArray(patient.diagnosticos)) {
-        patient.diagnosticos.forEach(dx => {
-            const k = String(dx).toLowerCase();
-            Object.keys(DIAG_AREAS).forEach(key => { if (k.indexOf(key) >= 0) DIAG_AREAS[key].forEach(a => { if (areas.indexOf(a) < 0) areas.push(a); }); });
-        });
+        patient.diagnosticos.forEach(dx => { const k = String(dx).toLowerCase(); Object.keys(DIAG_AREAS).forEach(key => { if (k.indexOf(key) >= 0) DIAG_AREAS[key].forEach(a => { if (areas.indexOf(a) < 0) areas.push(a); }); }); });
     }
     areas = areas.filter(a => AREA_ACTIVITIES[a] && AREA_ACTIVITIES[a].length);
     if (!areas.length) areas = ["atencion", "memoria", "razonamiento"].filter(a => AREA_ACTIVITIES[a] && AREA_ACTIVITIES[a].length);
 
-    const pickActivity = (area, used) => {
-        const list = (AREA_ACTIVITIES[area] || []).filter(x => used.indexOf(area + ":" + x.id) < 0);
-        if (!list.length) return null;
-        return list[Math.floor(Math.random() * list.length)];
-    };
-    const whyFor = (act) => {
-        const ev = ACTIVITY_EVIDENCE[act.id];
-        if (ev && ev.parents) return ev.parents.split(/[.;]/)[0];
-        return act.desc || act.label || "Trabajo del \u00e1rea";
-    };
+    // accuracy history per area
+    const acc = {};
+    try {
+        const sess = (typeof getSessions === "function") ? getSessions(patient ? patient.id : null) : [];
+        const agg = {};
+        sess.forEach(s => { if (!s || !s.result || typeof s.result.correct !== "boolean") return; const a = s.area; agg[a] = agg[a] || { n: 0, ok: 0 }; agg[a].n++; if (s.result.correct) agg[a].ok++; });
+        Object.keys(agg).forEach(a => { if (agg[a].n >= 3) acc[a] = agg[a].ok / agg[a].n; });
+    } catch (e) { }
+    // prioritise weaker areas first (lower accuracy); unknown = neutral 0.6
+    areas.sort((a, b) => ((acc[a] == null ? 0.6 : acc[a]) - (acc[b] == null ? 0.6 : acc[b])));
 
-    const used = [];
-    const steps = [];
+    const pickActivity = (area, used) => { const list = (AREA_ACTIVITIES[area] || []).filter(x => used.indexOf(area + ":" + x.id) < 0); if (!list.length) return null; return list[Math.floor(Math.random() * list.length)]; };
+    const whyFor = (act, area) => { let base; const ev = ACTIVITY_EVIDENCE[act.id]; if (ev && ev.parents) base = ev.parents.split(/[.;]/)[0]; else base = act.desc || act.label || "Trabajo del \u00e1rea"; if (acc[area] != null && acc[area] < 0.6) base += " \u00b7 a reforzar"; return base; };
+
+    const used = [], steps = [];
     const openArea = (AREA_ACTIVITIES["emocional"] && AREA_ACTIVITIES["emocional"].length) ? "emocional" : areas[0];
     const openList = AREA_ACTIVITIES[openArea] || [];
     const opener = openList.find(x => /respir/i.test(x.id) || /respir/i.test(x.label || "")) || openList[0];
     if (opener) { steps.push({ area: openArea, activity: opener.id, duration: 6, why: "Apertura: activaci\u00f3n y regulaci\u00f3n inicial" }); used.push(openArea + ":" + opener.id); }
-
     const coreCount = Math.max(2, Math.min(4, Math.round((targetMin - 11) / 10)));
-    for (let i = 0; i < coreCount; i++) {
-        const area = areas[i % areas.length];
-        const act = pickActivity(area, used);
-        if (act) { steps.push({ area: area, activity: act.id, duration: 10, why: whyFor(act) }); used.push(area + ":" + act.id); }
-    }
-
+    for (let i = 0; i < coreCount; i++) { const area = areas[i % areas.length]; const act = pickActivity(area, used); if (act) { steps.push({ area: area, activity: act.id, duration: 10, why: whyFor(act, area) }); used.push(area + ":" + act.id); } }
     const closeArea = (AREA_ACTIVITIES["autoestima"] && AREA_ACTIVITIES["autoestima"].length) ? "autoestima" : areas[0];
     const closeList = AREA_ACTIVITIES[closeArea] || [];
     const closer = closeList.find(x => /frasco|gratitud|arbol/i.test(x.id)) || closeList[0];
-    if (closer && used.indexOf(closeArea + ":" + closer.id) < 0) { steps.push({ area: closeArea, activity: closer.id, duration: 5, why: "Cierre en positivo: refuerzo de logros" }); }
-
+    if (closer && used.indexOf(closeArea + ":" + closer.id) < 0) steps.push({ area: closeArea, activity: closer.id, duration: 5, why: "Cierre en positivo: refuerzo de logros" });
     const total = steps.reduce((s, x) => s + x.duration, 0);
+    const weak = areas.filter(a => acc[a] != null && acc[a] < 0.6).slice(0, 2);
     return {
-        id: "__auto__",
-        name: "Plan sugerido \u00b7 " + ((patient && patient.nombre) || "paciente") + " (" + total + " min)",
-        emoji: "\u2728",
-        color: "#457B9D",
-        desc: "Generado para " + ageLabel + " a\u00f1os \u00b7 \u00e1reas: " + (areas.slice(0, 3).join(", ") || "general") + ". Rev\u00edsalo y aj\u00fastalo a tu criterio cl\u00ednico.",
+        id: "__auto__", name: "Aventura de " + ((patient && patient.nombre) || "paciente") + " (" + total + " min)", emoji: "\uD83D\uDDFA\uFE0F", color: "#457B9D",
+        desc: "Adaptada a " + ageLabel + " a\u00f1os \u00b7 \u00e1reas: " + (areas.slice(0, 3).join(", ") || "general") + (weak.length ? " \u00b7 refuerzo en: " + weak.join(", ") : "") + ".",
         steps: steps,
     };
 }
