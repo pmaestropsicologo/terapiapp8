@@ -17572,6 +17572,7 @@ const logCurrentResult = (correct, attempts = 1) => {
         correct, attempts, stars: correct ? 1 : 0,
     });
     try { if (typeof window !== "undefined" && window.dispatchEvent) window.dispatchEvent(new CustomEvent("terapiapp-companion-react", { detail: { correct: correct, patientId: _activePatientId, areaId: _activeAreaId, activityId: _activeActivityId } })); } catch (e) { }
+    try { return updateAdaptiveDiff(_activePatientId, _activeActivityId, correct); } catch (e) { }
 };
 // ═══════════════════════════════════════════════════════════════
 // PERSONAL BESTS — track highest scores per activity
@@ -18817,10 +18818,9 @@ function Feedback({ success, children, reward = true }) {
                 addStar(_activePatientId, _activeAreaId);
             if (reward)
                 setTimeout(() => fireConfetti(false), 150);
-            logCurrentResult(true);
-            // Adaptive difficulty
+            const adj = logCurrentResult(true) || {};
+            // Dificultad adaptativa (gestionada en logCurrentResult)
             if (_activePatientId && _activeActivityId) {
-                const adj = updateAdaptiveDiff(_activePatientId, _activeActivityId, true);
                 if (adj.changed && adj.direction === "up") {
                     setTimeout(() => {
                         if (_achievementTrigger)
@@ -18838,8 +18838,6 @@ function Feedback({ success, children, reward = true }) {
             if (_activePatientId)
                 breakStreak(_activePatientId);
             logCurrentResult(false);
-            if (_activePatientId && _activeActivityId)
-                updateAdaptiveDiff(_activePatientId, _activeActivityId, false);
         }
     }, [success, reward]);
     if (dismissed) return null;
@@ -24705,6 +24703,7 @@ function RolePlayConversacional({ patient }) {
     const [feedback, setFeedback] = useState(null);
     const [done, setDone] = useState(false);
     const [hint, setHint] = useState(null);
+    const [nudge, setNudge] = useState(null);
     const [hintLoading, setHintLoading] = useState(false);
     const [showTip, setShowTip] = useState(false);
     const turnRef = useRef(0);
@@ -24759,10 +24758,12 @@ Formato JSON:
     const sendMessage = async (forceFinal = false) => {
         if (!input.trim() || loading) return;
         const userMsg = input.trim();
+        if (!/[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(userMsg)) { setNudge("No te he entendido. ¿Puedes decirlo con palabras?"); setInput(""); return; }
         const newMessages = [...messages, { role: "user", text: userMsg }];
         setMessages(newMessages);
         setInput("");
         setHint(null);
+        setNudge(null);
         turnRef.current += 1;
         setLoading(true);
         const conversation = newMessages.map(m => `${m.role === "user" ? "Paciente" : "Personaje"}: ${m.text}`).join("\n");
@@ -24773,6 +24774,11 @@ ${intensityObj.mod}
 
 CÓMO DEBE SONAR EL PERSONAJE: como una persona real de esa edad hablando de verdad, NO como un guion. Lenguaje coloquial, contracciones, expresiones cotidianas ("o sea", "es que", "ya, pero", "venga", "tío/tía" si encaja con la edad). Frases cortas y espontáneas. Puede titubear, repetir, reaccionar en caliente. Evita frases largas y perfectas o vocabulario de adulto culto. Reacciona de forma realista a lo que acaba de decir el paciente, no sueltes un discurso.
 
+ROBUSTEZ (muy importante):
+- El paciente puede escribir con faltas de ortografía, sin tildes, con abreviaturas (xq, tb, q, pq), erratas o todo en minúsculas. Interpreta SIEMPRE lo que quiere decir y respóndele al sentido. NUNCA corrijas su ortografía ni la menciones: el role-play no evalúa cómo escribe.
+- Si el paciente dice tonterías, se pone a trolear, insulta, suelta cosas sin sentido o intenta romper el juego, NO te salgas del personaje, NO le sigas la provocación y NO escales. Mantén la calma, no te lo tomas como algo personal y reconduces con naturalidad hacia la situación. Mantén SIEMPRE un tono apropiado para un menor: sin tacos fuertes, sin contenido adulto y sin agresividad real.
+- Si el mensaje está vacío o es solo símbolos, reacciona como lo haría el personaje (por ejemplo: eh, no te he entendido, repite) y dale otra oportunidad.
+
 Conversación hasta ahora:
 ${conversation}
 
@@ -24781,6 +24787,7 @@ ${isFinalTurn ? `Esta es la última respuesta del personaje. Responde brevemente
 - PASIVA (no defiende sus intereses, evita)
 - AGRESIVA (ataca, descalifica)
 
+Evalúa SOLO la comunicación (asertividad, respeto y claridad de lo que pide), NUNCA la ortografía ni la redacción; si el paciente estuvo troleando o no participó en serio, indícalo con amabilidad en lo que puede mejorar y puntúa según su comunicación real.
 Da también una puntuación del 1 al 5 (5 = muy asertivo) y 1-2 cosas concretas que hizo bien y 1-2 a mejorar.
 
 Formato JSON:
@@ -24789,14 +24796,17 @@ Formato JSON:
   "feedback": {"tipo": "asertiva|pasiva|agresiva", "puntuacion": 1-5, "explicacion": "2-3 frases evaluando el conjunto de la conversación", "bien": ["qué hizo bien"], "mejorar": ["qué puede mejorar"], "alternativa": "ejemplo concreto de respuesta más asertiva si no lo era; cadena vacía si fue asertiva"}
 }` : `Responde brevemente (máximo 20 palabras) MANTENIENDO TU PERSONAJE y con ese lenguaje natural y espontáneo. Sigue la conversación de forma realista, sin romper el rol. Si el paciente es asertivo y firme varios turnos seguidos, puedes ir cediendo gradualmente (no en el primer intento). Indica también con "estado" cómo va el personaje: "duro" (sin ceder), "dudando" (empezando a ceder) o "cediendo" (el paciente lo está consiguiendo).
 
+Si el paciente lleva 2-3 mensajes seguidos troleando, sin sentido o sin participar en serio, el personaje puede cerrar la conversación con calma y EN PERSONAJE (algo como: mira, lo dejamos aquí si no va en serio). Cuando detectes troleo o que no participa en serio, rellena "aviso" con un mensaje CORTO y FUERA del personaje para animarle a tomárselo en serio (por ejemplo: Recuerda, esto es para practicar de verdad); si participa con normalidad, deja "aviso" como cadena vacía.
+
 Formato JSON:
-{"reply": "respuesta del personaje", "estado": "duro|dudando|cediendo"}`}`;
+{"reply": "respuesta del personaje", "estado": "duro|dudando|cediendo", "aviso": "mensaje fuera de personaje o cadena vacía"}`}`;
         const result = await callClaude(prompt, "roleplay_conv_turn");
         setLoading(false);
         if (result && result.__noKey) { alert("Configura tu API key."); return; }
         if (result && result.reply) {
             const finalMessages = [...newMessages, { role: "other", text: result.reply, estado: result.estado }];
             setMessages(finalMessages);
+            setNudge(result && result.aviso ? result.aviso : null);
             if (isFinalTurn && result.feedback) {
                 setFeedback(result.feedback); setDone(true);
                 saveConversation(finalMessages, result.feedback);
@@ -24819,6 +24829,8 @@ Formato JSON:
 
 Conversación hasta ahora:
 ${conversation}
+
+Interpreta lo que quiere decir aunque tenga faltas de ortografía o erratas, sin corregirle. Si ves que está troleando o no participa en serio, la pista puede recordarle con amabilidad que se lo tome en serio.
 
 Dale UNA pista breve (máximo 25 palabras) que le oriente sobre CÓMO responder de forma asertiva, SIN escribirle la respuesta literal. Que le haga pensar, no que se la dé hecha.
 
@@ -24954,6 +24966,7 @@ Formato JSON:
         // Live hint box
         hint && !done && React.createElement("div", { style: { padding: 10, background: C.primary + "11", borderRadius: 10, fontSize: 12, lineHeight: 1.5, marginBottom: 10, border: `1px solid ${C.primary}44` } },
             React.createElement("strong", { style: { color: C.primary } }, "💡 Pista: "), hint),
+        nudge && !done && React.createElement("div", { style: { padding: 10, background: "#FFF7E6", borderRadius: 10, fontSize: 12.5, lineHeight: 1.5, marginBottom: 10, border: "1px solid #F0C97A", color: "#8a5a00" } }, React.createElement("strong", null, "🙂 "), nudge),
         !done && React.createElement(React.Fragment, null,
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("input", { value: input, onChange: e => setInput(e.target.value), onKeyDown: e => e.key === "Enter" && sendMessage(), placeholder: "Tu respuesta...", disabled: loading, style: {
@@ -34201,9 +34214,586 @@ function Pseudopalabras({ patient }) {
                 React.createElement(Btn, { color: C.primary, onClick: () => setPhase("idle"), small: true }, "↻ Otra ronda"))));
 }
 
+function JuegoVasos({ patient }) {
+    const LEVELS = {
+        facil: { label: "Fácil", cups: 3, swaps: 5, speed: 520, revealMs: 1100, peek: true, emoji: "🐢" },
+        medio: { label: "Medio", cups: 3, swaps: 9, speed: 360, revealMs: 850, peek: false, emoji: "🙂" },
+        dificil: { label: "Difícil", cups: 4, swaps: 15, speed: 240, revealMs: 700, peek: false, emoji: "⚡" },
+    };
+    const [level, setLevel] = useState(function(){ try { var __d = getAdaptiveDiff(_activePatientId, _activeActivityId, "fácil"); return __d === "difícil" ? "dificil" : (__d === "medio" ? "medio" : "facil"); } catch (e) { return "facil"; } });
+    const [phase, setPhase] = useState("ready"); // ready|reveal|mix|guess|result
+    const [order, setOrder] = useState([0, 1, 2]); // cup id at each slot
+    const [ballCup, setBallCup] = useState(0);
+    const [lifted, setLifted] = useState([]); // slot indices raised
+    const [correct, setCorrect] = useState(null);
+    const [rounds, setRounds] = useState(0);
+    const [hits, setHits] = useState(0);
+    const orderRef = useRef([0, 1, 2]);
+    const ballCupRef = useRef(0);
+    const timers = useRef([]);
+    const after = (ms, fn) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+    useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
+
+    const LV = LEVELS[level];
+    const N = LV.cups;
+    const SLOT_W = N >= 4 ? 84 : 92, OFF = 8, CUP_W = N >= 4 ? 64 : 70;
+    const slotOf = (cupId, ord) => (ord || order).indexOf(cupId);
+
+    const startRound = () => {
+        timers.current.forEach(clearTimeout); timers.current = [];
+        const init = []; for (let i = 0; i < N; i++) init.push(i);
+        const bc = randInt(0, N - 1);
+        ballCupRef.current = bc; orderRef.current = init.slice();
+        setBallCup(bc); setOrder(init.slice()); setCorrect(null);
+        setLifted(init.slice()); setPhase("reveal");
+        try { sfx.tap(); } catch (e) { }
+        after(LV.revealMs, () => { setLifted([]); after(380, () => doMix()); });
+    };
+
+    const swapOnce = () => {
+        const a = randInt(0, N - 1); let b = randInt(0, N - 1); while (b === a) b = randInt(0, N - 1);
+        const ord = orderRef.current.slice(); const t = ord[a]; ord[a] = ord[b]; ord[b] = t;
+        orderRef.current = ord; setOrder(ord);
+        try { sfx.click && sfx.click(); } catch (e) { }
+    };
+
+    const doMix = () => {
+        setPhase("mix");
+        let i = 0;
+        const step = () => {
+            if (i >= LV.swaps) { setPhase("guess"); return; }
+            if (LV.peek && i === Math.floor(LV.swaps / 2)) {
+                const bs = orderRef.current.indexOf(ballCupRef.current);
+                setLifted([bs]);
+                after(470, () => { setLifted([]); after(240, () => { swapOnce(); i++; after(LV.speed + 40, step); }); });
+                return;
+            }
+            swapOnce(); i++; after(LV.speed + 40, step);
+        };
+        after(60, step);
+    };
+
+    const guess = (slot) => {
+        if (phase !== "guess") return;
+        const cup = order[slot];
+        const ok = cup === ballCupRef.current;
+        const ballSlot = slotOf(ballCupRef.current, order);
+        setLifted(Array.from(new Set([slot, ballSlot])));
+        setCorrect(ok); setPhase("result");
+        setRounds(r => r + 1); if (ok) setHits(h => h + 1);
+        try { ok ? sfx.success() : sfx.fail(); } catch (e) { }
+        if (typeof _activePatientId !== "undefined" && _activePatientId) {
+            try { addStar(_activePatientId, _activeAreaId, ok); } catch (e) { }
+            try { logCurrentResult(ok); } catch (e) { }
+        }
+    };
+
+    const cupSVG = `<svg width="${CUP_W}" height="86" viewBox="0 0 70 86" preserveAspectRatio="xMidYMid meet"><defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E07A5F"/><stop offset="1" stop-color="#B23A2E"/></linearGradient></defs><polygon points="16,8 54,8 64,78 6,78" fill="url(#cg)" stroke="#8e2b22" stroke-width="2"/><ellipse cx="35" cy="8" rx="19" ry="5" fill="#F0997F" stroke="#8e2b22" stroke-width="2"/><ellipse cx="35" cy="78" rx="29" ry="7" fill="#9e3225" stroke="#8e2b22" stroke-width="2"/><ellipse cx="35" cy="78" rx="22" ry="4" fill="#6e231a"/><path d="M22 16 L14 70" stroke="#ffffff" stroke-opacity="0.22" stroke-width="4" fill="none"/></svg>`;
+    const coinSVG = `<svg width="38" height="38" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#FFD45E" stroke="#E0A82E" stroke-width="3"/><circle cx="20" cy="20" r="11" fill="none" stroke="#E0A82E" stroke-width="1.5"/><text x="20" y="26" text-anchor="middle" font-size="16" font-weight="800" fill="#B8860B">€</text></svg>`;
+
+    const slotsArr = []; for (let i = 0; i < N; i++) slotsArr.push(i);
+    const board = React.createElement("div", { style: { position: "relative", width: N * SLOT_W, height: 150, margin: "8px auto 0", maxWidth: "100%" } },
+        React.createElement("div", { style: { position: "absolute", left: slotOf(ballCup, order) * SLOT_W + OFF + (CUP_W - 38) / 2, bottom: 12, width: 38, height: 38, transition: "left " + LV.speed + "ms ease-in-out", zIndex: 1 }, dangerouslySetInnerHTML: { __html: coinSVG } }),
+        slotsArr.map(cupId => {
+            const slot = slotOf(cupId, order);
+            const raised = lifted.indexOf(slot) >= 0;
+            const clickable = phase === "guess";
+            return React.createElement("div", {
+                key: cupId,
+                onClick: () => clickable && guess(slot),
+                style: {
+                    position: "absolute", bottom: 0, left: slot * SLOT_W + OFF, width: CUP_W, height: 86,
+                    transition: "left " + LV.speed + "ms ease-in-out, transform 260ms ease",
+                    transform: raised ? "translateY(-58px)" : "translateY(0)",
+                    cursor: clickable ? "pointer" : "default", zIndex: 2,
+                    filter: clickable ? "drop-shadow(0 3px 6px rgba(0,0,0,0.18))" : "none",
+                },
+                dangerouslySetInnerHTML: { __html: cupSVG },
+            });
+        }),
+    );
+
+    const banner = phase === "ready" ? "Memoriza dónde está la moneda y sigue el vaso."
+        : phase === "reveal" ? "¡Mira bien! La moneda está aquí…"
+            : phase === "mix" ? "¡Atento a los cambios!"
+                : phase === "guess" ? "¿Dónde está la moneda? Toca un vaso."
+                    : correct ? "¡Correcto! 🎉" : "¡Casi! Estaba en otro vaso.";
+
+    return React.createElement("div", { style: { textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 4 } }, "🥤 El Trile"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" } },
+            Object.keys(LEVELS).map(k => React.createElement("button", {
+                key: k,
+                onClick: () => { if (phase === "mix" || phase === "reveal") return; setLevel(k); setPhase("ready"); setLifted([]); },
+                style: {
+                    padding: "6px 14px", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13,
+                    cursor: "pointer", border: "2px solid " + (level === k ? C.primary : "#dde5e1"),
+                    background: level === k ? C.primary : "#fff", color: level === k ? "#fff" : C.text,
+                },
+            }, LEVELS[k].emoji + " " + LEVELS[k].label + (LEVELS[k].cups >= 4 ? " (4 vasos)" : "")))),
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, minHeight: 20, marginBottom: 2 } }, banner),
+        board,
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, marginTop: 12 } }, "Aciertos: " + hits + " / " + rounds),
+        React.createElement("div", { style: { marginTop: 10 } },
+            (phase === "ready") ? React.createElement(Btn, { color: C.primary, onClick: startRound }, "▶ Empezar")
+                : (phase === "result") ? React.createElement(Btn, { color: C.primary, onClick: startRound }, "Otra ronda")
+                    : React.createElement("div", { style: { height: 40 } })),
+    );
+}
+
+function cromoSVG(shape, color, locked) {
+    if (locked) return '<svg width="100%" height="100%" viewBox="0 0 100 100"><circle cx="50" cy="56" r="30" fill="#e3e7ea"/><text x="50" y="68" text-anchor="middle" font-size="34" font-weight="800" fill="#b3bcc4">?</text></svg>';
+    const dk = "rgba(70,50,40,0.22)";
+    let ears = "";
+    if (shape === "gato") ears = '<polygon points="28,32 37,12 47,34" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><polygon points="72,32 63,12 53,34" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    else if (shape === "zorro") ears = '<polygon points="24,34 31,8 49,32" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><polygon points="76,34 69,8 51,32" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    else if (shape === "conejo") ears = '<ellipse cx="39" cy="16" rx="7" ry="19" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><ellipse cx="61" cy="16" rx="7" ry="19" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    else if (shape === "oso") ears = '<circle cx="31" cy="30" r="11" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><circle cx="69" cy="30" r="11" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    else if (shape === "raton") ears = '<circle cx="29" cy="32" r="13" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><circle cx="71" cy="32" r="13" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    else if (shape === "perro") ears = '<ellipse cx="26" cy="44" rx="9" ry="17" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/><ellipse cx="74" cy="44" rx="9" ry="17" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>';
+    const beak = shape === "pollito" ? '<polygon points="46,62 54,62 50,69" fill="#f5a623"/>' : "";
+    const tuft = shape === "pollito" ? '<path d="M46 22 Q50 11 54 22" stroke="' + color + '" stroke-width="4" fill="none" stroke-linecap="round"/>' : "";
+    const smile = shape === "pollito" ? "" : '<path d="M45 63 Q50 68 55 63" stroke="#3a2e2a" stroke-width="2" fill="none" stroke-linecap="round"/>';
+    return '<svg width="100%" height="100%" viewBox="0 0 100 100">' + ears + tuft +
+        '<circle cx="50" cy="56" r="30" fill="' + color + '" stroke="' + dk + '" stroke-width="2"/>' +
+        '<ellipse cx="37" cy="65" rx="6" ry="4" fill="#ff9eb0" opacity="0.65"/><ellipse cx="63" cy="65" rx="6" ry="4" fill="#ff9eb0" opacity="0.65"/>' +
+        '<circle cx="41" cy="54" r="3.6" fill="#3a2e2a"/><circle cx="59" cy="54" r="3.6" fill="#3a2e2a"/>' +
+        '<circle cx="42.3" cy="52.7" r="1.1" fill="#fff"/><circle cx="60.3" cy="52.7" r="1.1" fill="#fff"/>' +
+        beak + smile + '</svg>';
+}
+
+const CROMO_THEME = [
+    { id: "c01", name: "Gato gris", shape: "gato", color: "#9aa7b0" },
+    { id: "c02", name: "Gatita naranja", shape: "gato", color: "#f4a259" },
+    { id: "c03", name: "Conejo blanco", shape: "conejo", color: "#f2e9e4" },
+    { id: "c04", name: "Coneja rosa", shape: "conejo", color: "#f7b2c4" },
+    { id: "c05", name: "Osito marrón", shape: "oso", color: "#c08552" },
+    { id: "c06", name: "Oso polar", shape: "oso", color: "#e8eef2" },
+    { id: "c07", name: "Perrito beige", shape: "perro", color: "#e7c9a9" },
+    { id: "c08", name: "Perro chocolate", shape: "perro", color: "#9c7050" },
+    { id: "c09", name: "Zorro naranja", shape: "zorro", color: "#ef8354" },
+    { id: "c10", name: "Zorrito rojo", shape: "zorro", color: "#d1495b" },
+    { id: "c11", name: "Ratón gris", shape: "raton", color: "#b8c0c8" },
+    { id: "c12", name: "Pollito", shape: "pollito", color: "#ffd45e" },
+    { id: "c13", name: "Gato negro", shape: "gato", color: "#5a5a66" },
+    { id: "c14", name: "Conejo dorado", shape: "conejo", color: "#e9c46a" },
+    { id: "c15", name: "Oso miel", shape: "oso", color: "#e9a23b" },
+    { id: "c16", name: "Perro gris", shape: "perro", color: "#aeb8c2" },
+    { id: "c17", name: "Zorro plateado", shape: "zorro", color: "#bfc7cf" },
+    { id: "c18", name: "Gato atigrado", shape: "gato", color: "#c98a4b" },
+    { id: "c19", name: "Coneja gris", shape: "conejo", color: "#c2c8cc" },
+    { id: "c20", name: "Osito rosa", shape: "oso", color: "#f3c1c6" },
+    { id: "c21", name: "Ratón blanco", shape: "raton", color: "#eef1f3" },
+    { id: "c22", name: "Pollito verde", shape: "pollito", color: "#a8d08d" },
+    { id: "c23", name: "Zorro dorado", shape: "zorro", color: "#e9b949" },
+    { id: "c24", name: "Ratoncito beige", shape: "raton", color: "#d8c3a5" },
+];
+const CROMO_EFFORT_PER = 2;
+
+function AlbumCromos({ patient, onClose }) {
+    const THEME = CROMO_THEME;
+    const pid = patient ? patient.id : null;
+    let effort = 0;
+    try { effort = (typeof getSessions === "function" && pid) ? (getSessions(pid) || []).length : 0; } catch (e) { }
+    const earned = Math.min(THEME.length, Math.floor(effort / CROMO_EFFORT_PER));
+    const storeKey = "album:" + pid;
+    const initSeen = useRef(null);
+    if (initSeen.current === null) { try { const d = storeLoad(storeKey); initSeen.current = (d && typeof d.seen === "number") ? d.seen : 0; } catch (e) { initSeen.current = 0; } }
+    const baseSeen = Math.min(initSeen.current, earned);
+    const newCount = Math.max(0, earned - baseSeen);
+    useEffect(() => {
+        if (pid && earned > initSeen.current) { try { storeSave(storeKey, { seen: earned }); } catch (e) { } try { sfx.success(); } catch (e) { } }
+    }, []);
+    const complete = earned >= THEME.length;
+    const toNext = complete ? 0 : (CROMO_EFFORT_PER - (effort % CROMO_EFFORT_PER));
+
+    const cell = (c, idx) => {
+        const got = idx < earned;
+        const isNew = got && idx >= baseSeen;
+        return React.createElement("div", {
+            key: c.id,
+            style: {
+                position: "relative", borderRadius: 14, padding: 6, textAlign: "center",
+                background: got ? "#fff" : "#f3f5f6",
+                border: "2px solid " + (isNew ? "#E0A82E" : got ? "#e3e9ec" : "#e8ecee"),
+                boxShadow: isNew ? "0 0 0 3px #ffe7a322" : "none",
+            },
+        },
+            isNew && React.createElement("div", { style: { position: "absolute", top: -8, right: -6, background: "#E0A82E", color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 8 } }, "¡Nuevo!"),
+            React.createElement("div", { style: { width: "100%", height: 60 }, dangerouslySetInnerHTML: { __html: cromoSVG(got ? c.shape : null, got ? c.color : null, !got) } }),
+            React.createElement("div", { style: { fontSize: 10.5, fontWeight: 700, color: got ? C.text : "#aeb6bb", marginTop: 2, lineHeight: 1.15, minHeight: 24 } }, got ? c.name : "?"),
+        );
+    };
+
+    return React.createElement("div", {
+        style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 14, overflowY: "auto" },
+        onClick: onClose,
+    },
+        React.createElement("div", {
+            onClick: (e) => e.stopPropagation(),
+            style: { background: "#fff", borderRadius: 18, maxWidth: 560, width: "100%", margin: "16px auto", padding: 18, boxShadow: "0 12px 44px rgba(0,0,0,0.22)" },
+        },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
+                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "📒 Álbum de cromos"),
+                React.createElement("button", { onClick: onClose, style: { border: "none", background: "#eef1f3", borderRadius: 10, width: 34, height: 34, fontSize: 16, cursor: "pointer", fontFamily: "inherit" } }, "✕")),
+            patient && React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 2 } }, "de " + (patient.nombre || "paciente")),
+            React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 8 } }, "Se consiguen participando, no por acertar. 💛"),
+            // progress
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 } },
+                React.createElement("div", { style: { flex: 1, height: 10, background: "#eef1f3", borderRadius: 6, overflow: "hidden" } },
+                    React.createElement("div", { style: { width: Math.round(earned / THEME.length * 100) + "%", height: "100%", background: C.primary, transition: "width 400ms ease" } })),
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: C.primary } }, earned + " / " + THEME.length)),
+            newCount > 0 && React.createElement("div", { style: { background: "#FFF7E6", border: "1px solid #F0C97A", color: "#8a5a00", borderRadius: 10, padding: "8px 10px", fontSize: 13, fontWeight: 700, marginBottom: 8, textAlign: "center" } }, "¡Has conseguido " + newCount + (newCount === 1 ? " cromo nuevo!" : " cromos nuevos!") + " 🎉"),
+            complete && React.createElement("div", { style: { background: "#EAF7F0", border: "1px solid #9ed3b8", color: "#1d6a45", borderRadius: 10, padding: "8px 10px", fontSize: 13, fontWeight: 800, marginBottom: 8, textAlign: "center" } }, "¡Álbum completo! 🌟 ¡Enhorabuena!"),
+            !complete && React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 8, textAlign: "center" } }, "Siguiente cromo: " + toNext + (toNext === 1 ? " actividad" : " actividades") + " más"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 } },
+                THEME.map((c, idx) => cell(c, idx))),
+        ),
+    );
+}
+
+// ───────────────────────── Atrapa al Topo (atención, go/no-go) ─────────────────────────
+function JuegoTopo({ patient }) {
+    const LEVELS = {
+        facil: { label: "Fácil", stayMs: 1300, gapMs: 500, bombProb: 0.12, target: 8, emoji: "🐢" },
+        medio: { label: "Medio", stayMs: 950, gapMs: 380, bombProb: 0.24, target: 12, emoji: "🙂" },
+        dificil: { label: "Difícil", stayMs: 700, gapMs: 280, bombProb: 0.34, target: 15, emoji: "⚡" },
+    };
+    const [level, setLevel] = useState(function(){ try { var __d = getAdaptiveDiff(_activePatientId, _activeActivityId, "fácil"); return __d === "difícil" ? "dificil" : (__d === "medio" ? "medio" : "facil"); } catch (e) { return "facil"; } });
+    const [phase, setPhase] = useState("ready");
+    const [active, setActive] = useState(null);
+    const [score, setScore] = useState(0);
+    const [tleft, setTleft] = useState(30);
+    const activeRef = useRef(null), running = useRef(false), timers = useRef([]), iv = useRef(null);
+    const after = (ms, fn) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+    const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; if (iv.current) clearInterval(iv.current); };
+    useEffect(() => () => { running.current = false; clearAll(); }, []);
+    const LV = LEVELS[level];
+
+    const spawn = () => {
+        if (!running.current) return;
+        const slot = randInt(0, 8);
+        const type = Math.random() < LV.bombProb ? "bomba" : "topo";
+        activeRef.current = { slot: slot, type: type, id: Math.random() };
+        setActive(activeRef.current);
+        const myId = activeRef.current.id;
+        after(LV.stayMs, () => { if (activeRef.current && activeRef.current.id === myId) { activeRef.current = null; setActive(null); after(LV.gapMs, spawn); } });
+    };
+    const start = () => {
+        clearAll(); setScore(0); setTleft(30); setActive(null); activeRef.current = null;
+        running.current = true; setPhase("play");
+        try { sfx.tap(); } catch (e) { }
+        after(300, spawn);
+        iv.current = setInterval(() => { setTleft(t => { if (t <= 1) { finish(); return 0; } return t - 1; }); }, 1000);
+    };
+    const finish = () => {
+        running.current = false; clearAll(); activeRef.current = null; setActive(null); setPhase("done");
+        setScore(sc => {
+            const ok = sc >= LV.target;
+            try { ok ? sfx.success() : sfx.fail(); } catch (e) { }
+            if (typeof _activePatientId !== "undefined" && _activePatientId) { try { addStar(_activePatientId, _activeAreaId, ok); } catch (e) { } try { logCurrentResult(ok); } catch (e) { } }
+            return sc;
+        });
+    };
+    const tap = (slot) => {
+        if (phase !== "play") return;
+        const a = activeRef.current;
+        if (!a || a.slot !== slot) return;
+        activeRef.current = null; setActive(null);
+        if (a.type === "topo") { setScore(s => s + 1); try { sfx.success(); } catch (e) { } }
+        else { setScore(s => Math.max(0, s - 1)); try { sfx.fail(); } catch (e) { } }
+        after(LV.gapMs, spawn);
+    };
+
+    const topoSVG = '<svg width="100%" height="100%" viewBox="0 0 100 100"><ellipse cx="50" cy="50" rx="30" ry="28" fill="#8a6f57"/><ellipse cx="36" cy="44" rx="7" ry="8" fill="#fff"/><ellipse cx="64" cy="44" rx="7" ry="8" fill="#fff"/><circle cx="37" cy="45" r="3.4" fill="#2c2420"/><circle cx="63" cy="45" r="3.4" fill="#2c2420"/><ellipse cx="50" cy="60" rx="12" ry="9" fill="#d79aa6"/><circle cx="44" cy="59" r="2" fill="#7a3b48"/><circle cx="56" cy="59" r="2" fill="#7a3b48"/><path d="M50 64 L50 70" stroke="#7a3b48" stroke-width="2"/></svg>';
+    const bombaSVG = '<svg width="100%" height="100%" viewBox="0 0 100 100"><circle cx="48" cy="58" r="26" fill="#33333b"/><circle cx="40" cy="50" r="7" fill="#5a5a66"/><rect x="54" y="28" width="7" height="12" rx="2" fill="#5a5a66"/><path d="M60 28 Q70 18 66 10" stroke="#a98" stroke-width="3" fill="none"/><circle cx="66" cy="9" r="4" fill="#ffb700"/><circle cx="66" cy="9" r="2" fill="#ff6a00"/></svg>';
+    const hole = '<svg width="100%" height="100%" viewBox="0 0 100 100"><ellipse cx="50" cy="66" rx="34" ry="15" fill="#5e4634"/><ellipse cx="50" cy="63" rx="28" ry="11" fill="#43301f"/></svg>';
+
+    return React.createElement("div", { style: { textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 4 } }, "🐹 Atrapa al Topo"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" } },
+            Object.keys(LEVELS).map(k => React.createElement("button", { key: k, onClick: () => { if (phase === "play") return; setLevel(k); setPhase("ready"); }, style: { padding: "6px 14px", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer", border: "2px solid " + (level === k ? C.primary : "#dde5e1"), background: level === k ? C.primary : "#fff", color: level === k ? "#fff" : C.text } }, LEVELS[k].emoji + " " + LEVELS[k].label))),
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 6 } }, phase === "play" ? ("⏱ " + tleft + "s · Puntos: " + score) : phase === "done" ? ((score >= LV.target ? "¡Muy bien! 🎉 " : "¡Sigue practicando! ") + "Puntos: " + score + " (objetivo " + LV.target + ")") : "Toca los topos 🐹 y esquiva las bombas 💣"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 300, margin: "0 auto" } },
+            [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => {
+                const a = active && active.slot === i ? active : null;
+                return React.createElement("div", { key: i, onClick: () => tap(i), style: { aspectRatio: "1 / 1", borderRadius: 14, background: "#EAF3EE", border: "2px solid #d6e6dd", cursor: phase === "play" ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 }, dangerouslySetInnerHTML: { __html: a ? (a.type === "topo" ? topoSVG : bombaSVG) : hole } });
+            })),
+        React.createElement("div", { style: { marginTop: 12 } }, (phase === "play") ? React.createElement("div", { style: { height: 40 } }) : React.createElement(Btn, { color: C.primary, onClick: start }, phase === "done" ? "Jugar otra vez" : "▶ Empezar")),
+    );
+}
+
+// ───────────────────────── Globos de Cálculo (discalculia) ─────────────────────────
+function JuegoGlobos({ patient }) {
+    const LEVELS = {
+        facil: { label: "Fácil", emoji: "🐢" },
+        medio: { label: "Medio", emoji: "🙂" },
+        dificil: { label: "Difícil", emoji: "⚡" },
+    };
+    const TOTAL = 10;
+    const [level, setLevel] = useState(function(){ try { var __d = getAdaptiveDiff(_activePatientId, _activeActivityId, "fácil"); return __d === "difícil" ? "dificil" : (__d === "medio" ? "medio" : "facil"); } catch (e) { return "facil"; } });
+    const [phase, setPhase] = useState("ready");
+    const [idx, setIdx] = useState(0);
+    const [hits, setHits] = useState(0);
+    const [prob, setProb] = useState(null);
+    const [opts, setOpts] = useState([]);
+    const [picked, setPicked] = useState(null);
+    const lock = useRef(false);
+    const COLORS = ["#e76f51", "#2a9d8f", "#457b9d", "#e9c46a", "#b5838d"];
+
+    const gen = (lv) => {
+        let a, b, op, ans;
+        if (lv === "facil") { op = Math.random() < 0.5 ? "+" : "-"; a = randInt(1, 10); b = randInt(1, op === "-" ? a : 10); }
+        else if (lv === "medio") { const r = Math.random(); if (r < 0.4) { op = "+"; a = randInt(2, 20); b = randInt(2, 20); } else if (r < 0.7) { op = "-"; a = randInt(5, 20); b = randInt(1, a); } else { op = "×"; a = randInt(2, 5); b = randInt(2, 9); } }
+        else { const r = Math.random(); if (r < 0.3) { op = "+"; a = randInt(5, 30); b = randInt(5, 30); } else if (r < 0.55) { op = "-"; a = randInt(10, 40); b = randInt(1, a); } else { op = "×"; a = randInt(2, 9); b = randInt(2, 9); } }
+        ans = op === "+" ? a + b : op === "-" ? a - b : a * b;
+        const set = new Set([ans]); const optsArr = [ans];
+        let guard = 0;
+        while (optsArr.length < 4 && guard++ < 40) { const d = ans + randInt(-Math.max(2, Math.round(ans * 0.3)), Math.max(2, Math.round(ans * 0.3))); if (d >= 0 && !set.has(d)) { set.add(d); optsArr.push(d); } }
+        while (optsArr.length < 4) { const d = ans + optsArr.length; if (!set.has(d)) { set.add(d); optsArr.push(d); } }
+        for (let i = optsArr.length - 1; i > 0; i--) { const j = randInt(0, i); const t = optsArr[i]; optsArr[i] = optsArr[j]; optsArr[j] = t; }
+        return { prob: { a: a, op: op, b: b, ans: ans }, opts: optsArr };
+    };
+    const next = (lv, n) => { const g = gen(lv || level); setProb(g.prob); setOpts(g.opts); setPicked(null); lock.current = false; setIdx(n); };
+    const start = () => { setHits(0); setPhase("play"); try { sfx.tap(); } catch (e) { } next(level, 0); };
+    const choose = (val) => {
+        if (phase !== "play" || lock.current) return;
+        lock.current = true; setPicked(val);
+        const ok = val === prob.ans;
+        if (ok) { setHits(h => h + 1); try { sfx.success(); } catch (e) { } } else { try { sfx.fail(); } catch (e) { } }
+        setTimeout(() => {
+            if (idx + 1 >= TOTAL) {
+                setPhase("done");
+                setHits(h => { const finalOk = h >= Math.ceil(TOTAL * 0.6); try { finalOk ? sfx.success() : sfx.tap(); } catch (e) { } if (typeof _activePatientId !== "undefined" && _activePatientId) { try { addStar(_activePatientId, _activeAreaId, finalOk); } catch (e) { } try { logCurrentResult(finalOk); } catch (e) { } } return h; });
+            } else next(level, idx + 1);
+        }, ok ? 520 : 820);
+    };
+
+    const balloon = (val, i) => {
+        const col = COLORS[i % COLORS.length];
+        const state = picked == null ? "" : (val === prob.ans ? "ok" : (val === picked ? "bad" : ""));
+        return React.createElement("div", { key: i, onClick: () => choose(val), style: { cursor: phase === "play" && picked == null ? "pointer" : "default", textAlign: "center", opacity: (picked != null && state === "") ? 0.4 : 1, transform: state === "ok" ? "scale(1.08)" : "scale(1)", transition: "transform 200ms ease, opacity 200ms ease" } },
+            React.createElement("div", { style: { width: "100%", height: 78 }, dangerouslySetInnerHTML: { __html: '<svg width="100%" height="100%" viewBox="0 0 80 100"><ellipse cx="40" cy="40" rx="30" ry="35" fill="' + (state === "bad" ? "#c2c2c2" : col) + '"/><ellipse cx="30" cy="30" rx="8" ry="11" fill="#ffffff" opacity="0.35"/><polygon points="36,73 44,73 40,80" fill="' + (state === "bad" ? "#c2c2c2" : col) + '"/><path d="M40 80 Q46 90 40 99" stroke="#9aa" stroke-width="2" fill="none"/><text x="40" y="48" text-anchor="middle" font-size="26" font-weight="800" fill="#fff">' + val + '</text></svg>' } }),
+            state === "ok" ? React.createElement("div", { style: { fontSize: 16 } }, "✅") : state === "bad" ? React.createElement("div", { style: { fontSize: 16 } }, "❌") : null);
+    };
+
+    return React.createElement("div", { style: { textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 4 } }, "🎈 Globos de Cálculo"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" } },
+            Object.keys(LEVELS).map(k => React.createElement("button", { key: k, onClick: () => { if (phase === "play") return; setLevel(k); setPhase("ready"); }, style: { padding: "6px 14px", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer", border: "2px solid " + (level === k ? C.primary : "#dde5e1"), background: level === k ? C.primary : "#fff", color: level === k ? "#fff" : C.text } }, LEVELS[k].emoji + " " + LEVELS[k].label))),
+        phase === "ready" ? React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 10 } }, "Explota el globo con el resultado correcto.") : null,
+        phase === "play" && prob ? React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Globo " + (idx + 1) + " / " + TOTAL + " · Aciertos: " + hits),
+            React.createElement("div", { style: { fontSize: 34, fontWeight: 800, margin: "6px 0 10px", color: C.text } }, prob.a + " " + prob.op + " " + prob.b + " = ?"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, maxWidth: 320, margin: "0 auto" } }, opts.map((v, i) => balloon(v, i)))) : null,
+        phase === "done" ? React.createElement("div", { style: { margin: "10px 0" } },
+            React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, hits >= Math.ceil(TOTAL * 0.6) ? "¡Muy bien! 🎉" : "¡Sigue practicando! 💪"),
+            React.createElement("div", { style: { fontSize: 14, color: C.textL, marginTop: 4 } }, "Aciertos: " + hits + " / " + TOTAL)) : null,
+        React.createElement("div", { style: { marginTop: 12 } }, (phase === "play") ? null : React.createElement(Btn, { color: C.primary, onClick: start }, phase === "done" ? "Jugar otra vez" : "▶ Empezar")),
+    );
+}
+
+// ───────────────────────── Luces (memoria visuoespacial simultánea) ─────────────────────────
+function JuegoLuces({ patient }) {
+    const LEVELS = {
+        facil: { label: "Fácil", k: 3, flash: 1700, emoji: "🐢" },
+        medio: { label: "Medio", k: 4, flash: 1300, emoji: "🙂" },
+        dificil: { label: "Difícil", k: 5, flash: 1000, emoji: "⚡" },
+    };
+    const ROUNDS = 5, N = 16;
+    const [level, setLevel] = useState(function(){ try { var __d = getAdaptiveDiff(_activePatientId, _activeActivityId, "fácil"); return __d === "difícil" ? "dificil" : (__d === "medio" ? "medio" : "facil"); } catch (e) { return "facil"; } });
+    const [phase, setPhase] = useState("ready"); // ready|flash|recall|result|done
+    const [lit, setLit] = useState([]);
+    const [picks, setPicks] = useState([]);
+    const [round, setRound] = useState(0);
+    const [scoreSum, setScoreSum] = useState(0);
+    const [roundHit, setRoundHit] = useState(0);
+    const timers = useRef([]);
+    const after = (ms, fn) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+    useEffect(() => () => timers.current.forEach(clearTimeout), []);
+    const LV = LEVELS[level];
+
+    const newRound = (rn) => {
+        const pool = []; for (let i = 0; i < N; i++) pool.push(i);
+        for (let i = pool.length - 1; i > 0; i--) { const j = randInt(0, i); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+        const sel = pool.slice(0, LV.k);
+        setLit(sel); setPicks([]); setRound(rn); setPhase("flash");
+        try { sfx.tap(); } catch (e) { }
+        after(LV.flash, () => setPhase("recall"));
+    };
+    const start = () => { setScoreSum(0); newRound(0); };
+    const tap = (i) => {
+        if (phase !== "recall") return;
+        if (picks.indexOf(i) >= 0) return;
+        const np = picks.concat([i]);
+        setPicks(np);
+        try { sfx.click && sfx.click(); } catch (e) { }
+        if (np.length >= LV.k) {
+            const hit = np.filter(x => lit.indexOf(x) >= 0).length;
+            setRoundHit(hit); setScoreSum(s => s + hit); setPhase("result");
+            try { hit === LV.k ? sfx.success() : sfx.fail(); } catch (e) { }
+            after(1300, () => {
+                if (round + 1 >= ROUNDS) {
+                    setScoreSum(s => {
+                        const ok = s >= Math.ceil(ROUNDS * LV.k * 0.6);
+                        try { ok ? sfx.success() : sfx.tap(); } catch (e) { }
+                        if (typeof _activePatientId !== "undefined" && _activePatientId) { try { addStar(_activePatientId, _activeAreaId, ok); } catch (e) { } try { logCurrentResult(ok); } catch (e) { } }
+                        return s;
+                    });
+                    setPhase("done");
+                } else newRound(round + 1);
+            });
+        }
+    };
+
+    const cellColor = (i) => {
+        if (phase === "flash") return lit.indexOf(i) >= 0 ? "#457b9d" : "#e9eef1";
+        if (phase === "recall") return picks.indexOf(i) >= 0 ? "#8ecae6" : "#e9eef1";
+        if (phase === "result") { const wasLit = lit.indexOf(i) >= 0, wasPicked = picks.indexOf(i) >= 0; if (wasLit && wasPicked) return "#2a9d8f"; if (wasPicked && !wasLit) return "#e76f51"; if (wasLit && !wasPicked) return "#e9c46a"; return "#e9eef1"; }
+        return "#e9eef1";
+    };
+
+    return React.createElement("div", { style: { textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 4 } }, "💡 Luces"),
+        React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 6, flexWrap: "wrap" } },
+            Object.keys(LEVELS).map(k => React.createElement("button", { key: k, onClick: () => { if (phase !== "ready" && phase !== "done") return; setLevel(k); setPhase("ready"); }, style: { padding: "6px 14px", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer", border: "2px solid " + (level === k ? C.primary : "#dde5e1"), background: level === k ? C.primary : "#fff", color: level === k ? "#fff" : C.text } }, LEVELS[k].emoji + " " + LEVELS[k].label))),
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 8, minHeight: 20 } },
+            phase === "ready" ? ("Memoriza las " + LV.k + " luces y tócalas después.") : phase === "flash" ? "¡Memoriza las luces! 👀" : phase === "recall" ? ("Toca las " + LV.k + " casillas (" + picks.length + "/" + LV.k + ")") : phase === "result" ? ("Acertaste " + roundHit + " / " + LV.k) : ("¡Hecho! Total: " + scoreSum + " / " + (ROUNDS * LV.k))),
+        phase !== "ready" && phase !== "done" ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 6 } }, "Ronda " + (round + 1) + " / " + ROUNDS) : null,
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 7, maxWidth: 280, margin: "0 auto" } },
+            (function () { const a = []; for (let i = 0; i < N; i++) a.push(i); return a; })().map(i => React.createElement("div", { key: i, onClick: () => tap(i), style: { aspectRatio: "1 / 1", borderRadius: 10, background: cellColor(i), border: "2px solid #d6dee3", cursor: phase === "recall" ? "pointer" : "default", transition: "background 180ms ease" } }))),
+        React.createElement("div", { style: { marginTop: 12 } }, (phase === "ready" || phase === "done") ? React.createElement(Btn, { color: C.primary, onClick: start }, phase === "done" ? "Jugar otra vez" : "▶ Empezar") : React.createElement("div", { style: { height: 40 } })),
+    );
+}
+
+// ───────────────────────── Jugamos en Equipo (cooperativo por turnos, social) ─────────────────────────
+const EQUIPO_RETOS = [
+    "Di una cosa que se te dé bien y otra que se le dé bien al otro jugador.",
+    "Por turnos, contad algo que os haya hecho felices esta semana.",
+    "Mira a tu compañero y adivina cómo se siente. Pregúntale si acertaste.",
+    "Inventad juntos el nombre de vuestro equipo y chocad los cinco.",
+    "Repite lo último que dijo tu compañero antes de hablar tú.",
+    "Proponed entre los dos una norma para jugar bien en equipo.",
+    "Di algo amable sobre tu compañero.",
+    "Por turnos, haced un gesto y que el otro lo imite.",
+    "Decidid juntos qué haríais si solo tuvierais un juguete para dos.",
+    "Cuenta un momento en el que ayudaste a alguien.",
+    "Por turnos, decid una palabra cada uno para construir una frase juntos.",
+    "Pensad juntos una forma justa de repartir una pizza.",
+    "Pregúntale a tu compañero qué le gusta hacer los fines de semana.",
+    "Por turnos, poned cara de una emoción y que el otro la adivine.",
+    "Contad juntos hasta cinco: uno dice un número y el otro el siguiente.",
+    "Dad las gracias a vuestro compañero por algo de hoy.",
+    "Inventad juntos un final feliz para una historia muy corta.",
+    "Por turnos, decid algo que os gustaría aprender.",
+    "Acordad un saludo secreto y hacedlo.",
+    "Cuenta algo que te costó y cómo lo conseguiste.",
+    "Escucha a tu compañero 20 segundos sin interrumpir y luego resume lo que dijo.",
+    "Decidid juntos a qué jugaríais en el recreo.",
+    "Proponed una forma de animar a alguien que está triste.",
+    "Por turnos, decid algo bonito de este momento o de este lugar.",
+];
+
+function JuegoEquipo({ patient }) {
+    const GOALS = { corto: 6, medio: 8, largo: 10 };
+    const [goalKey, setGoalKey] = useState("medio");
+    const [phase, setPhase] = useState("ready"); // ready|play|done
+    const [step, setStep] = useState(0);
+    const [turn, setTurn] = useState(1);
+    const [reto, setReto] = useState("");
+    const poolRef = useRef([]);
+    const goal = GOALS[goalKey];
+
+    const drawReto = () => {
+        if (!poolRef.current.length) { poolRef.current = EQUIPO_RETOS.slice(); for (let i = poolRef.current.length - 1; i > 0; i--) { const j = randInt(0, i); const t = poolRef.current[i]; poolRef.current[i] = poolRef.current[j]; poolRef.current[j] = t; } }
+        return poolRef.current.pop();
+    };
+    const start = () => { poolRef.current = []; setStep(0); setTurn(1); setReto(drawReto()); setPhase("play"); try { sfx.tap(); } catch (e) { } };
+    const done = () => {
+        if (phase !== "play") return;
+        const ns = step + 1;
+        try { sfx.success(); } catch (e) { }
+        if (ns >= goal) {
+            setStep(ns); setPhase("done");
+            if (typeof _activePatientId !== "undefined" && _activePatientId) { try { addStar(_activePatientId, _activeAreaId, true); } catch (e) { } try { logCurrentResult(true); } catch (e) { } }
+        } else { setStep(ns); setTurn(t => (t === 1 ? 2 : 1)); setReto(drawReto()); }
+    };
+
+    // torre compartida (se construye de abajo a arriba)
+    const blocks = [];
+    const COLS = ["#e76f51", "#2a9d8f", "#457b9d", "#e9c46a", "#b5838d", "#8ecae6", "#f4a259", "#90be6d", "#cdb4db", "#ffafcc"];
+    for (let i = goal - 1; i >= 0; i--) {
+        const filled = i < step;
+        blocks.push(React.createElement("div", { key: i, style: { height: 22, borderRadius: 6, margin: "3px auto", width: filled ? 120 : 96, background: filled ? COLS[i % COLS.length] : "#eef1f3", border: "2px solid " + (filled ? "rgba(0,0,0,0.08)" : "#e3e9ec"), transition: "all 240ms ease" } }));
+    }
+
+    return React.createElement("div", { style: { textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 2 } }, "🤝 Jugamos en Equipo"),
+        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 8 } }, "Cooperad por turnos. No se compite: ¡ganáis juntos! 💛"),
+        phase === "ready" ? React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 8 } }, "Elegid la altura de la torre que queréis construir en equipo:"),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 10, flexWrap: "wrap" } },
+                Object.keys(GOALS).map(k => React.createElement("button", { key: k, onClick: () => setGoalKey(k), style: { padding: "6px 14px", borderRadius: 10, fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: "pointer", border: "2px solid " + (goalKey === k ? C.primary : "#dde5e1"), background: goalKey === k ? C.primary : "#fff", color: goalKey === k ? "#fff" : C.text } }, (k === "corto" ? "Corta" : k === "medio" ? "Media" : "Alta") + " (" + GOALS[k] + ")"))),
+            React.createElement(Btn, { color: C.primary, onClick: start }, "▶ Empezar")) : null,
+        (phase === "play" || phase === "done") ? React.createElement("div", { style: { display: "flex", gap: 16, alignItems: "center", justifyContent: "center", flexWrap: "wrap" } },
+            React.createElement("div", { style: { minWidth: 130 } }, blocks),
+            React.createElement("div", { style: { flex: 1, minWidth: 220, maxWidth: 340 } },
+                phase === "play" ? React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: turn === 1 ? "#2a9d8f" : "#457b9d", marginBottom: 6 } }, "Le toca a: Jugador " + turn + (turn === 1 ? " 🟢" : " 🔵")),
+                    React.createElement("div", { style: { background: "#F4FAF7", border: "2px solid #d8e6df", borderRadius: 14, padding: "16px 14px", fontSize: 16, fontWeight: 600, color: C.text, minHeight: 86, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1.35 } }, reto),
+                    React.createElement("div", { style: { fontSize: 12, color: C.textL, margin: "8px 0" } }, "Bloque " + (step + 1) + " de " + goal),
+                    React.createElement(Btn, { color: C.primary, onClick: done }, "¡Hecho juntos! 🧱")
+                ) : React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 22, fontWeight: 800, marginBottom: 6 } }, "¡Torre completa! 🎉"),
+                    React.createElement("div", { style: { fontSize: 14, color: C.textL, marginBottom: 10 } }, "Lo habéis conseguido en equipo. ¡Buen trabajo cooperando y respetando los turnos!"),
+                    React.createElement(Btn, { color: C.primary, onClick: () => setPhase("ready") }, "Jugar otra vez")
+                ))
+        ) : null,
+    );
+}
+
+// ───────────────────────── Indicador de frescura (para el terapeuta) ─────────────────────────
+function FrescuraPanel({ patient }) {
+    const pid = patient ? patient.id : null;
+    let sessions = [];
+    try { sessions = (typeof getSessions === "function" && pid) ? (getSessions(pid) || []) : []; } catch (e) { }
+    const AL = {}; try { (AREAS || []).forEach(a => { AL[a.id] = a.label; }); } catch (e) { }
+    const areaName = (id) => AL[id] || id;
+    const labelOf = (area, id) => { try { const arr = AREA_ACTIVITIES[area] || []; const f = arr.find(x => x.id === id); return f ? f.label : id; } catch (e) { return id; } };
+    const now = Date.now(), DAY = 86400000;
+    const stat = {};
+    sessions.forEach(s => { if (!s || !s.area || !s.activity) return; const k = s.area + ":" + s.activity; const t = s.ts || 0; if (!stat[k]) stat[k] = { area: s.area, id: s.activity, count: 0, last: 0, recent: 0 }; stat[k].count++; if (t > stat[k].last) stat[k].last = t; if (t > now - 14 * DAY) stat[k].recent++; });
+    const usedArr = Object.keys(stat).map(k => stat[k]);
+    const overused = usedArr.filter(a => a.recent >= 2 || a.count >= 4).sort((a, b) => (b.recent - a.recent) || (b.count - a.count)).slice(0, 6);
+    let areas = (patient && Array.isArray(patient.areas) && patient.areas.length) ? patient.areas.slice() : Object.keys(AREA_ACTIVITIES);
+    areas = areas.filter(a => AREA_ACTIVITIES[a] && AREA_ACTIVITIES[a].length);
+    const fresh = [];
+    areas.forEach(area => { (AREA_ACTIVITIES[area] || []).forEach(act => { const k = area + ":" + act.id; const st = stat[k]; const never = !st; const old = st && st.last < now - 21 * DAY; if (never || old) fresh.push({ area: area, id: act.id, label: act.label, never: never, last: st ? st.last : 0 }); }); });
+    fresh.sort((a, b) => (a.never === b.never ? 0 : (a.never ? -1 : 1)) || (a.last - b.last));
+    const freshTop = fresh.slice(0, 8);
+    const daysAgo = (t) => t ? Math.max(0, Math.round((now - t) / DAY)) : null;
+
+    const row = (label, sub, color) => React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e9eef1", marginBottom: 6 } },
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, label),
+        React.createElement("div", { style: { fontSize: 11.5, fontWeight: 700, color: color, whiteSpace: "nowrap" } }, sub));
+
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 12 } }, "Te ayuda a variar y a evitar que el paciente se canse de las mismas actividades."),
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#b5651d", marginBottom: 6 } }, "🔁 Muy usadas últimamente"),
+        overused.length ? overused.map((a, i) => React.createElement("div", { key: i }, row(labelOf(a.area, a.id) + "  ·  " + areaName(a.area), a.recent >= 2 ? (a.recent + "× en 2 sem.") : (a.count + "× en total"), "#b5651d")))
+            : React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 8 } }, "Nada sobreusado por ahora 👍"),
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#1d6a45", margin: "14px 0 6px" } }, "🌿 Frescas para probar"),
+        freshTop.length ? freshTop.map((a, i) => React.createElement("div", { key: i }, row(a.label + "  ·  " + areaName(a.area), a.never ? "sin probar" : ("hace " + daysAgo(a.last) + " d"), "#1d6a45")))
+            : React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Has probado casi todo recientemente. ¡Buen momento para repetir favoritas!"),
+        !sessions.length ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginTop: 10 } }, "Aún no hay historial de sesiones para este paciente.") : null,
+    );
+}
+
 const AREA_ACTIVITIES = {
     atencion: [
         { id: "busca", label: "Busca y Cuenta", desc: "Encuentra objetos escondidos", comp: BuscaCuenta, hasAI: true },
+        { id: "vasos", label: "El Trile", desc: "Sigue el vaso que esconde la moneda", comp: JuegoVasos, complex: true },
+        { id: "topo", label: "Atrapa al Topo", desc: "Toca los topos y esquiva las bombas", comp: JuegoTopo, complex: true },
         { id: "diferencias", label: "Encuentra Diferencias", desc: "Compara y descubre cambios", comp: Diferencias, hasAI: true },
         { id: "patron", label: "Sigue el Patrón", desc: "Descubre qué viene después", comp: SiguePatron, hasAI: true },
         { id: "intruso", label: "Encuentra al Intruso", desc: "¿Cuál no pertenece?", comp: Intruso, hasAI: true },
@@ -34223,6 +34813,7 @@ const AREA_ACTIVITIES = {
     ],
     memoria: [
         { id: "simon", label: "Simon Dice", desc: "Repite la secuencia", comp: SimonDice },
+        { id: "luces", label: "Luces", desc: "Memoriza qué casillas se encienden y tócalas", comp: JuegoLuces, complex: true },
         { id: "parejas", label: "Memory de Parejas", desc: "Encuentra las parejas", comp: MemoryParejas, hasAI: true },
         { id: "cambio", label: "¿Qué Ha Cambiado?", desc: "Memoriza y detecta", comp: QueCambio, hasAI: true },
         { id: "categoriza", label: "Clasifica por Categorías", desc: "Ordena por tipos", comp: Categorizacion, hasAI: true, complex: true },
@@ -34260,6 +34851,7 @@ const AREA_ACTIVITIES = {
     ],
     social: [
         { id: "escenarios", label: "Escenarios Sociales", desc: "Elige la mejor respuesta", comp: EscenariosSociales, hasAI: true },
+        { id: "equipo", label: "Jugamos en Equipo", desc: "Juego cooperativo por turnos (2 jugadores)", comp: JuegoEquipo, complex: true },
         { id: "dialogos", label: "¿Qué Dirías?", desc: "Practica respuestas", comp: Dialogos, hasAI: true },
         { id: "expresiones", label: "Lectura Expresiones", desc: "Identifica emociones en caras", comp: Expresiones },
         { id: "historia", label: "Historia Social", desc: "100% generada por IA", comp: HistoriaSocial, hasAI: true },
@@ -34314,6 +34906,7 @@ const AREA_ACTIVITIES = {
     ],
     discalculia: [
         { id: "subitizacion", label: "Subitización", desc: "Reconoce cantidades sin contar (1-9 puntos)", comp: SubitizacionTest },
+        { id: "globos", label: "Globos de Cálculo", desc: "Explota el globo con el resultado correcto", comp: JuegoGlobos, complex: true },
         { id: "magnitudes", label: "Más Grande / Más Pequeño", desc: "Comparación de magnitudes (sentido numérico)", comp: ComparacionMagnitudes },
         { id: "recta_numerica", label: "Recta Numérica", desc: "Estimación de números en la recta mental", comp: RectaNumerica },
         { id: "descomposicion", label: "Descompón el Número", desc: "Centenas, decenas y unidades", comp: Descomposicion },
@@ -34506,6 +35099,11 @@ const ACTIVITY_AGE = {
 const ACTIVITY_EVIDENCE = {
     // ── Autoestima ──
     gratitud: { ref: "Tres cosas buenas (Seligman et al., 2005)", parents: "Anotar cada día lo positivo y su causa aumenta el bienestar de forma sostenida." },
+    vasos: { ref: "Seguimiento de objetos y memoria de trabajo visuoespacial", parents: "Seguir un objeto que cambia de posición entrena la atención sostenida y la memoria de trabajo visuoespacial." },
+    topo: { ref: "Atención selectiva y control inhibitorio (tareas go/no-go)", parents: "Responder a los objetivos y frenar ante los distractores entrena la atención selectiva y el control inhibitorio." },
+    luces: { ref: "Memoria de trabajo visuoespacial (amplitud simultánea)", parents: "Recordar y reproducir un conjunto de posiciones entrena la memoria de trabajo visuoespacial." },
+    globos: { ref: "Fluidez de cálculo y recuperación de hechos numéricos", parents: "Resolver operaciones de forma ágil entrena la fluidez aritmética y la recuperación de hechos numéricos." },
+    equipo: { ref: "Cooperación y respeto de turnos (habilidades sociales)", parents: "Cooperar hacia una meta común y respetar los turnos entrena la comunicación social y la espera." },
     arbol: { ref: "Fortalezas del carácter (Peterson & Seligman, 2004)", parents: "Identificar y nombrar las propias cualidades (modelo VIA) refuerza una autoimagen positiva." },
     mis_valores: { ref: "Clarificación de valores (ACT; Hayes et al.)", parents: "Conectar la conducta con lo que de verdad importa orienta las decisiones y da sentido." },
     carta: { ref: "Autocompasión (Neff, 2003)", parents: "Escribirse con amabilidad, como a un buen amigo, mejora el trato hacia uno mismo." },
@@ -37333,6 +37931,7 @@ function PrintSheetOverlay({ data, onClose }) {
         React.createElement("div", { className: "ps-controls", style: { position: "sticky", top: 0, background: "#2D6A4F", padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", flexWrap: "wrap", gap: 8 } },
             React.createElement("div", { style: { color: "#fff", fontWeight: 800, fontSize: 15 } }, "Vista de impresión"),
             React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                React.createElement("button", { onClick: generarResumenIA, disabled: aiLoading, style: btn("#fff", "#2D6A4F") }, aiLoading ? "Generando…" : "✨ Resumen IA"),
                 React.createElement("button", { onClick: () => { try { window.print(); } catch (e) { alert("Usa 'Descargar' y abre el archivo para imprimir."); } }, style: btn("#fff", "#2D6A4F"), disabled: !sheet }, "🖨 Imprimir"),
                 React.createElement("button", { onClick: () => sheet && downloadSheetHTML(sheet, today), style: btn("rgba(255,255,255,0.2)", "#fff", "2px solid rgba(255,255,255,0.5)"), disabled: !sheet }, "⬇ Descargar"),
                 React.createElement("button", { onClick: onClose, style: btn("transparent", "#fff", "2px solid rgba(255,255,255,0.5)") }, "✕ Cerrar"))),
@@ -38145,8 +38744,8 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
-// ── Compañero / mascota (v25.11) ──
-// ── Compañero / mascota (v25.11) ── diseños + monedas + tienda de accesorios
+// ── Compañero / mascota (v25.24) ──
+// ── Compañero / mascota (v25.24) ── diseños + monedas + tienda de accesorios
 const COMPANION_DESIGNS = [
     { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
     { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
@@ -38160,6 +38759,10 @@ const COMPANION_DESIGNS = [
     { id: "pajarito", name: "Pajarito", body: "#F2D26B", cheek: "#F2A1A1", shape: "ave" },
     { id: "ranita", name: "Ranita", body: "#A6D96A", cheek: "#F2A1A1", shape: "gato" },
     { id: "fresa", name: "Fresita", body: "#F08C9E", cheek: "#E36B7E", shape: "oso" },
+    { id: "estrellita", name: "Estrellita", body: "#9AA7E0", cheek: "#C9B7F0", shape: "ave" },
+    { id: "coralito", name: "Coralito", body: "#FF9E80", cheek: "#E36B7E", shape: "conejo" },
+    { id: "bosque", name: "Bosquecito", body: "#6FB98F", cheek: "#F2A1A1", shape: "oso" },
+    { id: "uvita", name: "Uvita", body: "#B388C9", cheek: "#F4B6C2", shape: "gato" },
 ];
 const COMPANION_SHOP = [
     { id: "gorro", name: "Gorro de lana", slot: "hat", cost: 10, emoji: "\uD83E\uDDE2" },
@@ -38238,13 +38841,14 @@ function accessorySVG(slot, id, cx, cy, s) {
 
 function companionSVG(opts) {
     opts = opts || {};
-    const stage = Math.max(1, Math.min(3, opts.stage || 1));
+    const stage = Math.max(0, Math.min(4, opts.stage == null ? 1 : opts.stage));
     const mood = opts.mood || "feliz";
     const acc = opts.accessories || {};
     const design = COMPANION_DESIGNS.find(d => d.id === opts.design) || COMPANION_DESIGNS[0];
     const body = design.body, cheek = design.cheek, shape = design.shape || "blob";
     const dark = "#2D6A4F", ink = "#2B3A33";
-    const s = stage === 1 ? 46 : stage === 2 ? 55 : 63;
+    if (stage === 0) { const ex0 = 100, ey0 = 132; return `<svg viewBox="0 0 200 215" width="100%" style="max-width:220px;height:auto;display:block;margin:0 auto;"><ellipse cx="${ex0}" cy="${ey0 + 60}" rx="34" ry="9" fill="${dark}" opacity="0.12"/><ellipse cx="${ex0}" cy="${ey0}" rx="44" ry="56" fill="${body}" stroke="${dark}" stroke-width="3.5"/><ellipse cx="${ex0 - 14}" cy="${ey0 - 18}" rx="10" ry="15" fill="#FFFFFF" opacity="0.45"/><circle cx="${ex0 - 12}" cy="${ey0 + 14}" r="7" fill="${cheek}" opacity="0.7"/><circle cx="${ex0 + 16}" cy="${ey0 - 4}" r="6" fill="${cheek}" opacity="0.7"/><circle cx="${ex0 + 6}" cy="${ey0 + 32}" r="5" fill="${cheek}" opacity="0.7"/><g stroke="#FFD45E" stroke-width="3" stroke-linecap="round"><path d="M50 84 l0 10 M45 89 l10 0"/><path d="M150 78 l0 10 M145 83 l10 0"/></g></svg>`; }
+    const s = stage === 1 ? 44 : stage === 2 ? 53 : stage === 3 ? 61 : 68;
     const cx = 100, cy = 130;
     const ex = s * 0.40, ey = cy - s * 0.34, er = Math.max(4, s * 0.11);
     const top = cy - s * 0.92;
@@ -38264,7 +38868,10 @@ function companionSVG(opts) {
     if (mood === "fiesta") mouth = `<path d="M${cx - 12} ${my} q12 16 24 0 z" fill="#C0392B" stroke="${ink}" stroke-width="2"/>`;
     else if (mood === "animo") mouth = `<path d="M${cx - 9} ${my} q9 11 18 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
     else mouth = `<path d="M${cx - 8} ${my} q8 7 16 0" stroke="${ink}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
-    const crown = stage === 3 ? `<path d="M${cx - 18} ${top - 1} L${cx - 11} ${top - 16} L${cx} ${top - 4} L${cx + 11} ${top - 16} L${cx + 18} ${top - 1} Z" fill="#FFD45E" stroke="#E0A82E" stroke-width="2"/>` : "";
+    const crown = stage >= 3 ? `<path d="M${cx - 18} ${top - 1} L${cx - 11} ${top - 16} L${cx} ${top - 4} L${cx + 11} ${top - 16} L${cx + 18} ${top - 1} Z" fill="#FFD45E" stroke="#E0A82E" stroke-width="2"/>` : "";
+    const sprout = stage === 2 ? `<path d="M${cx - 2} ${top + 2} q-8 -16 3 -22 q-1 12 8 16 Z" fill="#7FD1A6" stroke="${dark}" stroke-width="2"/><path d="M${cx + 2} ${top} q9 -7 17 -3 q-6 9 -16 7 Z" fill="#7FD1A6" stroke="${dark}" stroke-width="1.5"/>` : "";
+    const wings = stage >= 4 ? `<ellipse cx="${cx - s * 0.95}" cy="${cy}" rx="15" ry="26" fill="#FDE9A9" stroke="${dark}" stroke-width="2.5" transform="rotate(-22 ${cx - s * 0.95} ${cy})"/><ellipse cx="${cx + s * 0.95}" cy="${cy}" rx="15" ry="26" fill="#FDE9A9" stroke="${dark}" stroke-width="2.5" transform="rotate(22 ${cx + s * 0.95} ${cy})"/>` : "";
+    const aura = stage >= 4 ? `<g stroke="#FFD45E" stroke-width="3" stroke-linecap="round"><path d="M26 52 l0 12 M20 58 l12 0"/><path d="M174 56 l0 12 M168 62 l12 0"/><path d="M30 154 l0 10 M25 159 l10 0"/><path d="M168 150 l0 10 M163 155 l10 0"/></g>` : "";
     const ay = cy + s * 0.18;
     const arms = mood === "animo"
         ? `<path d="M${cx - s} ${ay} q-16 -10 -10 -26" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M${cx + s} ${ay} q16 6 12 22" stroke="${dark}" stroke-width="7" fill="none" stroke-linecap="round"/>`
@@ -38276,8 +38883,11 @@ function companionSVG(opts) {
     const held = acc.held ? accessorySVG("held", acc.held, cx, cy, s) : "";
     return `<svg viewBox="0 0 200 215" width="100%" style="max-width:220px;height:auto;display:block;margin:0 auto;">
   ${sp}
+  ${aura}
   ${earsBehind}
+  ${wings}
   ${topExtra}
+  ${sprout}
   ${crown}
   ${arms}
   <ellipse cx="${cx}" cy="${cy}" rx="${s}" ry="${s * 0.92}" fill="${body}" stroke="${dark}" stroke-width="3.5"/>
@@ -38302,8 +38912,9 @@ const COMPANION_MSGS = {
     logro: ["\u00a1Lo conseguiste! Cu\u00e1nto has trabajado para esto.", "\u00a1Bien hecho! Has crecido un poquito m\u00e1s.", "\u00a1Qu\u00e9 orgulloso estoy de tu esfuerzo!"],
 };
 
-function companionStage(stars) { stars = stars || 0; if (stars >= 60) return 3; if (stars >= 20) return 2; return 1; }
-function companionNext(stars) { if (stars >= 60) return null; return stars >= 20 ? 60 : 20; }
+const COMPANION_STAGE_NAMES = ["Huevo", "Cría", "Joven", "Adulto", "Radiante"];
+function companionStage(stars) { stars = stars || 0; if (stars >= 120) return 4; if (stars >= 60) return 3; if (stars >= 20) return 2; if (stars >= 5) return 1; return 0; }
+function companionNext(stars) { stars = stars || 0; if (stars >= 120) return null; if (stars >= 60) return 120; if (stars >= 20) return 60; if (stars >= 5) return 20; return 5; }
 
 function Mascota({ patient, onClose }) {
     const pid = patient ? patient.id : "_demo";
@@ -38386,7 +38997,7 @@ function Mascota({ patient, onClose }) {
             React.createElement("div", { style: { background: "#EAF7F0", border: "1.5px solid #BFE6D2", borderRadius: 14, padding: "10px 14px", margin: "10px 0", textAlign: "center", color: "#2D5C46", fontSize: 14, fontWeight: 600 } }, "\u201c" + msg + "\u201d"),
             React.createElement("div", { style: { margin: "12px 0 4px" } },
                 React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginBottom: 4 } },
-                    React.createElement("span", null, "Nivel " + stage + (stage === 3 ? " \u00b7 \u00a1m\u00e1ximo!" : "")),
+                    React.createElement("span", null, (COMPANION_STAGE_NAMES[stage] || ("Nivel " + stage)) + (stage >= 4 ? " \u00b7 \u00a1m\u00e1ximo!" : "")),
                     React.createElement("span", null, next ? (stars + " / " + next + " \u2b50") : (stars + " \u2b50"))),
                 React.createElement("div", { style: { background: "#eee", borderRadius: 8, height: 12, overflow: "hidden" } },
                     React.createElement("div", { style: { width: pct + "%", height: 12, background: "#7FD1A6", borderRadius: 8 } }))
@@ -38519,11 +39130,13 @@ function AventuraView({ patient, onClose, onLaunch }) {
     const [completed, setCompleted] = useState([]);
     const [addOpen, setAddOpen] = useState(false);
     const [addArea, setAddArea] = useState(null);
+    const [saved, setSaved] = useState(false);
 
     const clearAdv = () => { try { storeSave("adventure:" + pid, null); } catch (e) { } };
     React.useEffect(() => { if (phase === "map" && plan) { try { storeSave("adventure:" + pid, { plan: plan, current: current, completed: completed, tally: (storeLoad("adventure:" + pid) || {}).tally || {} }); } catch (e) { } } }, [phase, plan, current, completed]);
     React.useEffect(() => { let a; try { a = storeLoad("adventure:" + pid); } catch (e) { } if (a && a.plan && a.plan.steps && a.plan.steps.length) { setPlan(a.plan); setCurrent(a.current || 0); setCompleted(a.completed || []); setPhase((a.current || 0) >= a.plan.steps.length ? "done" : "map"); } }, []);
     React.useEffect(() => { if (phase !== "map") return; const h = (e) => { const det = (e && e.detail) || {}; if (det.patientId !== pid) return; let a; try { a = storeLoad("adventure:" + pid); } catch (er) { } if (!a || !a.plan || !a.plan.steps) return; setCompleted(a.completed || []); if ((a.current || 0) >= a.plan.steps.length) { setPhase("done"); } else { setCurrent(a.current || 0); } }; window.addEventListener("terapiapp-companion-react", h); return () => window.removeEventListener("terapiapp-companion-react", h); }, [phase, pid]);
+    const confetti = React.useMemo(() => { const cols = ["#E15554", "#F4A261", "#FFD45E", "#7FD1A6", "#457B9D", "#C3B0E6", "#F08C9E"]; const arr = []; for (let i = 0; i < 30; i++) { const a = (Math.PI * 2 * i) / 30 + Math.random() * 0.5; const d = 70 + Math.random() * 150; arr.push({ dx: Math.round(Math.cos(a) * d), dy: Math.round(Math.sin(a) * d + 40), r: Math.round(Math.random() * 540 - 270), c: cols[i % cols.length], dur: (1.1 + Math.random() * 0.9).toFixed(2), delay: (Math.random() * 0.25).toFixed(2), w: 6 + Math.round(Math.random() * 5), h: 9 + Math.round(Math.random() * 7), round: Math.random() < 0.3 }); } return arr; }, []);
 
     const AREAS_ = (typeof AREAS !== "undefined") ? AREAS : [];
     const areaLabel = id => { const a = AREAS_.find(x => x.id === id); return a ? a.label : id; };
@@ -38610,7 +39223,7 @@ function AventuraView({ patient, onClose, onLaunch }) {
             React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setPhase("edit"); }, style: { marginTop: 10, background: "none", border: "none", color: "#8a948f", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5 } }, "\u21A9 Editar la aventura"));
     } else {
         body = React.createElement("div", { style: { textAlign: "center", padding: "10px 0" } },
-            mascot("fiesta"),
+            React.createElement("div", { style: { position: "relative", width: 150, height: 150, margin: "0 auto 4px" } }, confetti.map((p, i) => React.createElement("div", { key: i, style: { position: "absolute", left: "50%", top: "50%", width: p.w, height: p.h, background: p.c, borderRadius: p.round ? "50%" : 2, transform: "translate(-50%,-50%)", animation: "taConfetti " + p.dur + "s ease-out " + p.delay + "s forwards", zIndex: 1, "--dx": p.dx + "px", "--dy": p.dy + "px", "--r": p.r + "deg" } })), React.createElement("div", { style: { position: "relative", zIndex: 2 } }, mascot("fiesta"))),
             React.createElement("div", { style: { fontSize: 24, fontWeight: 800, color: "#2D6A4F", marginTop: 8 } }, "\uD83C\uDF89 \u00a1Misi\u00f3n completada!"),
             React.createElement("div", { style: { fontSize: 14, color: "#3a4742", marginTop: 6 } }, "Has terminado las " + (plan ? plan.steps.length : 0) + " paradas. \u00a1Cu\u00e1nto has trabajado hoy!"),
             summaryRows.length ? React.createElement("div", { style: { textAlign: "left", maxWidth: 340, margin: "16px auto 0", background: "#F7FAF8", border: "1px solid #e3ece7", borderRadius: 12, padding: "10px 14px" } },
@@ -38618,11 +39231,13 @@ function AventuraView({ patient, onClose, onLaunch }) {
                 summaryRows.map(r => React.createElement("div", { key: r.area, style: { display: "flex", justifyContent: "space-between", fontSize: 12.5, color: "#3a4742", padding: "3px 0" } },
                     React.createElement("span", null, areaLabel(r.area) + " \u00b7 " + r.stops + (r.stops > 1 ? " paradas" : " parada") + (weakAreas.indexOf(r.area) >= 0 ? " \uD83D\uDCAA" : "")),
                     React.createElement("span", { style: { fontWeight: 700, color: "#2D6A4F" } }, r.total > 0 ? (Math.round(100 * r.correct / r.total) + "% aciertos") : "realizada")))) : null,
+            React.createElement("button", { onClick: () => { if (saved) return; try { sfx.tap(); } catch (e) { } try { const key = "adventures:" + pid; const arr = storeLoad(key) || []; const total = (plan ? plan.steps : []).reduce((x, st) => x + (st.duration || 0), 0); arr.push({ ts: Date.now(), name: (plan && plan.name) || "Aventura", stops: plan ? plan.steps.length : 0, minutes: total, areas: summaryRows }); storeSave(key, arr); setSaved(true); } catch (e) { } }, style: { marginTop: 14, padding: "9px 14px", borderRadius: 12, border: "2px solid #BFE6D2", background: saved ? "#EAF7F0" : "#fff", color: "#2D6A4F", fontWeight: 700, cursor: saved ? "default" : "pointer", fontFamily: "inherit" } }, saved ? "✓ Guardado en el seguimiento" : "🗒️ Guardar en el seguimiento"),
             React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", marginTop: 18 } },
                 React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } clearAdv(); setPhase("config"); setPlan(null); setCompleted([]); setCurrent(0); }, style: { padding: "10px 16px", borderRadius: 12, border: "2px solid #BFE6D2", background: "#fff", color: "#2D6A4F", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "Otra aventura"),
                 React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } clearAdv(); onClose && onClose(); }, style: { padding: "10px 16px", borderRadius: 12, border: "none", background: "#2D6A4F", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "Cerrar")));
     }
 
+    if (phase === "done") return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, overflow: "hidden" } }, React.createElement("style", null, "@keyframes taConfetti{0%{transform:translate(-50%,-50%) rotate(0deg);opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--r));opacity:0}}"), React.createElement("div", { style: { position: "relative", textAlign: "center", maxWidth: 420, width: "100%" } }, body));
     return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
         React.createElement("div", { style: { background: "#fff", borderRadius: 20, padding: 20, maxWidth: 560, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
@@ -38680,7 +39295,7 @@ function SeguimientoClinico({ patient, onClose }) {
                 "Objetivos terapéuticos y notas de sesión. Ambos pueden incluirse en el informe."),
             // Tabs
             React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16 } },
-                [{ id: "objetivos", label: "🎯 Objetivos", n: objetivos.length }, { id: "notas", label: "📝 Notas de sesión", n: notas.length }, { id: "evolucion", label: "📈 Evolución" }].map(t =>
+                [{ id: "objetivos", label: "🎯 Objetivos", n: objetivos.length }, { id: "notas", label: "📝 Notas de sesión", n: notas.length }, { id: "evolucion", label: "📈 Evolución" }, { id: "frescura", label: "🌿 Frescura" }].map(t =>
                     React.createElement("button", { key: t.id, onClick: () => { sfx.tap(); setTab(t.id); }, style: {
                         flex: 1, padding: "9px 12px", borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: "pointer",
                         background: tab === t.id ? C.primary : "#fff", color: tab === t.id ? "#fff" : C.text,
@@ -38706,8 +39321,10 @@ function SeguimientoClinico({ patient, onClose }) {
                             } }, est.label),
                             React.createElement("button", { onClick: () => delObjetivo(o.id), style: { border: "none", background: "transparent", color: C.textL, cursor: "pointer", fontSize: 13, fontFamily: "inherit" } }, "🗑"));
                     }))),
+            tab === "frescura" && React.createElement(FrescuraPanel, { patient: patient }),
             // ── Notas de sesión ──
             tab === "notas" && React.createElement("div", null,
+                (function () { var advs = []; try { advs = storeLoad("adventures:" + patient.id) || []; } catch (e) { } if (!advs.length) return null; return React.createElement("div", { style: { marginBottom: 14, padding: 12, background: "#F4FAF7", border: "1px solid #d8e6df", borderRadius: 12 } }, React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#2D6A4F", marginBottom: 8 } }, "🗺️ Aventuras realizadas (" + advs.length + ")"), advs.slice().sort(function (a, b) { return b.ts - a.ts; }).map(function (av, i) { return React.createElement("div", { key: i, style: { fontSize: 12.5, color: "#3a4742", padding: "5px 0", borderTop: i ? "1px solid #e3ece7" : "none" } }, React.createElement("div", { style: { fontWeight: 700 } }, new Date(av.ts).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" }) + " · " + (av.name || "Aventura")), React.createElement("div", { style: { color: "#6a756f" } }, (av.stops || 0) + " paradas · " + (av.minutes || 0) + " min" + ((av.areas && av.areas.length) ? " · " + av.areas.map(function (r) { return (r.total > 0 ? Math.round(100 * r.correct / r.total) + "% " : "") + ((AREAS.find(function (x) { return x.id === r.area; }) || {}).label || r.area); }).join(", ") : ""))); })); })(),
                 React.createElement("div", { style: { padding: 12, background: "#f9f9f9", borderRadius: 12, marginBottom: 14 } },
                     React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 8 } },
                         React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: C.textL } }, "Fecha:"),
@@ -38743,6 +39360,7 @@ function SessionReport({ patient, onClose }) {
         { id: "evidencia", label: "Evidencia científica de las actividades", defaultOff: true },
         { id: "emocional", label: "Evolución y registro emocional" },
         { id: "notas", label: "Notas de sesión" },
+        { id: "aventuras", label: "Registro de aventuras", defaultOff: true },
         { id: "fortalezas", label: "Cualidades reconocidas" },
         { id: "gratitud", label: "Diario de gratitud" },
         { id: "logros", label: "Logros personales" },
@@ -38750,12 +39368,37 @@ function SessionReport({ patient, onClose }) {
         { id: "adolescente", label: "Perfil adolescente (valores, decisiones)" },
         { id: "apoyos", label: "Mapa de apoyos" },
         { id: "linea", label: "Línea de vida" },
+        { id: "resumen_ia", label: "Resumen clínico (IA)", defaultOff: true },
     ];
     const [sections, setSections] = useState(() => {
         const s = {};
         ALL_SECTIONS.forEach(sec => { s[sec.id] = !sec.defaultOff; });
         return s;
     });
+    const [aiSummary, setAiSummary] = useState("");
+    const [aiLoading, setAiLoading] = useState(false);
+    const generarResumenIA = async () => {
+        if (aiLoading) return;
+        setAiLoading(true);
+        try {
+            var sess = [];
+            try { sess = (typeof getSessions === "function") ? (getSessions(patient.id) || []) : []; } catch (e) { }
+            var lines = sess.slice(-40).map(function (s) { return (typeof areaLabel === "function" ? areaLabel(s.area) : s.area) + " · " + s.activity + " · " + (s.result && s.result.correct ? "logrado" : "en proceso"); }).join("\n");
+            var prompt = `Eres un psicólogo infantil redactando para una historia clínica. Escribe en español, en 2-3 párrafos, con tono clínico y humano (que NO suene a IA), un resumen de la evolución del paciente a partir de las sesiones registradas. No inventes datos que no aparezcan; si hay pocos registros, indícalo con prudencia. Paciente: ${patient.nombre || "paciente"}, edad ${patient.edad || "?"}, diagnósticos: ${((patient.diagnosticos || []).join(", ")) || "no especificados"}.
+
+Sesiones recientes (área · actividad · resultado):
+${lines || "sin registros"}
+
+Devuelve un JSON con la forma {"resumen": "texto del resumen"}.`;
+            var res = await callClaude(prompt, null, null);
+            var txt = "";
+            if (res) { if (typeof res === "string") txt = res; else if (res.resumen) txt = res.resumen; else if (res.text) txt = res.text; }
+            if (res && res.__noKey) { alert("Configura tu clave de API (ajustes) para usar la IA."); }
+            else if (txt) { setAiSummary(String(txt)); setSections(function (s) { return Object.assign({}, s, { resumen_ia: true }); }); }
+            else { alert("No se pudo generar el resumen. Inténtalo de nuevo."); }
+        } catch (e) { alert("No se pudo generar el resumen."); }
+        setAiLoading(false);
+    };
     const toggleSection = (id) => setSections(s => ({ ...s, [id]: !s[id] }));
     // Whether a section has any data within the chosen scope (drives auto-disabling).
     // References `inScope` and `sessions` which are defined below — fine because
@@ -38771,6 +39414,8 @@ function SessionReport({ patient, onClose }) {
             case "emocional": return L("termometro").length > 0;
             case "objetivos": return (storeLoad("objetivos:" + patient.id) || []).length > 0;
             case "notas": return L("notas_sesion").length > 0;
+            case "resumen_ia": return !!aiSummary;
+            case "aventuras": return L("adventures").length > 0;
             case "fortalezas": return L("strengths").length > 0;
             case "gratitud": return L("gratitud").length > 0;
             case "logros": return L("logros").length > 0;
@@ -38860,6 +39505,12 @@ function SessionReport({ patient, onClose }) {
         const objetivosList = storeLoad("objetivos:" + patient.id) || [];
         // Session notes (date-filtered to the report scope).
         const notasList = _scoped(storeLoad("notas_sesion:" + patient.id) || []);
+        const aventurasList = _scoped(storeLoad("adventures:" + patient.id) || []);
+        const aventurasHTML = aventurasList.length === 0 ? "" : aventurasList.slice().sort((a, b) => b.ts - a.ts).map(av => {
+            const dt = new Date(av.ts).toLocaleDateString("es-ES", { day: "2-digit", month: "long", year: "numeric" });
+            const rows = (av.areas || []).map(r => `<li>${areaLabel(r.area)} · ${r.stops} parada${r.stops === 1 ? "" : "s"}${r.total > 0 ? " · " + Math.round(100 * r.correct / r.total) + "% aciertos" : ""}</li>`).join("");
+            return `<div style="margin-bottom:7pt;padding:7pt 10pt;background:#FAFAF7;border-left:3pt solid #457B9D;border-radius:4pt;page-break-inside:avoid"><div style="font-weight:600">${dt} — ${av.name || "Aventura"}</div><div style="font-size:9pt;color:#666">${av.stops} paradas · ${av.minutes} min</div><ul style="margin:4pt 0 0 14pt;font-size:9.5pt">${rows}</ul></div>`;
+        }).join("");
         const ESTADO_INFO = {
             pendiente: { label: "Pendiente", color: "#888" },
             en_progreso: { label: "En progreso", color: "#A0530F" },
@@ -39346,7 +39997,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.11</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.24</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -39403,6 +40054,12 @@ ${sections.resumen ? `
   </table>
 </div>` : ''}
 
+${(sections.resumen_ia && aiSummary) ? `
+<div class="print-section print-avoid-break">
+  <div class="print-section-title">Resumen clínico</div>
+  <div style="font-size:10pt;line-height:1.55;white-space:pre-wrap">${aiSummary.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+</div>` : ''}
+
 ${(includeCharts && sections.rendimiento && perfChartHTML) ? `
 <div class="print-section print-avoid-break">
   <div class="print-section-title">Evolución del rendimiento</div>
@@ -39443,7 +40100,14 @@ ${(sections.notas && notasHTML) ? `
   ${notasHTML}
 </div>` : ''}
 
-${(sections.fortalezas && strengthsList.length > 0) ? `
+${(sections.aventuras && aventurasHTML) ? `
+<div class="print-section">
+  <div class="print-section-title">Registro de aventuras</div>
+  <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Sesiones realizadas en modo aventura${scopeMode !== "todo" ? " en el período seleccionado" : ""} (${aventurasList.length}).</div>
+  ${aventurasHTML}
+</div>` : ''}
+
+                ${(sections.fortalezas && strengthsList.length > 0) ? `
 <div class="print-section print-avoid-break">
   <div class="print-section-title">Cualidades reconocidas por el paciente</div>
   <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Identificadas a lo largo de las sesiones (Árbol de Fortalezas, Espejo Positivo).</div>
@@ -39502,7 +40166,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.11</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.24</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -39962,7 +40626,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.11", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.24", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -40211,6 +40875,7 @@ function TerapiAppInner() {
     const [showRegistry, setShowRegistry] = useState(false);
     const [showMascota, setShowMascota] = useState(false);
     const [showAventura, setShowAventura] = useState(false);
+    const [showAlbum, setShowAlbum] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
     const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
     const [evidenceShown, setEvidenceShown] = useState(null); // activity id whose evidence modal is open
@@ -40518,6 +41183,11 @@ function TerapiAppInner() {
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                     }, title: "Mi compañero" }, "🐣 Compañero"),
+                React.createElement("button", { onClick: () => { sfx.tap(); setShowAlbum(true); }, style: {
+                        background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
+                        borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+                    }, title: "Álbum de cromos" }, "📒 Álbum"),
                 React.createElement("button", { onClick: () => { sfx.tap(); setShowAventura(true); }, style: {
                         background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
@@ -40540,6 +41210,7 @@ function TerapiAppInner() {
             reportPatient && React.createElement(SessionReport, { patient: reportPatient, onClose: () => setReportPatient(null) }),
             trackingPatient && React.createElement(SeguimientoClinico, { patient: trackingPatient, onClose: () => setTrackingPatient(null) }),
             showMascota && React.createElement(Mascota, { patient: activePatient, onClose: () => setShowMascota(false) }),
+            showAlbum && React.createElement(AlbumCromos, { patient: activePatient, onClose: () => setShowAlbum(false) }),
             React.createElement(CompanionReactions, null),
             showAventura && React.createElement(AventuraView, { patient: activePatient, onClose: () => setShowAventura(false), onLaunch: (areaId, activityId) => { setShowAventura(false); nav(areaId, activityId); } }),
             showGuiaDislexia && React.createElement(GuiaDislexia, { onClose: () => setShowGuiaDislexia(false) }),
@@ -40998,7 +41669,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.11"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.24"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
@@ -41055,25 +41726,44 @@ function buildSuggestedPlan(patient, opts) {
     areas = areas.filter(a => AREA_ACTIVITIES[a] && AREA_ACTIVITIES[a].length);
     if (!areas.length) areas = ["atencion", "memoria", "razonamiento"].filter(a => AREA_ACTIVITIES[a] && AREA_ACTIVITIES[a].length);
 
-    // accuracy history per area
+    // historial: precisión por área + última vez usada por actividad (para rotar)
     const acc = {};
+    const actLastUsed = {};
     try {
         const sess = (typeof getSessions === "function") ? getSessions(patient ? patient.id : null) : [];
         const agg = {};
-        sess.forEach(s => { if (!s || !s.result || typeof s.result.correct !== "boolean") return; const a = s.area; agg[a] = agg[a] || { n: 0, ok: 0 }; agg[a].n++; if (s.result.correct) agg[a].ok++; });
+        sess.forEach(s => {
+            if (!s) return;
+            if (s.area && s.activity) { const key = s.area + ":" + s.activity; const t = s.ts || 1; if (!actLastUsed[key] || t > actLastUsed[key]) actLastUsed[key] = t; }
+            if (!s.result || typeof s.result.correct !== "boolean") return;
+            const a = s.area; agg[a] = agg[a] || { n: 0, ok: 0 }; agg[a].n++; if (s.result.correct) agg[a].ok++;
+        });
         Object.keys(agg).forEach(a => { if (agg[a].n >= 3) acc[a] = agg[a].ok / agg[a].n; });
     } catch (e) { }
-    // prioritise weaker areas first (lower accuracy); unknown = neutral 0.6
     areas.sort((a, b) => ((acc[a] == null ? 0.6 : acc[a]) - (acc[b] == null ? 0.6 : acc[b])));
 
-    const pickActivity = (area, used) => { const list = (AREA_ACTIVITIES[area] || []).filter(x => used.indexOf(area + ":" + x.id) < 0); if (!list.length) return null; return list[Math.floor(Math.random() * list.length)]; };
-    const whyFor = (act, area) => { let base; const ev = ACTIVITY_EVIDENCE[act.id]; if (ev && ev.parents) base = ev.parents.split(/[.;]/)[0]; else base = act.desc || act.label || "Trabajo del \u00e1rea"; if (acc[area] != null && acc[area] < 0.6) base += " \u00b7 a reforzar"; return base; };
+    const lastUsedOf = (area, id) => actLastUsed[area + ":" + id] || 0;
+    // elige entre las MÁS FRESCAS (no probadas primero, luego las menos recientes); algo de azar para variar
+    const pickActivity = (area, used) => {
+        let list = (AREA_ACTIVITIES[area] || []).filter(x => used.indexOf(area + ":" + x.id) < 0);
+        if (!list.length) return null;
+        list = list.slice().sort((a, b) => lastUsedOf(area, a.id) - lastUsedOf(area, b.id));
+        const k = Math.min(3, list.length);
+        return list[Math.floor(Math.random() * k)];
+    };
+    const whyFor = (act, area) => {
+        let base; const ev = ACTIVITY_EVIDENCE[act.id];
+        if (ev && ev.parents) base = ev.parents.split(/[.;]/)[0]; else base = act.desc || act.label || "Trabajo del área";
+        if (acc[area] != null && acc[area] < 0.6) base += " · a reforzar";
+        if (!actLastUsed[area + ":" + act.id]) base += " · nueva";
+        return base;
+    };
 
     const used = [], steps = [];
     const openArea = (AREA_ACTIVITIES["emocional"] && AREA_ACTIVITIES["emocional"].length) ? "emocional" : areas[0];
     const openList = AREA_ACTIVITIES[openArea] || [];
     const opener = openList.find(x => /respir/i.test(x.id) || /respir/i.test(x.label || "")) || openList[0];
-    if (opener) { steps.push({ area: openArea, activity: opener.id, duration: 6, why: "Apertura: activaci\u00f3n y regulaci\u00f3n inicial" }); used.push(openArea + ":" + opener.id); }
+    if (opener) { steps.push({ area: openArea, activity: opener.id, duration: 6, why: "Apertura: activación y regulación inicial" }); used.push(openArea + ":" + opener.id); }
     const coreCount = Math.max(2, Math.min(4, Math.round((targetMin - 11) / 10)));
     for (let i = 0; i < coreCount; i++) { const area = areas[i % areas.length]; const act = pickActivity(area, used); if (act) { steps.push({ area: area, activity: act.id, duration: 10, why: whyFor(act, area) }); used.push(area + ":" + act.id); } }
     const closeArea = (AREA_ACTIVITIES["autoestima"] && AREA_ACTIVITIES["autoestima"].length) ? "autoestima" : areas[0];
@@ -41083,8 +41773,8 @@ function buildSuggestedPlan(patient, opts) {
     const total = steps.reduce((s, x) => s + x.duration, 0);
     const weak = areas.filter(a => acc[a] != null && acc[a] < 0.6).slice(0, 2);
     return {
-        id: "__auto__", name: "Aventura de " + ((patient && patient.nombre) || "paciente") + " (" + total + " min)", emoji: "\uD83D\uDDFA\uFE0F", color: "#457B9D",
-        desc: "Adaptada a " + ageLabel + " a\u00f1os \u00b7 \u00e1reas: " + (areas.slice(0, 3).join(", ") || "general") + (weak.length ? " \u00b7 refuerzo en: " + weak.join(", ") : "") + ".",
+        id: "__auto__", name: "Aventura de " + ((patient && patient.nombre) || "paciente") + " (" + total + " min)", emoji: "🗺️", color: "#457B9D",
+        desc: "Adaptada a " + ageLabel + " años · áreas: " + (areas.slice(0, 3).join(", ") || "general") + (weak.length ? " · refuerzo en: " + weak.join(", ") : "") + " · rota para no repetir lo reciente.",
         steps: steps,
     };
 }
