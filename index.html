@@ -18666,7 +18666,8 @@ const callClaude = async (prompt, activityKey = null, schema = null) => {
         return { __noKey: true };
     const patient = _activePatientFull || null;
     const historyNote = activityKey ? formatHistoryForPrompt(activityKey) : "";
-    const fullPrompt = prompt + historyNote + `\n\nResponde SOLO con el JSON, sin markdown, sin explicaciones, sin comentarios.`;
+    const diffNote = (activityKey && _activePatientId && _activeActivityId) ? ("\n\nNivel de dificultad objetivo para este paciente en esta actividad: " + getAdaptiveDiff(_activePatientId, _activeActivityId, "medio") + ". Ajusta la complejidad del contenido a ese nivel (fácil = más simple y con más apoyo; difícil = más exigente, sin cambiar el tipo de tarea).") : "";
+    const fullPrompt = prompt + historyNote + diffNote + `\n\nResponde SOLO con el JSON, sin markdown, sin explicaciones, sin comentarios.`;
     const systemPrompt = buildSystemPrompt(patient);
     try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -21361,9 +21362,11 @@ const formatDiagnosticos = (p) => {
 };
 function PatientRegistry({ patients, setPatients, activePatient, setActivePatient, onClose, onShowReport, onShowTracking, onShowFeedbackAdmin }) {
     const [mode, setMode] = useState("list");
+    const [pq, setPq] = useState("");
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
     const resetForm = () => setForm({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
+    const pqList = [...patients].filter(p => { const q = pq.trim().toLowerCase(); if (!q) return true; return ((p.nombre || "").toLowerCase().includes(q)) || (Array.isArray(p.diagnosticos) && p.diagnosticos.join(" ").toLowerCase().includes(q)); }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
     const save = () => {
         if (!form.nombre.trim())
             return;
@@ -21409,9 +21412,10 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
                     React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setMode("new"); }, small: true }, "+ Nuevo"),
                     onShowFeedbackAdmin && React.createElement(Btn, { color: C.accent, onClick: () => { sfx.click(); onShowFeedbackAdmin(); }, small: true, outline: true }, "💬 Mensajes"),
                     React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
+            patients.length > 0 && React.createElement("input", { value: pq, onChange: e => setPq(e.target.value), placeholder: "🔍 Buscar por nombre o diagnóstico...", style: { width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 10, border: "1px solid #d8d8d0", marginBottom: 12, fontSize: 14, fontFamily: "inherit" } }),
             patients.length === 0 ? (React.createElement("div", { style: { textAlign: "center", padding: 36, color: C.textL } },
                 React.createElement("div", { style: { fontSize: 14, marginBottom: 12 } }, "No hay pacientes registrados"),
-                React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setMode("new"); }, small: true }, "+ A\u00F1adir primer paciente"))) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, [...patients].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" })).map(p => {
+                React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setMode("new"); }, small: true }, "+ A\u00F1adir primer paciente"))) : (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, pqList.length === 0 ? React.createElement("div", { style: { textAlign: "center", padding: 20, color: C.textL, fontSize: 13 } }, "Sin resultados para «" + pq + "»") : pqList.map(p => {
                 var _a;
                 return (React.createElement("div", { key: p.id, style: {
                         padding: 14, borderRadius: 14, border: `2px solid ${(activePatient === null || activePatient === void 0 ? void 0 : activePatient.id) === p.id ? C.primary : C.border}`,
@@ -30567,20 +30571,16 @@ function SocialQuiz({ patient, title, instructions, adoInstructions, bank, bankB
 function QueEstaPensando({ patient }) {
     // Theory of mind: false belief, knowledge inference, intention, desire.
     const BANK = [
-        { ctx: "Marta guarda su pelota en la caja roja y se va a merendar. Mientras no está, su hermano la cambia a la caja azul.", q: "Cuando Marta vuelva, ¿dónde buscará su pelota?", opts: ["En la caja roja", "En la caja azul"], ans: 0, exp: "Marta no vio el cambio, así que ella sigue creyendo que su pelota está en la caja roja. Buscará donde ella cree que está, no donde está de verdad." },
-        { ctx: "Hay una caja de galletas en la mesa. Pero por dentro, en realidad, está llena de lápices. Llega Luis, que nunca ha abierto esa caja.", q: "¿Qué pensará Luis que hay dentro de la caja?", opts: ["Lápices", "Galletas"], ans: 1, exp: "Luis no ha visto el interior. Por la imagen de la caja, pensará que hay galletas, aunque nosotros sepamos que hay lápices." },
-        { ctx: "Estaban contando el final de una película. Ana llegó tarde y se lo perdió.", q: "¿Sabe Ana cómo termina la película?", opts: ["Sí", "No"], ans: 1, exp: "Ana no estaba cuando lo contaron. Si no estuvo presente, no puede saberlo." },
-        { ctx: "Tom deja su bici en el jardín y entra a casa. Su padre, sin decirle nada, la guarda en el garaje.", q: "¿Dónde irá Tom a buscar su bici?", opts: ["Al jardín", "Al garaje"], ans: 0, exp: "Tom no sabe que su padre la movió. Buscará en el jardín, que es donde él cree que la dejó." },
-        { ctx: "Lucía mira el reloj una y otra vez, ya tiene la mochila puesta y está junto a la puerta.", q: "¿Qué quiere Lucía?", opts: ["Quedarse en casa", "Irse, está esperando la hora de salir"], ans: 1, exp: "Sus acciones (mirar el reloj, mochila puesta, junto a la puerta) nos dicen que tiene ganas de marcharse." },
-        { ctx: "A Juan le han preparado una fiesta sorpresa. Él no sabe nada y entra en casa pensando que no hay nadie.", q: "¿Cómo se sentirá Juan al entrar y ver a todos?", opts: ["Sorprendido", "Aburrido"], ans: 0, exp: "Como él creía que la casa estaba vacía, encontrarse a todos le va a pillar por sorpresa." },
-        { ctx: "María le susurra un secreto a Ana al oído. Luis está en la misma sala pero un poco lejos y no oye nada.", q: "¿Sabe Luis cuál es el secreto?", opts: ["Sí", "No"], ans: 1, exp: "Aunque Luis estaba en la sala, no oyó el susurro. Estar cerca no es lo mismo que enterarse." },
-        { ctx: "Carlos busca sus gafas por toda la casa, nervioso. En realidad las lleva puestas.", q: "¿Por qué no encuentra Carlos sus gafas?", opts: ["No se da cuenta de que las lleva puestas", "Alguien se las ha escondido"], ans: 0, exp: "A veces creemos algo que no encaja con la realidad. Carlos no es consciente de que ya las tiene puestas." },
-        { ctx: "Le dijeron a Sara que el examen sería el viernes. Pero lo han adelantado al miércoles y nadie se lo ha contado.", q: "Hoy es martes. ¿Está Sara preocupada por el examen?", opts: ["No, ella cree que aún le queda tiempo", "Sí, sabe que es mañana"], ans: 0, exp: "Sara actúa según lo que ella cree (viernes). No puede preocuparse por algo que no sabe." },
-        { ctx: "Pedro se acerca a su amigo con los brazos abiertos y una gran sonrisa.", q: "¿Qué va a hacer Pedro?", opts: ["Darle un abrazo", "Enfadarse con él"], ans: 0, exp: "Los brazos abiertos y la sonrisa son señales de que quiere saludar con cariño, no de enfado." },
-        { ctx: "Ana mira por la ventana, ve el cielo lleno de nubes negras y coge el paraguas antes de salir.", q: "¿Qué está pensando Ana?", opts: ["Que va a llover", "Que hace calor"], ans: 0, exp: "Por sus acciones deducimos su pensamiento: coge el paraguas porque cree que lloverá." },
-        { ctx: "Sabes que hay una araña de juguete escondida en el cajón. Tu amigo no lo sabe y va a abrirlo.", q: "¿Cómo crees que reaccionará tu amigo?", opts: ["Se asustará o se sorprenderá", "No sentirá nada"], ans: 0, exp: "Tú tienes una información que tu amigo no tiene. Como él no se lo espera, la araña le sorprenderá." },
-        { ctx: "Un niño esconde algo detrás de su espalda, sonríe mucho y le dice a su hermana: '¡Cierra los ojos!'", q: "¿Qué va a hacer el niño?", opts: ["Darle una sorpresa o un regalo", "Reñir a su hermana"], ans: 0, exp: "Esconder algo, sonreír y pedir que cierre los ojos son señales de que prepara una sorpresa agradable." },
-        { ctx: "Elena cree que su amiga Rosa está enfadada con ella, pero en realidad Rosa solo está cansada y callada.", q: "¿Por qué piensa Elena que Rosa está enfadada?", opts: ["Ha interpretado su silencio como enfado", "Rosa le ha dicho que está enfadada"], ans: 0, exp: "El mismo gesto puede tener varias causas. Elena ha supuesto enfado, pero el silencio de Rosa era cansancio." },
+        { ctx: "Marta guarda su pelota en la caja roja y se va a merendar. Mientras no está, su hermano la cambia a la caja azul.", q: "Cuando Marta vuelva, ¿dónde buscará primero su pelota?", opts: ["En la caja roja", "En la caja azul", "Les preguntará a sus padres"], ans: 0, exp: "Marta no vio el cambio, así que cree que sigue en la caja roja y buscará allí, aunque de verdad esté en la azul." },
+        { ctx: "Una caja de galletas está en la mesa, pero por dentro tiene lápices. Llega Luis, que nunca la ha abierto.", q: "¿Qué pensará Luis que hay dentro antes de abrirla?", opts: ["Galletas", "Lápices", "No pensará nada"], ans: 0, exp: "Luis se guía por la imagen de la caja: pensará que hay galletas, aunque nosotros sepamos que hay lápices." },
+        { ctx: "Pablo esconde un regalo bajo la cama para dar una sorpresa a Ana. Ana entra después y no ha visto nada.", q: "¿Ana sabe dónde está su regalo?", opts: ["Sí, lo sabe", "Solo si es su cumpleaños", "No, no puede saberlo porque no lo vio"], ans: 2, exp: "Solo sabemos lo que hemos percibido. Ana no vio nada, así que no puede saber dónde está." },
+        { ctx: "Hugo ve cómo su amigo coge a escondidas una galleta y luego le dice que no ha sido él.", q: "¿Hugo sabe que su amigo miente?", opts: ["Sí, porque lo vio hacerlo", "No, no puede saberlo", "Solo si se lo cuenta otro"], ans: 0, exp: "Hugo presenció la acción, así que sabe que lo que dice su amigo es falso." },
+        { ctx: "Sara hace un dibujo para regalárselo a su profe, pero le queda un poco torcido. La profe lo recibe sonriendo.", q: "¿Por qué sonríe la profe?", opts: ["Porque el dibujo es perfecto", "Porque valora el cariño y la intención, aunque no sea perfecto", "Porque no lo ha mirado"], ans: 1, exp: "La gente valora la intención y el esfuerzo, no solo el resultado. Por eso sonríe agradecida." },
+        { ctx: "Leo cree que su equipo juega hoy, pero en realidad el partido es mañana. Nadie se lo ha dicho.", q: "¿Qué hará Leo esta tarde?", opts: ["Estudiará, porque sabe que es mañana", "Esperará el partido, porque cree que es hoy", "Llamará al estadio"], ans: 1, exp: "Actuamos según lo que creemos. Leo cree que es hoy, así que se preparará para verlo, aunque se equivoque." },
+        { ctx: "María le dice a Juan «qué bien te queda ese jersey» con una sonrisa sincera y cálida.", q: "¿Qué pretende María?", opts: ["Burlarse de Juan", "Hacerle un cumplido amable", "Pedirle el jersey"], ans: 1, exp: "El tono y la sonrisa sinceros indican un cumplido de verdad, no una burla." },
+        { ctx: "Antes de un examen, Nora dice «uf, no he estudiado nada», pero la has visto estudiar toda la semana.", q: "¿Por qué lo dice?", opts: ["Porque de verdad no estudió", "Por nervios o para no presumir, no porque sea cierto", "Porque quiere copiarte"], ans: 1, exp: "A veces se dice lo contrario de lo real por nervios o modestia. Lo que sabemos (estudió) contradice sus palabras." },
+        { ctx: "Tomás esconde sus caramelos en el cajón. Su madre, sin que él lo vea, los pasa al armario.", q: "¿Dónde irá Tomás a buscar sus caramelos?", opts: ["Al armario", "Al cajón", "A la cocina"], ans: 1, exp: "Tomás no vio el cambio: irá al cajón, donde él cree que están." },
+        { ctx: "Elena promete a su amigo guardarle un secreto, pero luego se lo cuenta a otra persona.", q: "Si su amigo se entera, ¿cómo se sentirá?", opts: ["Aliviado", "Contento", "Traicionado o decepcionado"], ans: 2, exp: "Romper una promesa de confianza suele provocar sensación de traición o decepción." }
     ];
     return React.createElement(SocialQuiz, {
         patient, title: "¿Qué Está Pensando?",
@@ -30592,15 +30592,14 @@ function QueEstaPensando({ patient }) {
 }
 
 const BANK_DIFICIL_TOM = [
-    { ctx: "Marta esconde un caramelo en la caja roja. Luis la ve hacerlo desde la puerta, pero Marta no sabe que Luis la vio.", q: "Si le preguntan a Marta '¿Luis sabe dónde está el caramelo?', ¿qué responderá?", opts: ["No, no lo sabe", "Sí, lo sabe"], ans: 0, exp: "Marta cree que Luis no la vio, así que en su mente Luis no lo sabe. Pensamos siempre desde lo que sabe el personaje, no desde lo que sabemos nosotros." },
-    { ctx: "Lucía felicita a Marta diciendo: 'Qué guay que sea tu cumpleaños hoy.' Pero el cumpleaños es de Ana, no de Marta. Marta nota que Lucía se ha equivocado.", q: "¿Qué hará probablemente Marta?", opts: ["No corregirla en ese momento para no avergonzar a Lucía", "Reírse de Lucía delante de todos"], ans: 0, exp: "Esto es un faux pas: alguien dice algo sin querer que puede avergonzar. Lo socialmente esperado es no señalarlo en público, para no incomodar." },
-    { ctx: "Juan llega tarde a un examen y dice: 'Bueno, llego con tiempo de sobra.'", q: "¿Qué quiere decir realmente?", opts: ["Está usando ironía: en realidad llega muy justo o tarde", "Está contento porque tiene mucho tiempo"], ans: 0, exp: "La ironía consiste en decir lo contrario de lo que se piensa. El contexto (llegar tarde) nos da la pista de que no lo dice en serio." },
-    { ctx: "A Sara le regalan un libro por su cumpleaños, pero ella esperaba un balón. Sonríe y dice 'gracias, me encanta'.", q: "¿Cómo se siente Sara realmente?", opts: ["Decepcionada pero lo oculta para no ofender a quien le ha regalado", "Genuinamente contenta con el libro"], ans: 0, exp: "A veces ocultamos lo que sentimos por no herir a los demás. La diferencia entre lo que decimos y lo que sentimos es una habilidad social compleja." },
-    { ctx: "Tomás esconde galletas debajo de la cama. Sin que él sepa, su hermano lo ha visto desde fuera. Tomás tampoco sabe que su hermano lo vio.", q: "¿Dónde irá su hermano a buscar las galletas?", opts: ["Debajo de la cama (donde las vio esconder)", "En otro sitio porque cree que Tomás las cambió"], ans: 0, exp: "Aquí cada uno tiene una información distinta. El hermano sabe el escondite porque lo vio, así que irá allí directamente." },
-    { ctx: "Ana ve el jersey nuevo de Pablo y dice en tono cansado: 'Vaya, qué original.'", q: "¿Le gusta el jersey?", opts: ["No, lo dice con ironía o crítica", "Sí, le parece bonito"], ans: 0, exp: "El tono y las palabras 'vaya' al inicio sugieren ironía. Cuando alguien dice 'qué original' con ese tono, suele ser una crítica disimulada." },
-    { ctx: "Luis prometió ayudar a su amigo con un trabajo pero se le olvidó por completo. Su amigo se enfada mucho con él.", q: "¿Luis es mala persona por eso?", opts: ["No: olvidar no es lo mismo que faltar a propósito; la intención importa", "Sí: ha roto su promesa así que es mala persona"], ans: 0, exp: "La intención cambia el significado moral de una acción. Olvidar sin querer no es lo mismo que decidir no cumplir; los dos amigos pueden hablarlo." },
-    { ctx: "A Marta le hacen una fiesta sorpresa, pero su prima se lo había contado dos días antes. El día de la fiesta, Marta finge estar muy sorprendida.", q: "¿Por qué finge?", opts: ["Para no estropear la ilusión de los que han organizado la fiesta", "Porque está realmente sorprendida"], ans: 0, exp: "Cuidar de los demás a veces incluye ocultar lo que sabemos. Marta valora más la ilusión de los demás que demostrar que ella ya lo sabía." },
-];
+        { ctx: "Ana mete su muñeca en el cesto y sale. Su hermano la cambia al cajón. Pero Ana, desde la puerta y sin que él lo sepa, ha visto el cambio.", q: "¿Dónde irá Ana a buscar su muñeca?", opts: ["Al cajón, porque sí vio el cambio", "Al cesto, porque es donde la dejó", "Le preguntará a su hermano"], ans: 0, exp: "Aquí Ana SÍ vio el cambio (aunque su hermano cree que no). Por eso buscará donde está de verdad: el cajón." },
+        { ctx: "Juan le ha comprado un helado a su amigo como sorpresa, pero aún no se lo ha dicho. El amigo, sin saberlo, piensa: «seguro que Juan se ha olvidado de mí».", q: "¿Qué cree el amigo que ha hecho Juan?", opts: ["Que le ha comprado un helado", "Que se ha olvidado de él", "Que está enfadado con él"], ans: 1, exp: "El amigo no sabe lo del helado, así que cree que Juan se olvidó, aunque nosotros sepamos que no es así." },
+        { ctx: "Marcos cree que María no sabe dónde está escondida la tarta. Pero María lo descubrió en secreto y Marcos no lo sabe.", q: "¿Qué piensa Marcos sobre lo que sabe María?", opts: ["Cree que María NO sabe dónde está", "Sabe que María sí lo sabe", "No piensa nada sobre María"], ans: 0, exp: "Teoría de la mente de 2º orden: lo importante es lo que Marcos CREE sobre el conocimiento de María (y se equivoca)." },
+        { ctx: "Tu amiga te regala una bufanda que no te gusta nada y te pregunta ilusionada si te gusta.", q: "¿Qué respuesta cuida sus sentimientos sin ser cruel?", opts: ["«Es horrible, no me gusta»", "«Gracias, qué detalle; me viene genial»", "No decir nada y marcharte"], ans: 1, exp: "Una mentira piadosa o agradecer la intención cuida al otro. La sinceridad brutal hiere sin necesidad." },
+        { ctx: "Pedro le pide a Luis: «no le cuentes a nadie que rompí el jarrón». Luego Luis se lo cuenta a su madre.", q: "Cuando Pedro se entere, ¿qué pensará de Luis?", opts: ["Que es de total confianza", "Que no guardó su secreto", "Que no le importó el jarrón"], ans: 1, exp: "Pedro confiaba en que Luis callara; al contarlo, Pedro pensará que no es de fiar para los secretos." },
+        { ctx: "En clase, alguien da una respuesta equivocada y otro suelta «sí, claro, eres un auténtico genio» y varios se ríen.", q: "Además de las palabras, ¿qué está pasando?", opts: ["Le están alabando de verdad", "Es sarcasmo y puede ser una burla que hace daño", "Le están preguntando algo"], ans: 1, exp: "El sarcasmo en grupo puede funcionar como burla. Detectar la intención (y el posible daño) es clave en lo social." },
+        { ctx: "Sofía no quiere ir a una fiesta, así que le dice a su amiga que está enferma, aunque no lo está.", q: "¿Por qué miente Sofía?", opts: ["Porque está enferma de verdad", "Para evitar la fiesta sin quedar mal", "Porque no sabe que hay fiesta"], ans: 1, exp: "Es una mentira para evitar una situación y no ofender. Lo que sabemos (no está enferma) revela su verdadera intención." }
+    ];
 
 function ComoSeSiente({ patient }) {
     // Emotion in context — infer emotion from the situation, not a face.
@@ -30945,37 +30944,37 @@ function EmocionesMixtas({ patient }) {
 
 // ── C. Reading the Mind in the Eyes (ilustrado) ──
 const EYES_BANK = [
-    { id: "decidido", target: "decidido", opts: ["decidido", "asustado", "soñoliento", "alegre"], eyebrows: "M30,28 L52,30 M68,30 L90,28", openness: 0.6, pupilY: 50, pupilDx: 0 },
-    { id: "cansado", target: "cansado", opts: ["cansado", "enfadado", "sorprendido", "atento"], eyebrows: "M30,30 Q40,31 50,30 M70,30 Q80,31 90,30", openness: 0.3, pupilY: 51, pupilDx: 0 },
-    { id: "interesado", target: "interesado", opts: ["interesado", "aburrido", "triste", "enfadado"], eyebrows: "M30,27 Q40,24 50,27 M70,27 Q80,24 90,27", openness: 0.85, pupilY: 49, pupilDx: 0 },
-    { id: "duda", target: "duda", opts: ["duda", "alegría", "miedo", "calma"], eyebrows: "M30,24 Q40,21 50,26 M70,29 L90,29", openness: 0.6, pupilY: 50, pupilDx: 2 },
-    { id: "alivio", target: "alivio", opts: ["alivio", "rabia", "asombro", "sospecha"], eyebrows: "M30,30 Q40,29 50,30 M70,30 Q80,29 90,30", openness: 0.45, pupilY: 50, pupilDx: 0 },
-    { id: "concentrado", target: "concentrado", opts: ["concentrado", "asustado", "alegre", "aburrido"], eyebrows: "M32,29 L50,31 M70,31 L88,29", openness: 0.45, pupilY: 50, pupilDx: 0 },
-    { id: "verguenza", target: "vergüenza", opts: ["vergüenza", "ira", "sorpresa", "interés"], eyebrows: "M30,28 Q40,26 50,28 M70,28 Q80,26 90,28", openness: 0.5, pupilY: 55, pupilDx: 0 },
-    { id: "nervioso", target: "nervioso", opts: ["nervioso", "calma", "aburrimiento", "ternura"], eyebrows: "M30,26 Q40,22 50,26 M70,26 Q80,22 90,26", openness: 0.85, pupilY: 49, pupilDx: -2 },
-    { id: "asombro", target: "asombro", opts: ["calma", "asombro", "aburrimiento", "enfado"],
+    { id: "decidido", target: "decidido", opts: ["concentrado","decidido","enfadado","atento"], eyebrows: "M30,28 L52,30 M68,30 L90,28", openness: 0.6, pupilY: 50, pupilDx: 0 },
+    { id: "cansado", target: "cansado", opts: ["cansado","soñoliento","aburrido","triste"], eyebrows: "M30,30 Q40,31 50,30 M70,30 Q80,31 90,30", openness: 0.3, pupilY: 51, pupilDx: 0 },
+    { id: "interesado", target: "interesado", opts: ["atento","interesado","sorprendido","curioso"], eyebrows: "M30,27 Q40,24 50,27 M70,27 Q80,24 90,27", openness: 0.85, pupilY: 49, pupilDx: 0 },
+    { id: "duda", target: "duda", opts: ["sospecha","confusión","duda","preocupación"], eyebrows: "M30,24 Q40,21 50,26 M70,29 L90,29", openness: 0.6, pupilY: 50, pupilDx: 2 },
+    { id: "alivio", target: "alivio", opts: ["alivio","calma","cansancio","tranquilidad"], eyebrows: "M30,30 Q40,29 50,30 M70,30 Q80,29 90,30", openness: 0.45, pupilY: 50, pupilDx: 0 },
+    { id: "concentrado", target: "concentrado", opts: ["decidido","serio","concentrado","enfadado"], eyebrows: "M32,29 L50,31 M70,31 L88,29", openness: 0.45, pupilY: 50, pupilDx: 0 },
+    { id: "verguenza", target: "vergüenza", opts: ["timidez","vergüenza","culpa","tristeza"], eyebrows: "M30,28 Q40,26 50,28 M70,28 Q80,26 90,28", openness: 0.5, pupilY: 55, pupilDx: 0 },
+    { id: "nervioso", target: "nervioso", opts: ["preocupación","miedo","nervioso","inquietud"], eyebrows: "M30,26 Q40,22 50,26 M70,26 Q80,22 90,26", openness: 0.85, pupilY: 49, pupilDx: -2 },
+    { id: "asombro", target: "asombro", opts: ["sorpresa","asombro","miedo","incredulidad"],
       eyebrows: "M30,25 Q40,18 50,25 M70,25 Q80,18 90,25", openness: 0.9, pupilY: 50, pupilDx: 0 },
-    { id: "sospecha", target: "sospecha", opts: ["alegría", "tristeza", "sospecha", "miedo"],
+    { id: "sospecha", target: "sospecha", opts: ["desconfianza","duda","sospecha","enfado"],
       eyebrows: "M30,30 L52,28 M68,28 L90,30", openness: 0.5, pupilY: 47, pupilDx: -3 },
-    { id: "preocupacion", target: "preocupación", opts: ["preocupación", "rabia", "calma", "diversión"],
+    { id: "preocupacion", target: "preocupación", opts: ["preocupación","miedo","tristeza","nerviosismo"],
       eyebrows: "M28,28 Q40,22 52,28 M68,28 Q80,22 92,28", openness: 0.7, pupilY: 52, pupilDx: 0 },
-    { id: "burla", target: "burla", opts: ["ternura", "burla", "miedo", "vergüenza"],
+    { id: "burla", target: "burla", opts: ["picardía","burla","desprecio","diversión"],
       eyebrows: "M30,30 L52,24 M68,24 L90,30", openness: 0.55, pupilY: 48, pupilDx: 0 },
-    { id: "ternura", target: "ternura", opts: ["ternura", "ira", "duda", "sorpresa"],
+    { id: "ternura", target: "ternura", opts: ["cariño","calma","ternura","alegría"],
       eyebrows: "M30,28 Q40,28 50,28 M70,28 Q80,28 90,28", openness: 0.55, pupilY: 50, pupilDx: 0 },
-    { id: "duda", target: "duda", opts: ["duda", "alegría", "asombro", "calma"],
+    { id: "duda", target: "duda", opts: ["indecisión","duda","sospecha","preocupación"],
       eyebrows: "M28,32 Q40,28 52,30 M68,30 Q80,28 92,32", openness: 0.7, pupilY: 47, pupilDx: 4 },
-    { id: "decision", target: "determinación", opts: ["miedo", "determinación", "tristeza", "duda"],
+    { id: "decision", target: "determinación", opts: ["decisión","determinación","concentración","enfado"],
       eyebrows: "M28,28 L52,32 M68,32 L92,28", openness: 0.6, pupilY: 50, pupilDx: 0 },
-    { id: "interes", target: "interés", opts: ["aburrimiento", "rabia", "interés", "sospecha"],
+    { id: "interes", target: "interés", opts: ["curiosidad","atención","interés","sorpresa"],
       eyebrows: "M28,25 Q40,22 52,26 M68,26 Q80,22 92,25", openness: 0.85, pupilY: 50, pupilDx: 0 },
-    { id: "vergonzosa", target: "vergüenza", opts: ["vergüenza", "alegría", "asombro", "rabia"],
+    { id: "vergonzosa", target: "vergüenza", opts: ["timidez","culpa","vergüenza","incomodidad"],
       eyebrows: "M30,28 Q40,28 50,28 M70,28 Q80,28 90,28", openness: 0.45, pupilY: 52, pupilDx: -4 },
-    { id: "esperanza", target: "esperanza", opts: ["preocupación", "esperanza", "burla", "miedo"],
+    { id: "esperanza", target: "esperanza", opts: ["ilusión","esperanza","alegría","expectación"],
       eyebrows: "M28,27 Q40,23 52,27 M68,27 Q80,23 92,27", openness: 0.75, pupilY: 49, pupilDx: 2 },
-    { id: "alivio", target: "alivio", opts: ["tensión", "alivio", "duda", "rabia"],
+    { id: "alivio", target: "alivio", opts: ["tranquilidad","alivio","calma","cansancio"],
       eyebrows: "M30,30 Q40,32 50,30 M70,30 Q80,32 90,30", openness: 0.5, pupilY: 50, pupilDx: 0 },
-    { id: "incredulidad", target: "incredulidad", opts: ["ternura", "alegría", "incredulidad", "calma"],
+    { id: "incredulidad", target: "incredulidad", opts: ["asombro","incredulidad","sorpresa","escepticismo"],
       eyebrows: "M28,28 Q40,22 52,28 M68,28 Q80,32 92,30", openness: 0.7, pupilY: 49, pupilDx: 0 },
 ];
 function EyesTest({ patient }) {
@@ -33241,20 +33240,18 @@ function MiIdentidadAutista({ patient }) {
 function DobleSentido({ patient }) {
     // Figurative language & irony — pragmatic difficulty typical of ASD.
     const BANK = [
-        { ctx: "\"Después del partido, estoy hecho polvo.\"", q: "¿Qué quiere decir de verdad?", opts: ["Que está muy cansado", "Que se ha convertido en polvo"], ans: 0, exp: "\"Estar hecho polvo\" es una frase hecha: significa estar muy cansado. No hay que entenderla al pie de la letra." },
-        { ctx: "\"Cuando vi el pastel, se me hizo la boca agua.\"", q: "¿Qué significa esa expresión?", opts: ["Que le apetecía mucho comerlo", "Que se le mojó la boca de verdad"], ans: 0, exp: "\"Hacerse la boca agua\" significa que algo te apetece muchísimo. Es una expresión, no algo literal." },
-        { ctx: "\"Esa bici me ha costado un ojo de la cara.\"", q: "¿Qué quiere decir?", opts: ["Que era muy cara", "Que perdió un ojo al comprarla"], ans: 0, exp: "\"Costar un ojo de la cara\" significa que algo es muy caro." },
-        { ctx: "Después de fallar muchas veces, Ana dice: \"No voy a tirar la toalla.\"", q: "¿Qué significa?", opts: ["Que no va a rendirse", "Que va a lavar la toalla"], ans: 0, exp: "\"Tirar la toalla\" significa rendirse. Ana dice que va a seguir intentándolo." },
-        { ctx: "La profesora le dice a Marcos: \"Estás en las nubes.\"", q: "¿Qué le quiere decir?", opts: ["Que está distraído", "Que está volando"], ans: 0, exp: "\"Estar en las nubes\" significa estar distraído, con la mente en otro sitio." },
-        { ctx: "\"El examen ha sido pan comido.\"", q: "¿Qué significa?", opts: ["Que ha sido muy fácil", "Que se comió un pan en el examen"], ans: 0, exp: "\"Ser pan comido\" significa que algo resulta muy fácil." },
-        { ctx: "Un amigo te dice riéndose: \"Te estoy tomando el pelo.\"", q: "¿Qué quiere decir?", opts: ["Que está bromeando contigo", "Que te está cogiendo el pelo con la mano"], ans: 0, exp: "\"Tomar el pelo\" significa bromear o gastar una broma, no algo físico." },
-        { ctx: "Marcos suspende mates y su madre, con cara seria, le dice: \"¡Qué bien, enhorabuena!\"", q: "¿Su madre está contenta de verdad?", opts: ["No, lo dice con ironía: en realidad no le parece bien", "Sí, está muy contenta"], ans: 0, exp: "Esto es ironía: dice lo contrario de lo que piensa. Su cara seria es la pista de que no está contenta de verdad." },
-        { ctx: "Lucía tropieza y se le cae todo. Un compañero dice en tono burlón: \"Muy elegante.\"", q: "¿Le está haciendo un cumplido?", opts: ["No, se burla con ironía", "Sí, le dice que ha sido elegante"], ans: 0, exp: "El tono burlón indica ironía: dice \"elegante\" justo cuando ha pasado lo contrario, para burlarse." },
-        { ctx: "\"Anoche no pegué ojo.\"", q: "¿Qué quiere decir?", opts: ["Que no pudo dormir", "Que se golpeó el ojo"], ans: 0, exp: "\"No pegar ojo\" significa no conseguir dormir." },
-        { ctx: "Tu amigo te dice: \"¿Me echas una mano con esto?\"", q: "¿Qué te está pidiendo?", opts: ["Que le ayudes", "Que le lances una mano"], ans: 0, exp: "\"Echar una mano\" significa ayudar. Es una forma habitual de pedir ayuda." },
-        { ctx: "\"Cuando me lo contaron, me quedé de piedra.\"", q: "¿Qué significa?", opts: ["Que se quedó muy sorprendido", "Que se convirtió en una piedra"], ans: 0, exp: "\"Quedarse de piedra\" significa quedarse muy sorprendido o impactado por algo." },
-        { ctx: "El entrenador dice: \"Hoy habéis dado el cien por cien.\"", q: "¿Qué quiere decir?", opts: ["Que se han esforzado al máximo", "Que han contado hasta cien"], ans: 0, exp: "\"Dar el cien por cien\" significa esforzarse todo lo posible." },
-        { ctx: "Se me había olvidado por completo: se me fue el santo al cielo.", q: "¿Qué significa esa expresión?", opts: ["Que se despistó y lo olvidó", "Que vio un santo en el cielo"], ans: 0, exp: "\"Irse el santo al cielo\" significa despistarse y olvidar lo que se iba a hacer." },
+        { ctx: "«Después del partido estoy hecho polvo.»", q: "¿Qué quiere decir de verdad?", opts: ["Que se ha llenado de polvo", "Que está agotado", "Que está muy enfadado"], ans: 1, exp: "«Estar hecho polvo» significa estar muy cansado. No es literal ni tiene que ver con el enfado." },
+        { ctx: "«Cuando vi el pastel se me hizo la boca agua.»", q: "¿Qué significa?", opts: ["Que le apetecía muchísimo", "Que le entró sed", "Que se le mojó la boca"], ans: 0, exp: "«Hacérsele la boca agua» = algo te apetece mucho; no es que te entre sed ni que te mojes." },
+        { ctx: "«Esa bici me ha costado un ojo de la cara.»", q: "¿Qué quiere decir?", opts: ["Que se esforzó mucho para comprarla", "Que se hizo daño en un ojo", "Que fue carísima"], ans: 2, exp: "«Costar un ojo de la cara» = ser muy caro. El esfuerzo es plausible, pero la expresión habla del precio." },
+        { ctx: "«Mi abuelo siempre tiene la cabeza en las nubes.»", q: "¿Cómo es el abuelo?", opts: ["Muy alto", "Despistado y soñador", "Aficionado a la montaña"], ans: 1, exp: "«Tener la cabeza en las nubes» = estar distraído o soñando despierto." },
+        { ctx: "«Le pedí ayuda y me dio largas.»", q: "¿Qué hizo?", opts: ["Me ayudó enseguida", "Me fue retrasando sin ayudarme de verdad", "Me dio una cuerda larga"], ans: 1, exp: "«Dar largas» = ir aplazando algo para no hacerlo. No es ayudar ni nada físico." },
+        { ctx: "«Ese examen fue pan comido.»", q: "¿Cómo fue el examen?", opts: ["Algo aburrido", "Muy fácil", "Sobre comida"], ans: 1, exp: "«Pan comido» = muy fácil. «Aburrido» es plausible, pero no es lo que significa." },
+        { ctx: "«Se me fue el santo al cielo y olvidé llamarte.»", q: "¿Qué pasó?", opts: ["Que rezó mucho", "Que estaba muy feliz", "Que se distrajo y se le olvidó"], ans: 2, exp: "«Irse el santo al cielo» = despistarse y olvidar lo que ibas a hacer." },
+        { ctx: "«No te lo tomes al pie de la letra.»", q: "¿Qué te piden?", opts: ["Que no lo entiendas de forma tan literal", "Que lo leas con los pies", "Que te lo aprendas entero"], ans: 0, exp: "«Al pie de la letra» = de forma totalmente literal; aquí te piden justo NO entenderlo así." },
+        { ctx: "«Estoy entre la espada y la pared.»", q: "¿Cómo está?", opts: ["Jugando con una espada", "A la defensiva y enfadado", "En un aprieto, sin buena salida"], ans: 2, exp: "«Entre la espada y la pared» = en una situación difícil con opciones malas. «A la defensiva» es plausible pero no es el sentido." },
+        { ctx: "«Mi hermana y yo nos llevamos como el perro y el gato.»", q: "¿Qué relación tienen?", opts: ["Tienen mascotas", "Discuten mucho entre ellos", "Se cuidan muchísimo"], ans: 1, exp: "«Como el perro y el gato» = se pelean o discuten con frecuencia." },
+        { ctx: "«Te lo dije con segundas.»", q: "¿Qué quiso decir?", opts: ["Lo dijo dos veces", "Lo dijo con una intención oculta, no solo lo evidente", "Lo dijo en segundo lugar"], ans: 1, exp: "«Con segundas» = con una intención escondida detrás de las palabras." },
+        { ctx: "«Ese chico es un trozo de pan.»", q: "¿Cómo es?", opts: ["Muy bueno y de buen corazón", "Que come mucho pan", "Que es muy simple o tonto"], ans: 0, exp: "«Ser un trozo de pan» = ser muy buena persona. «Simple» es un distractor plausible pero incorrecto." }
     ];
     return React.createElement(SocialQuiz, {
         patient, title: "Doble Sentido",
@@ -33266,17 +33263,15 @@ function DobleSentido({ patient }) {
 }
 
 const BANK_DIFICIL_DS = [
-    { ctx: "\"Después de esa charla, se me han abierto los ojos.\"", q: "¿Qué significa?", opts: ["Que ha entendido algo nuevo que antes no veía", "Que se le abrieron los párpados de verdad"], ans: 0, exp: "\"Abrírsele los ojos\" es una metáfora: significa comprender algo que antes no se entendía. Sus ojos físicos no han cambiado." },
-    { ctx: "Estás con el móvil y tu madre dice: \"¿No tendrías que estar haciendo deberes?\"", q: "¿Qué te está diciendo realmente?", opts: ["Que dejes el móvil y vayas a estudiar", "Te está preguntando por curiosidad si tienes deberes"], ans: 0, exp: "Es una indirecta. En forma de pregunta, en realidad está dando una orden suave. El contexto (estar con el móvil) deja claro el mensaje." },
-    { ctx: "\"Llevo varios días con el agua al cuello.\"", q: "¿Qué quiere decir?", opts: ["Que está agobiado con muchos problemas a la vez", "Que ha estado nadando varios días"], ans: 0, exp: "\"Estar con el agua al cuello\" es una expresión: sentirse desbordado por muchos problemas o muy estresado." },
-    { ctx: "Tu amigo llega dos horas tarde a la cita. Tú le dices: \"Puntual como siempre.\"", q: "¿Qué estás haciendo?", opts: ["Usar ironía: en realidad le estás reprochando que llega tarde", "Felicitarle por ser puntual"], ans: 0, exp: "La ironía dice lo contrario de lo que se piensa. Llega tarde, así que decir \"puntual como siempre\" es un reproche disfrazado." },
-    { ctx: "Sobre alguien que se equivoca a menudo, alguien comenta: \"No es muy listo que digamos.\"", q: "¿Qué quiere decir?", opts: ["Que en realidad no es listo, pero lo dice de forma suave", "Que es listo pero no demasiado"], ans: 0, exp: "Esto es un eufemismo: una forma suave y educada de decir algo negativo. \"No es muy listo que digamos\" suaviza un juicio que en realidad es bastante crítico." },
-    { ctx: "Estáis en una habitación con mucho calor. Tu amigo, sentado junto al ventilador apagado, dice: \"Qué calor hace aquí, ¿no?\"", q: "¿Qué pretende?", opts: ["Que enciendas el ventilador que tiene al lado", "Solo está comentando la temperatura"], ans: 0, exp: "Es una indirecta para pedir algo. En vez de decir directamente \"enciende el ventilador\", lo sugiere mencionando el problema." },
-    { ctx: "\"Mi hermano siempre tiene que sacarme las castañas del fuego.\"", q: "¿Qué significa?", opts: ["Que su hermano siempre le saca de los problemas", "Que su hermano cocina castañas para él"], ans: 0, exp: "\"Sacar las castañas del fuego\" significa resolver un problema o un apuro que otro ha provocado." },
-    { ctx: "Pierdes una final 5-0. Alguien dice: \"Vaya partidazo habéis jugado.\"", q: "¿Lo dice en serio?", opts: ["No, es ironía: en realidad jugasteis muy mal", "Sí, está elogiando vuestro juego"], ans: 0, exp: "El resultado tan malo (5-0) muestra que la frase es irónica. La ironía suele necesitar el contexto para entenderse." },
-    { ctx: "\"Hoy estás en la luna de Valencia.\"", q: "¿Qué te están diciendo?", opts: ["Que estás muy despistado y no te enteras de nada", "Que estás en Valencia mirando la luna"], ans: 0, exp: "\"Estar en la luna de Valencia\" es una expresión que significa estar muy despistado o ausente, sin enterarse de lo que pasa." },
-    { ctx: "Llegas a casa y tu madre, con cara seria, dice: \"Qué pronto vienes hoy.\" Son las 10 de la noche y habíais quedado a las 8.", q: "¿Está contenta de que llegues pronto?", opts: ["No, está usando ironía para mostrar enfado por la tardanza", "Sí, te felicita por la puntualidad"], ans: 0, exp: "La cara seria y el contexto (dos horas tarde) indican ironía. Es una forma de mostrar enfado sin gritar directamente." },
-];
+        { ctx: "Está lloviendo a mares. Tu amigo mira por la ventana y dice: «¡Qué día más estupendo para ir a la playa!»", q: "¿Qué quiere decir en realidad?", opts: ["Que de verdad quiere ir a la playa", "Que está siendo irónico: el día es malísimo", "Que le da igual el tiempo"], ans: 1, exp: "Es ironía: dice lo contrario de lo que piensa para señalar que el día es horrible. El contexto (llueve) y el tono lo indican." },
+        { ctx: "Llegas tardísimo a entrenar y tu entrenador dice: «Veo que tienes muchísima prisa por llegar.»", q: "¿Qué hace el entrenador?", opts: ["Te reprocha con ironía que has llegado tarde", "Te felicita por tu puntualidad", "Te pregunta si tienes prisa"], ans: 0, exp: "Dice lo contrario de lo que ha pasado (llegaste tarde) para reprochártelo de forma indirecta." },
+        { ctx: "Tu hermano rompe un plato sin querer y tu madre dice: «¡Bravo! Qué bien lo haces todo.»", q: "¿Qué expresa la madre?", opts: ["Le alaba de verdad", "Le pide que aplauda", "Usa ironía para mostrar su enfado"], ans: 2, exp: "El «bravo» es irónico: en realidad está molesta por el plato roto." },
+        { ctx: "Un compañero te dice: «Claro, claro… tú siempre tienes razón en todo.» y pone los ojos en blanco.", q: "¿Qué te está diciendo?", opts: ["Que de verdad cree que siempre aciertas", "Con sarcasmo, que NO sueles tener razón", "Que quiere darte la razón"], ans: 1, exp: "El sarcasmo (y el gesto) invierten el significado: insinúa que te equivocas a menudo." },
+        { ctx: "Tu amiga se mancha el abrigo nuevo, suspira y dice: «Genial, justo lo que necesitaba hoy.»", q: "¿Cómo se siente de verdad?", opts: ["Necesitaba mancharse", "Contenta con la mancha", "Fastidiada, y lo dice con ironía"], ans: 2, exp: "Dice lo contrario de lo que siente para expresar fastidio. El suspiro es una pista." },
+        { ctx: "En una fiesta, alguien está callado en un rincón toda la tarde. Otro comenta: «Se nota que es el alma de la fiesta.»", q: "¿Qué significa el comentario?", opts: ["Que anima muchísimo la fiesta", "Es irónico: en realidad está apartado y callado", "Que organizó la fiesta"], ans: 1, exp: "Ironía: se dice lo contrario de lo que se ve para señalarlo con humor." },
+        { ctx: "Le preguntas a tu amigo si le gustó la peli y responde: «Bueno… no estuvo mal del todo, supongo.»", q: "¿Qué da a entender?", opts: ["Que le encantó", "Que en realidad no le gustó mucho, aunque sea educado", "Que no la vio"], ans: 1, exp: "Las formas tibias («no estuvo mal del todo, supongo») suelen suavizar una opinión negativa por cortesía." },
+        { ctx: "Tu amiga te enseña su nota baja y dice, con media sonrisa triste: «Para qué estudiar, total, si soy un genio.»", q: "¿Qué quiere decir?", opts: ["Cree de verdad que es un genio", "Se critica a sí misma con ironía por la nota", "Te pide que estudies por ella"], ans: 1, exp: "Usa la ironía sobre sí misma: le ha sentado mal la nota, no se cree un genio." }
+    ];
 
 function Rimas({ patient }) {
     // Words grouped by rhyming ending. Each group rhymes internally.
@@ -34755,6 +34750,17 @@ function JuegoEquipo({ patient }) {
 // ───────────────────────── Indicador de frescura (para el terapeuta) ─────────────────────────
 function FrescuraPanel({ patient }) {
     const pid = patient ? patient.id : null;
+    const [marks, setMarks] = useState(function () { try { return (pid && storeLoad("frescuraMarks:" + pid)) || {}; } catch (e) { return {}; } });
+    const toggle = function (area, id, label) {
+        setMarks(function (m) {
+            const n = Object.assign({}, m); const k = area + ":" + id;
+            if (n[k]) { delete n[k]; } else { n[k] = { area: area, id: id, label: label }; }
+            try { sfx.tap(); } catch (e) { }
+            try { if (pid) storeSave("frescuraMarks:" + pid, n); } catch (e) { }
+            return n;
+        });
+    };
+    const isMarked = function (area, id) { return !!marks[area + ":" + id]; };
     let sessions = [];
     try { sessions = (typeof getSessions === "function" && pid) ? (getSessions(pid) || []) : []; } catch (e) { }
     const AL = {}; try { (AREAS || []).forEach(a => { AL[a.id] = a.label; }); } catch (e) { }
@@ -34771,23 +34777,665 @@ function FrescuraPanel({ patient }) {
     areas.forEach(area => { (AREA_ACTIVITIES[area] || []).forEach(act => { const k = area + ":" + act.id; const st = stat[k]; const never = !st; const old = st && st.last < now - 21 * DAY; if (never || old) fresh.push({ area: area, id: act.id, label: act.label, never: never, last: st ? st.last : 0 }); }); });
     fresh.sort((a, b) => (a.never === b.never ? 0 : (a.never ? -1 : 1)) || (a.last - b.last));
     const freshTop = fresh.slice(0, 8);
+    var adiff = {}; try { adiff = storeLoad("adaptiveDiff:" + pid) || {}; } catch (e) { }
+    var idMap = {}; try { Object.keys(AREA_ACTIVITIES).forEach(function (ar) { (AREA_ACTIVITIES[ar] || []).forEach(function (act) { if (!idMap[act.id]) idMap[act.id] = { area: ar, label: act.label }; }); }); } catch (e) { }
+    var adapted = Object.keys(adiff).filter(function (id) { return adiff[id] && adiff[id] !== "medio"; }).map(function (id) { var mm = idMap[id] || { area: "", label: id }; return { id: id, level: adiff[id], label: mm.label, area: mm.area }; });
     const daysAgo = (t) => t ? Math.max(0, Math.round((now - t) / DAY)) : null;
 
-    const row = (label, sub, color) => React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 10, background: "#fff", border: "1px solid #e9eef1", marginBottom: 6 } },
-        React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, label),
-        React.createElement("div", { style: { fontSize: 11.5, fontWeight: 700, color: color, whiteSpace: "nowrap" } }, sub));
+    const row = function (area, id, label, sub, color) {
+        const marked = isMarked(area, id);
+        return React.createElement("div", {
+            onClick: function () { toggle(area, id, label); },
+            style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 10, background: marked ? "#eafaf1" : "#fff", border: "1px solid " + (marked ? "#1d6a45" : "#e9eef1"), marginBottom: 6, cursor: "pointer" }
+        },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+                React.createElement("span", { style: { fontSize: 15, width: 18, textAlign: "center", fontWeight: 800, color: marked ? "#1d6a45" : "#c7ced2" } }, marked ? "✓" : "○"),
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, label)),
+            React.createElement("div", { style: { fontSize: 11.5, fontWeight: 700, color: color, whiteSpace: "nowrap" } }, sub));
+    };
+
+    const markedList = Object.keys(marks).map(function (k) { return marks[k]; });
 
     return React.createElement("div", null,
-        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 12 } }, "Te ayuda a variar y a evitar que el paciente se canse de las mismas actividades."),
+        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 12 } }, "Toca una actividad para marcarla para la próxima sesión. Te ayuda a variar y a evitar que el paciente se canse de las mismas."),
+        markedList.length ? React.createElement("div", { style: { background: "#f3fbf6", border: "1px solid #cdeede", borderRadius: 12, padding: 10, marginBottom: 14 } },
+            React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#1d6a45", marginBottom: 6 } }, "✅ Marcadas para la próxima sesión (" + markedList.length + ")"),
+            markedList.map(function (a, i) {
+                return React.createElement("div", { key: i, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 2px", fontSize: 13, fontWeight: 700, color: C.text } },
+                    React.createElement("span", null, (a.label || a.id) + "  ·  " + areaName(a.area)),
+                    React.createElement("span", { onClick: function () { toggle(a.area, a.id, a.label); }, style: { cursor: "pointer", color: "#b5651d", fontWeight: 800, fontSize: 12 } }, "quitar ✕"));
+            })) : null,
         React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#b5651d", marginBottom: 6 } }, "🔁 Muy usadas últimamente"),
-        overused.length ? overused.map((a, i) => React.createElement("div", { key: i }, row(labelOf(a.area, a.id) + "  ·  " + areaName(a.area), a.recent >= 2 ? (a.recent + "× en 2 sem.") : (a.count + "× en total"), "#b5651d")))
+        overused.length ? overused.map(function (a, i) { return React.createElement("div", { key: i }, row(a.area, a.id, labelOf(a.area, a.id) + "  ·  " + areaName(a.area), a.recent >= 2 ? (a.recent + "× en 2 sem.") : (a.count + "× en total"), "#b5651d")); })
             : React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 8 } }, "Nada sobreusado por ahora 👍"),
         React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#1d6a45", margin: "14px 0 6px" } }, "🌿 Frescas para probar"),
-        freshTop.length ? freshTop.map((a, i) => React.createElement("div", { key: i }, row(a.label + "  ·  " + areaName(a.area), a.never ? "sin probar" : ("hace " + daysAgo(a.last) + " d"), "#1d6a45")))
+        freshTop.length ? freshTop.map(function (a, i) { return React.createElement("div", { key: i }, row(a.area, a.id, a.label + "  ·  " + areaName(a.area), a.never ? "sin probar" : ("hace " + daysAgo(a.last) + " d"), "#1d6a45")); })
             : React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Has probado casi todo recientemente. ¡Buen momento para repetir favoritas!"),
-        !sessions.length ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginTop: 10 } }, "Aún no hay historial de sesiones para este paciente.") : null,
+        React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: "#3a5a8a", margin: "14px 0 6px" } }, "🎚️ Nivel ajustado por la app"),
+        adapted.length ? adapted.map(function (a, i) { return React.createElement("div", { key: i }, row(a.area, a.id, a.label + "  ·  " + areaName(a.area), a.level === "difícil" ? "subió a difícil" : "bajó a fácil", a.level === "difícil" ? "#3a5a8a" : "#b5651d")); }) : React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Todo en nivel estándar por ahora."),
+        !sessions.length ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginTop: 10 } }, "Aún no hay historial de sesiones para este paciente.") : null
     );
 }
+
+    // ===== NEW v25.45: evidence-based exercises (TEA + dislexia escritura) =====
+    function ReglasNoEscritas({ patient }) {
+        const BANK = [
+            { ctx: "Estás en la biblioteca y quieres contarle algo divertido a tu amigo.", q: "¿Qué es lo más adecuado?", opts: ["Hablar muy bajito o esperar a salir", "Contarlo en voz alta para que se rían todos", "Darle un grito desde la otra punta"], ans: 0, exp: "Una regla no escrita de la biblioteca es estar en silencio. Nadie lo dice en voz alta, pero se espera." },
+            { ctx: "Un compañero te enseña una foto de sus vacaciones, aunque a ti no te interesa nada.", q: "¿Qué se suele esperar?", opts: ["Decir «qué aburrido, no me interesa»", "Quitarle el móvil para ver otra cosa", "Mirarla un momento y decir algo amable"], ans: 2, exp: "Aunque algo no te interese, una regla social implícita es responder con un mínimo de cortesía." },
+            { ctx: "Vas a sentarte en el autobús, que está casi vacío.", q: "¿Dónde es mejor sentarse?", opts: ["Justo pegado al único pasajero que hay", "En un asiento libre con espacio alrededor", "De pie delante de alguien mirándolo"], ans: 1, exp: "Aunque no hay ninguna norma escrita, se respeta el espacio personal de los demás cuando hay sitio de sobra." },
+            { ctx: "Tu profe pregunta algo a la clase y tú sabes la respuesta.", q: "¿Qué es lo apropiado?", opts: ["Levantar la mano y esperar tu turno", "Gritar la respuesta sin más", "Levantarte y escribirla en la pizarra"], ans: 0, exp: "La regla no escrita del aula es pedir el turno levantando la mano, aunque sepas la respuesta." },
+            { ctx: "Un amigo te cuenta que se le ha muerto su mascota y está triste.", q: "¿Qué encaja mejor?", opts: ["Contarle que tú tienes tres mascotas sanas", "Decirle que lo sientes y preguntarle cómo está", "Explicarle datos sobre esa especie de animal"], ans: 1, exp: "Ante la tristeza de alguien, lo que se espera es acompañar, no informar ni hablar de uno mismo." },
+            { ctx: "Estás hablando con alguien y notas que mira el reloj y se gira hacia la puerta.", q: "¿Qué suele significar?", opts: ["Que quiere que sigas contándole más", "Que le ha gustado mucho la conversación", "Que probablemente tiene prisa o quiere irse"], ans: 2, exp: "Mirar el reloj y girarse hacia la salida son señales implícitas de que la otra persona necesita terminar." },
+            { ctx: "Quieres unirte a unos compañeros que ya están jugando a un juego.", q: "¿Qué funciona mejor?", opts: ["Coger la pelota y empezar a jugar tú", "Acercarte, mirar un poco y preguntar si puedes unirte", "Decirles que están jugando mal"], ans: 1, exp: "La forma esperada de entrar en un grupo es observar primero y pedir unirse, no irrumpir ni criticar." },
+            { ctx: "Tu tía te regala un jersey que no te gusta nada.", q: "¿Qué se suele hacer?", opts: ["Darle las gracias por el detalle", "Decirle que es feo y que no lo querías", "Devolvérselo delante de todos"], ans: 0, exp: "Aunque el regalo no guste, la regla social implícita es agradecer la intención de quien lo hace." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Estás en casa de un amigo y su madre dice «¿no tendrás hambre tú?» mientras saca la merienda.", q: "¿Qué quiere decir?", opts: ["Te está ofreciendo merendar de forma indirecta", "Solo siente curiosidad por si comes", "Quiere que te vayas a casa a comer"], ans: 0, exp: "Muchas ofertas se hacen de forma indirecta: aquí te está invitando a merendar, aunque no lo diga literalmente." },
+            { ctx: "Un compañero dice «qué frío hace aquí» y mira la ventana abierta que tienes al lado.", q: "¿Qué significa?", opts: ["Te pide de forma indirecta que cierres la ventana", "Solo comenta el tiempo", "Quiere que le prestes tu abrigo"], ans: 0, exp: "Es una petición indirecta: espera que cierres la ventana sin decírtelo de forma directa." },
+            { ctx: "Cuentas algo tuyo y la otra persona responde con monosílabos y mira el móvil.", q: "¿Qué conviene hacer?", opts: ["Seguir con más detalles para engancharla", "Captar que quizá no es buen momento y cerrar o cambiar de tema", "Reprocharle que no te hace caso"], ans: 1, exp: "Las señales (monosílabos, mirar el móvil) indican poco interés o mal momento; conviene leerlas y ajustarse." },
+            { ctx: "Te invitan a una reunión «informal» en casa de alguien.", q: "¿Cómo vas vestido?", opts: ["Muy arreglado, de traje", "Con ropa de calle cómoda", "Preguntando a todos qué se ponen exactamente"], ans: 1, exp: "«Informal» implica un punto medio: ni de etiqueta ni en pijama; ropa de calle normal." },
+            { ctx: "Tras una interrupción, el profe dice con tono irónico «¿alguien quiere dar la clase por mí?».", q: "¿Qué significa de verdad?", opts: ["Entender que es un toque de atención, no una oferta", "Levantarte a explicar la lección", "Reírte con ganas"], ans: 0, exp: "El tono irónico convierte la «oferta» en un reproche por la interrupción." },
+            { ctx: "Quedas con gente a una hora concreta y no sabes el plan exacto.", q: "¿Qué encaja mejor?", opts: ["Llegar bastante antes y esperar solo mucho rato", "Llegar a la hora acordada, ni muy pronto ni tarde", "Llegar media hora tarde a propósito"], ans: 1, exp: "La norma implícita es la puntualidad: llegar demasiado pronto o tarde incomoda al resto." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Reglas No Escritas",
+            instructions: "Hay reglas sociales que nadie te explica, pero que casi todos siguen. Lee cada situación y elige lo que se suele esperar.",
+            adoInstructions: "Identifica la norma social implícita (currículo oculto) que rige cada situación, más allá de lo que está dicho de forma explícita.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Situación",
+        });
+    }
+
+    function IdeaPrincipal({ patient }) {
+        const BANK = [
+            { ctx: "Marcos llegó tarde a su cumpleaños porque se averió el coche. Aun así, sopló las velas, abrió sus regalos y se rió mucho con sus amigos.", q: "¿De qué trata sobre todo?", opts: ["De que se averió el coche", "De que Marcos disfrutó su fiesta de cumpleaños", "De que había velas en la tarta"], ans: 1, exp: "El coche y las velas son detalles ciertos, pero la idea principal es que Marcos pasó un buen cumpleaños. Hay que mirar el conjunto." },
+            { ctx: "Lucía estudió toda la semana, durmió bien y desayunó fuerte. En el examen estaba tranquila y sacó muy buena nota.", q: "¿Cuál es la idea principal?", opts: ["Que desayunó fuerte", "Que prepararse bien la ayudó a hacer un buen examen", "Que el examen tenía preguntas"], ans: 1, exp: "El desayuno es un detalle. La idea central es que su preparación dio buen resultado." },
+            { ctx: "Durante el paseo vimos un perro marrón, un buzón rojo y un coche azul. Pero lo importante fue que nos perdimos y un señor muy amable nos ayudó a volver.", q: "¿Qué es lo principal del paseo?", opts: ["Que había un buzón rojo", "Que vimos un perro marrón", "Que nos perdimos y alguien nos ayudó"], ans: 2, exp: "Los colores son detalles llamativos pero secundarios. Lo principal fue perderse y recibir ayuda." },
+            { ctx: "Ana preparó la mochila, el bañador y la toalla. Cuando llegó a la piscina, descubrió que estaba cerrada por obras y tuvo que volver a casa.", q: "¿De qué trata sobre todo?", opts: ["De que Ana no pudo bañarse porque la piscina estaba cerrada", "De que llevaba una toalla", "De que preparó la mochila"], ans: 0, exp: "La toalla y la mochila son detalles. La idea central es que el plan se frustró por estar cerrada." },
+            { ctx: "El partido empezó con lluvia, el campo estaba embarrado y hacía frío. Al final, el equipo de Pablo remontó y ganó en el último minuto.", q: "¿Cuál es la idea principal?", opts: ["Que hacía frío", "Que el campo estaba embarrado", "Que el equipo de Pablo ganó remontando al final"], ans: 2, exp: "El tiempo y el barro son el decorado; lo principal es la victoria en el último minuto." },
+            { ctx: "Sara abrió un libro de tapa verde, con letras grandes y muchos dibujos. La historia trataba de una niña que aprendía a no rendirse.", q: "¿De qué trata el libro sobre todo?", opts: ["De una niña que aprende a no rendirse", "De que la tapa era verde", "De que tenía letras grandes"], ans: 0, exp: "El color y el tamaño de letra describen el libro, pero el tema es el aprendizaje de la niña." },
+            { ctx: "En la cocina había harina, huevos y azúcar por la mesa, y todo estaba un poco manchado. La abuela y el nieto acababan de hornear juntos un bizcocho.", q: "¿Qué es lo principal?", opts: ["Que la mesa estaba manchada", "Que la abuela y el nieto hornearon un bizcocho juntos", "Que había azúcar"], ans: 1, exp: "El desorden es un detalle; la idea central es el momento compartido cocinando." },
+            { ctx: "El tren iba lleno, hacía calor y un bebé lloraba. Aun así, Marta llegó a tiempo a la entrevista y consiguió el trabajo.", q: "¿Cuál es la idea principal?", opts: ["Que un bebé lloraba", "Que hacía calor en el tren", "Que Marta llegó a la entrevista y consiguió el trabajo"], ans: 2, exp: "Las molestias del viaje son secundarias; lo importante es que logró el trabajo." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "La Idea Principal",
+            instructions: "A veces nos quedamos con un detalle pequeño y se nos escapa lo importante. Lee y elige de qué trata SOBRE TODO.",
+            adoInstructions: "Extrae la idea global del texto integrando la información, sin quedarte anclado en un detalle concreto.",
+            bank: BANK,
+            ctxLabel: "Lee esto",
+        });
+    }
+
+    function PlanB({ patient }) {
+        const BANK = [
+            { ctx: "Habías quedado para jugar en el parque, pero empieza a llover con fuerza.", q: "¿Qué es lo más flexible y útil?", opts: ["Enfadarte mucho porque el plan ya no puede ser", "Proponer un plan B: jugar en casa o quedar otro día", "Ir igual al parque aunque os mojéis"], ans: 1, exp: "Cuando un plan se tuerce, buscar una alternativa ayuda más que bloquearse o insistir en lo imposible." },
+            { ctx: "Tu serie favorita no está hoy disponible en la tele.", q: "¿Qué sería lo más flexible?", opts: ["Ver otra cosa o hacer otro plan por hoy", "No hacer nada y enfadarte el resto del día", "Insistir en verla aunque no se pueda"], ans: 0, exp: "Adaptarse y elegir otra opción reduce la frustración cuando algo no sale como esperabas." },
+            { ctx: "En clase os cambian de sitio y ya no te sientas con tu amigo.", q: "¿Qué pensamiento ayuda más?", opts: ["«Esto es horrible, no lo soporto»", "«Es un cambio; puedo verle en el recreo y conocer a otro compañero»", "«No voy a hablar con nadie nunca más»"], ans: 1, exp: "Reinterpretar el cambio como algo manejable, con alternativas, facilita la flexibilidad." },
+            { ctx: "Tu pieza favorita del puzle se ha perdido y no aparece.", q: "¿Qué es lo más flexible?", opts: ["Romper el puzle entero del enfado", "Buscar un rato y, si no aparece, hacer otra cosa", "Negarte a jugar a nada más"], ans: 1, exp: "Tolerar que algo no sea perfecto y reorientar la actividad es una habilidad de flexibilidad." },
+            { ctx: "Ibas a comer macarrones pero se han acabado; hay arroz.", q: "¿Qué respuesta es más flexible?", opts: ["Aceptar el arroz por hoy aunque no sea lo previsto", "No comer nada en protesta", "Enfadarte con quien cocina"], ans: 0, exp: "Aceptar un cambio pequeño sin que arruine el día es parte de adaptarse a lo inesperado." },
+            { ctx: "El profe cambia la fecha del examen para la semana que viene.", q: "¿Qué es lo más útil?", opts: ["Agobiarte porque ya no es el día que tú tenías en la cabeza", "Ajustar tu plan de estudio a la nueva fecha", "Negarte a hacerlo otro día"], ans: 1, exp: "Reorganizar el plan ante un cambio de calendario es más útil que resistirse a lo que no controlas." },
+            { ctx: "Tu amigo propone cambiar el juego que siempre jugáis por uno nuevo.", q: "¿Qué actitud es más flexible?", opts: ["Negarte porque solo te gusta el de siempre", "Probar el nuevo un rato y ver si te gusta", "Enfadarte y dejar de jugar"], ans: 1, exp: "Probar algo nuevo, aunque rompa la rutina, abre opciones y entrena la flexibilidad." },
+            { ctx: "Llegas a la atracción de la feria y hay una cola larguísima.", q: "¿Qué plan B encaja mejor?", opts: ["Esperar enfadado quejándote todo el rato", "Ir a otra atracción y volver luego si baja la cola", "Irte a casa sin más"], ans: 1, exp: "Cambiar el orden de los planes ante un imprevisto permite seguir disfrutando." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Llevas toda la semana esperando una excursión y la cancelan por lluvia el mismo día.", q: "¿Qué es lo más flexible?", opts: ["Quedarte enfadado todo el día sin hacer nada", "Sentir la decepción un momento y montar un plan alternativo", "Exigir que la hagan igual bajo la lluvia"], ans: 1, exp: "Permitirte sentir la decepción y luego buscar una alternativa es más útil que bloquearte o insistir en lo imposible." },
+            { ctx: "Tu grupo cambia de idea y quiere ver una peli que a ti no te gusta.", q: "¿Qué actitud ayuda más?", opts: ["Acceder esta vez y proponer tu elección para la próxima", "Irte enfadado a casa", "Obligarles a poner la tuya"], ans: 0, exp: "Ceder esta vez y guardar tu turno para otra mantiene el grupo y reparte las decisiones." },
+            { ctx: "Has preparado un plan perfecto pero surge un imprevisto a mitad.", q: "¿Qué conviene?", opts: ["Abandonar todo porque ya no sale como lo pensaste", "Ajustar el plan sobre la marcha y seguir", "Empezar de cero desde el principio"], ans: 1, exp: "Adaptar el plan al imprevisto, en vez de abandonarlo o reiniciarlo entero, es flexibilidad cognitiva." },
+            { ctx: "Esperabas un 10 y sacas un 8.", q: "¿Qué pensamiento es más flexible?", opts: ["Valorar que es buena nota y ver qué mejorar", "Pensar que es un desastre y que no sirves", "Dejar de esforzarte por no haber llegado al 10"], ans: 0, exp: "Reinterpretar el resultado de forma realista (es buena nota, con margen de mejora) evita el todo-o-nada." },
+            { ctx: "Tu rutina de siempre no es posible hoy por un cambio de horario.", q: "¿Qué es lo más adaptativo?", opts: ["Bloquearte porque no es tu rutina habitual", "Adaptar la rutina al nuevo horario por hoy", "Negarte a hacer nada hasta que vuelva tu horario"], ans: 1, exp: "Ajustarte a un cambio puntual de horario, aunque rompa la rutina, reduce la rigidez." },
+            { ctx: "En un trabajo en grupo, eligen otra idea en vez de la tuya.", q: "¿Qué encaja mejor?", opts: ["Aportar a la idea elegida aunque no fuera la tuya", "Hacer tu parte mal a propósito", "Abandonar el grupo"], ans: 0, exp: "Sumar a la opción del grupo, aunque no fuera tu idea, es cooperar con flexibilidad." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Plan B",
+            instructions: "A veces las cosas no salen como las habíamos pensado. Elige la forma más flexible de reaccionar cuando un plan cambia.",
+            adoInstructions: "Genera y valora alternativas (plan B) ante cambios o imprevistos, entrenando la flexibilidad cognitiva.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Situación",
+        });
+    }
+
+    function ReglasOrtografia({ patient }) {
+        const BANK = [
+            { ctx: "El niño tocaba el ___ en el desfile.", q: "¿Cómo se escribe?", opts: ["tanbor", "tambor", "tamvor"], ans: 1, exp: "Antes de «b» y «p» siempre se escribe «m», no «n»: tambor." },
+            { ctx: "El agua empezó a ___ en la olla.", q: "¿Cómo se escribe?", opts: ["hervir", "herbir", "erbir"], ans: 0, exp: "«Hervir» lleva «h» inicial (muda) y se escribe con «v»." },
+            { ctx: "En el zoo vimos una ___ de cuello largo.", q: "¿Cómo se escribe?", opts: ["girafa", "jirafa", "gjirafa"], ans: 1, exp: "«Jirafa» se escribe con «j», aunque ante «i» la «g» suene igual." },
+            { ctx: "Por la mañana me comí un ___ frito.", q: "¿Cómo se escribe?", opts: ["uevo", "huebo", "huevo"], ans: 2, exp: "«Huevo» lleva «h» (muda) al principio y se escribe con «v»." },
+            { ctx: "Quiero un trozo de ___ en el bocadillo.", q: "¿Cómo se escribe?", opts: ["queso", "keso", "cueso"], ans: 0, exp: "El sonido /k/ ante «e» o «i» se escribe «qu»: queso." },
+            { ctx: "Se cayó y se hizo daño en la ___.", q: "¿Cómo se escribe?", opts: ["rodiya", "rrodilla", "rodilla"], ans: 2, exp: "«Rodilla» se escribe con «ll» y con una sola «r» al principio." },
+            { ctx: "El ___ ladró toda la noche.", q: "¿Cómo se escribe?", opts: ["pero", "perro", "perrro"], ans: 1, exp: "El sonido fuerte /r/ entre vocales se escribe «rr»: perro (≠ «pero»)." },
+            { ctx: "Sopló las velas en su fiesta de ___.", q: "¿Cómo se escribe?", opts: ["cunpleaños", "cumpleaños", "cumpleanos"], ans: 1, exp: "Antes de «p» va «m»: cumpleaños; y «ñ» en «años»." },
+            { ctx: "Mi abuela ___ en un pueblo pequeño.", q: "¿Cómo se escribe?", opts: ["bive", "vibe", "vive"], ans: 2, exp: "«Vive» (del verbo vivir) se escribe con «v» las dos veces." },
+            { ctx: "El niño aprende a tocar la ___ española.", q: "¿Cómo se escribe?", opts: ["gitarra", "guitarra", "guitara"], ans: 1, exp: "Para el sonido /g/ ante «i» se escribe «gui»; y el sonido fuerte se escribe «rr»: guitarra." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "En el zoo había un ___ en el hielo.", q: "¿Cómo se escribe?", opts: ["pinguino", "pingüino", "pingwino"], ans: 1, exp: "«Pingüino» lleva diéresis (ü) para que la «u» suene tras «g» ante «i»." },
+            { ctx: "Me rompí un ___ del pie.", q: "¿Cómo se escribe?", opts: ["hueso", "gueso", "ueso"], ans: 0, exp: "«Hueso» empieza por «hue-» con «h»; el diptongo «ue» inicial suele llevar h." },
+            { ctx: "Hizo una buena ___ en el partido.", q: "¿Cómo se escribe?", opts: ["acción", "acion", "aczión"], ans: 0, exp: "«Acción» lleva doble c (cc), frecuente en palabras terminadas en «-cción»." },
+            { ctx: "Hicimos un ___ de mates.", q: "¿Cómo se escribe?", opts: ["examen", "exámen", "esamen"], ans: 0, exp: "«Examen» es llana terminada en «n» (sin tilde) y se escribe con «x»." },
+            { ctx: "El abuelo cuenta una ___ de su infancia.", q: "¿Cómo se escribe?", opts: ["istoria", "historia", "hsitoria"], ans: 1, exp: "«Historia» lleva «h» inicial muda." },
+            { ctx: "Hoy el ___ sopla muy fuerte.", q: "¿Cómo se escribe?", opts: ["biento", "viento", "vviento"], ans: 1, exp: "«Viento» se escribe con «v»." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Reglas de Ortografía",
+            instructions: "Muchas palabras suenan parecidas pero solo una se escribe bien. Lee la frase y elige la forma correcta.",
+            adoInstructions: "Aplica las reglas ortográficas (m antes de p/b, b/v, g/j, h muda, qu, ll, rr) para elegir la grafía correcta.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
+    function Tildes({ patient }) {
+        const BANK = [
+            { ctx: "En el jardín hay un ___ muy alto.", q: "¿Cuál está bien acentuada?", opts: ["arbol", "árbol", "arból"], ans: 1, exp: "«Árbol» es llana acabada en consonante distinta de n/s → lleva tilde: ÁR-bol." },
+            { ctx: "Me encanta el bocadillo de ___.", q: "¿Cuál es correcta?", opts: ["jamón", "jamon", "jámon"], ans: 0, exp: "«Jamón» es aguda acabada en «n» → tilde en la última sílaba." },
+            { ctx: "Encendí la ___ para ver de noche.", q: "¿Cuál es correcta?", opts: ["lampara", "lampará", "lámpara"], ans: 2, exp: "Todas las palabras esdrújulas llevan tilde: LÁM-pa-ra." },
+            { ctx: "Pon el plato sobre la ___.", q: "¿Cuál es correcta?", opts: ["mésa", "mesa", "mesá"], ans: 1, exp: "«Mesa» es llana acabada en vocal → NO lleva tilde." },
+            { ctx: "Hoy ha sido un buen ___.", q: "¿Cuál es correcta?", opts: ["dia", "día", "díà"], ans: 1, exp: "«Día» tiene hiato (la «í» tónica junto a «a») → lleva tilde para romper el diptongo." },
+            { ctx: "¿___ quieres, agua o zumo?", q: "¿Cuál es correcta?", opts: ["Que", "Qué", "Qüe"], ans: 1, exp: "En las preguntas, «qué» lleva tilde diacrítica." },
+            { ctx: "Me apetece un ___ calentito.", q: "¿Cuál es correcta? (la bebida de hojas)", opts: ["te", "té", "tê"], ans: 1, exp: "«Té» (la bebida) lleva tilde diacrítica para distinguirlo de «te» (pronombre)." },
+            { ctx: "El ___ vuela muy alto.", q: "¿Cuál es correcta?", opts: ["avión", "avion", "ávion"], ans: 0, exp: "«Avión» es aguda acabada en «n» → tilde en la última sílaba." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "«No sé ___ vendrá.» (pregunta indirecta)", q: "¿Cuál es correcta?", opts: ["cuando", "cuándo", "cuándó"], ans: 1, exp: "En interrogativas indirectas, «cuándo» lleva tilde diacrítica." },
+            { ctx: "«Dame el libro a ___.» (pronombre)", q: "¿Cuál es correcta?", opts: ["mí", "mi", "mï"], ans: 0, exp: "«Mí» (pronombre) lleva tilde; «mi» (posesivo) no." },
+            { ctx: "«Quiero ___ agua, por favor.» (cantidad)", q: "¿Cuál es correcta?", opts: ["más", "mas", "máss"], ans: 0, exp: "«Más» (cantidad) lleva tilde; «mas» (= pero) no." },
+            { ctx: "«Se lo di a ___.» (pronombre, persona)", q: "¿Cuál es correcta?", opts: ["el", "él", "ël"], ans: 1, exp: "«Él» (pronombre) lleva tilde; «el» (artículo) no." },
+            { ctx: "Me hizo ___ mucho con su chiste.", q: "¿Cuál es correcta?", opts: ["reír", "reir", "réir"], ans: 0, exp: "«Reír» tiene hiato (e-í, con í tónica) → lleva tilde." },
+            { ctx: "«___ no ha llegado el tren.» (= todavía)", q: "¿Cuál es correcta?", opts: ["Aun", "Aún", "Aûn"], ans: 1, exp: "«Aún» (= todavía) lleva tilde; «aun» (= incluso) no." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Acentuación",
+            instructions: "La tilde cambia cómo se escribe (y a veces qué significa) una palabra. Elige la forma bien acentuada.",
+            adoInstructions: "Aplica las reglas de acentuación (agudas, llanas, esdrújulas, hiatos y tilde diacrítica) para elegir la forma correcta.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
+    function Homofonos({ patient }) {
+        const BANK = [
+            { ctx: "Ojalá ___ buen tiempo mañana para la excursión.", q: "¿Cuál es correcta?", opts: ["haya", "halla", "aya"], ans: 0, exp: "«Haya» es del verbo haber. «Halla» = encuentra; «aya» = cuidadora." },
+            { ctx: "Ya he ___ los deberes antes de cenar.", q: "¿Cuál es correcta?", opts: ["echo", "hecho", "echó"], ans: 1, exp: "«Hecho» es el participio de hacer. «Echo» es del verbo echar." },
+            { ctx: "El agua pasa por un ___ de plástico.", q: "¿Cuál es correcta?", opts: ["tubo", "tuvo", "túbo"], ans: 0, exp: "«Tubo» es el objeto. «Tuvo» es del verbo tener." },
+            { ctx: "No ___ por ahí, que es peligroso.", q: "¿Cuál es correcta?", opts: ["valles", "ballas", "vayas"], ans: 2, exp: "«Vayas» es del verbo ir. «Valla» = una cerca o vallado." },
+            { ctx: "Vamos ___ qué ha pasado ahí fuera.", q: "¿Cuál es correcta?", opts: ["haber", "a ver", "aver"], ans: 1, exp: "«A ver» significa observar o comprobar. «Haber» es el verbo auxiliar." },
+            { ctx: "En las elecciones, mi padre siempre ___.", q: "¿Cuál es correcta?", opts: ["bota", "vota", "botá"], ans: 1, exp: "«Vota» es del verbo votar (elegir). «Bota» = calzado o del verbo botar." },
+            { ctx: "Cierra bien la ___ del jardín, que se escapa el perro.", q: "¿Cuál es correcta?", opts: ["vaya", "baya", "valla"], ans: 2, exp: "«Valla» es la cerca. «Vaya» es del verbo ir; «baya» es un fruto." },
+            { ctx: "Me gusta caminar ___ la montaña al amanecer.", q: "¿Cuál es correcta?", opts: ["hacia", "asia", "hacía"], ans: 0, exp: "«Hacia» indica dirección. «Hacía» (con tilde) es del verbo hacer; «Asia» es el continente." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Homófonos",
+            instructions: "Hay palabras que suenan igual pero se escriben distinto y significan cosas diferentes. Lee la frase y elige la correcta.",
+            adoInstructions: "Elige el homófono correcto según el contexto (haya/halla, hecho/echo, tubo/tuvo...), accediendo a la representación ortográfica de cada palabra.",
+            bank: BANK,
+            ctxLabel: "Frase",
+        });
+    }
+
+
+    // ===== NEW v25.45: producción escrita (construir la palabra letra a letra) =====
+    function OrdenaLetras({ patient }) {
+        const WORDS = [
+            { w: "casa", clue: "🏠 El sitio donde vives" },
+            { w: "vaca", clue: "🐄 Animal de granja que da leche" },
+            { w: "perro", clue: "🐕 Animal que ladra y mueve la cola" },
+            { w: "huevo", clue: "🥚 Lo pone la gallina" },
+            { w: "queso", clue: "🧀 Se hace con leche y va en la pizza" },
+            { w: "llave", clue: "🔑 Sirve para abrir y cerrar puertas" },
+            { w: "zapato", clue: "👟 Lo llevas puesto en el pie" },
+            { w: "jirafa", clue: "🦒 Animal de cuello muy largo" },
+            { w: "árbol", clue: "🌳 Tiene tronco, ramas y hojas" },
+            { w: "botella", clue: "🍶 Recipiente para guardar líquidos" },
+            { w: "caballo", clue: "🐴 Animal que se monta y galopa" },
+            { w: "guitarra", clue: "🎸 Instrumento de música con cuerdas" },
+            { w: "mariposa", clue: "🦋 Insecto con alas de colores" },
+            { w: "plátano", clue: "🍌 Fruta amarilla y alargada" },
+        ];
+        const [order, setOrder] = useState(() => shuffle(WORDS.map((_, i) => i)));
+        const [pos, setPos] = useState(0);
+        const [tiles, setTiles] = useState([]);
+        const [built, setBuilt] = useState([]);
+        const [done, setDone] = useState(false);
+        const [ok, setOk] = useState(null);
+        const [score, setScore] = useState({ correct: 0, total: 0 });
+        const item = WORDS[order[pos]];
+        const target = item.w;
+        useEffect(() => {
+            setTiles(shuffle(target.split("").map((ch, i) => ({ id: i, ch }))));
+            setBuilt([]); setDone(false); setOk(null);
+        }, [pos, order]);
+        const speak = () => { try { const u = new SpeechSynthesisUtterance(target); u.lang = "es-ES"; u.rate = 0.8; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) { } };
+        const builtStr = built.map(id => { const t = tiles.find(x => x.id === id); return t ? t.ch : ""; }).join("");
+        const add = (id) => { if (done) return; sfx.tap(); setBuilt(b => [...b, id]); };
+        const removeLast = () => { if (done || built.length === 0) return; sfx.tap(); setBuilt(b => b.slice(0, -1)); };
+        const check = () => {
+            if (done || built.length !== target.length) return;
+            const correct = builtStr === target;
+            setOk(correct); setDone(true);
+            setScore(s => ({ correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }));
+            if (correct) { sfx.success(); if (_activePatientId) { addStar(_activePatientId, _activeAreaId, true); logCurrentResult(true); } }
+            else { sfx.fail(); if (_activePatientId) { breakStreak(_activePatientId); logCurrentResult(false); } }
+        };
+        const next = () => { let np = pos + 1; if (np >= order.length) { setOrder(shuffle(WORDS.map((_, i) => i))); np = 0; } else { setPos(np); } };
+        const remaining = tiles.filter(t => built.indexOf(t.id) < 0);
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Ordena las Letras"),
+            React.createElement(Instructions, { adoChildren: "Producción ortográfica: construir la palabra grafema a grafema (encoding) entrena la representación y la secuencia de letras, más exigente que reconocerla." },
+                "Lee la pista, escucha la palabra si quieres y constrúyela tocando las letras en el orden correcto."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 10 } },
+                React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+            React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 16, marginBottom: 12, textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 700, marginBottom: 10 } }, item.clue),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: speak }, "🔊 Escuchar")),
+            React.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", minHeight: 52, marginBottom: 14, padding: 8, borderRadius: 12, border: "2px dashed " + (ok === true ? C.success : ok === false ? "#E57373" : "#D8D8D0"), background: "#FFFFFF" } },
+                built.length === 0
+                    ? React.createElement("span", { style: { color: C.textL, alignSelf: "center", fontSize: 14 } }, "Toca las letras para escribir aquí")
+                    : built.map((id, k) => { const t = tiles.find(x => x.id === id); return React.createElement("span", { key: k, style: { fontSize: 26, fontWeight: 800, minWidth: 30, textAlign: "center", color: ok === false ? "#E57373" : C.text } }, t ? t.ch : ""); })),
+            !done && React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 } },
+                remaining.map(t => React.createElement("button", {
+                    key: t.id, onClick: () => add(t.id),
+                    style: { fontSize: 24, fontWeight: 800, width: 48, height: 48, borderRadius: 12, border: "2px solid " + C.primary, background: "#FFF", color: C.primary, cursor: "pointer" }
+                }, t.ch))),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" } },
+                !done && React.createElement(Btn, { color: C.textL, small: true, outline: true, onClick: removeLast }, "⌫ Borrar"),
+                !done && React.createElement(Btn, { color: C.primary, small: true, onClick: check, disabled: built.length !== target.length }, "Comprobar"),
+                done && React.createElement(Btn, { color: C.primary, small: true, onClick: next }, "Siguiente ▶")),
+            done && React.createElement("div", { style: { textAlign: "center", marginTop: 12, fontSize: 16, fontWeight: 700, color: ok ? C.success : "#E57373" } },
+                ok ? "¡Muy bien! Lo has escrito correctamente." : ("Casi. Se escribe así: " + target))
+        );
+    }
+
+
+    // ===== NEW v25.45: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
+    function SilabasTrabadas({ patient }) {
+        const BANK = [
+            { ctx: "Comí en un ___ blanco.", q: "¿Cómo se escribe?", opts: ["plato", "pato", "palto"], ans: 0, exp: "«Plato» tiene la sílaba trabada «pla» (p+l). «Pato» es otro animal y «palto» cambia el orden." },
+            { ctx: "Vi pasar un ___ por la vía.", q: "¿Cómo se escribe?", opts: ["ten", "tren", "tern"], ans: 1, exp: "«Tren» lleva la trabada «tre» (t+r); no se pierde la «r»." },
+            { ctx: "Soplé un ___ de colores en la fiesta.", q: "¿Cómo se escribe?", opts: ["glovo", "globo", "gobo"], ans: 1, exp: "«Globo»: sílaba trabada «glo» (g+l) y se escribe con «b»." },
+            { ctx: "Me duele el ___ derecho.", q: "¿Cómo se escribe?", opts: ["bazo", "barzo", "brazo"], ans: 2, exp: "«Brazo»: trabada «bra» (b+r). «Bazo» es un órgano distinto." },
+            { ctx: "Le regalé una ___ muy bonita.", q: "¿Cómo se escribe?", opts: ["flor", "for", "frol"], ans: 0, exp: "«Flor»: trabada «flo» (f+l); no se omite la «l»." },
+            { ctx: "En la playa vi un ___ entre las rocas.", q: "¿Cómo se escribe?", opts: ["crangejo", "cangejo", "cangrejo"], ans: 2, exp: "«Cangrejo»: trabada «gre» (g+r) en su sitio." },
+            { ctx: "Tengo ___ años más que mi hermano.", q: "¿Cómo se escribe?", opts: ["tels", "tres", "tes"], ans: 1, exp: "«Tres»: trabada «tre» (t+r); no se pierde la «r»." },
+            { ctx: "En el cuento aparecía un ___ que escupía fuego.", q: "¿Cómo se escribe?", opts: ["dragón", "dagón", "gardón"], ans: 0, exp: "«Dragón»: trabada «dra» (d+r), y aguda con tilde en la «o»." },
+            { ctx: "Pinté la pared de color ___.", q: "¿Cómo se escribe?", opts: ["blanco", "banco", "balnco"], ans: 0, exp: "«Blanco»: trabada «bla» (b+l). «Banco» es otra cosa." },
+            { ctx: "Me puse el ___ porque hacía frío.", q: "¿Cómo se escribe?", opts: ["arbigo", "abrigo", "abigo"], ans: 1, exp: "«Abrigo»: trabada «bri» (b+r) bien colocada." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Cogimos el ___ público para ir al centro.", q: "¿Cómo se escribe?", opts: ["transporte", "tansporte", "transporpe"], ans: 0, exp: "«Transporte»: trabada «tra» (t+r); no se pierde la «r»." },
+            { ctx: "Aprende a tocar un ___ de viento.", q: "¿Cómo se escribe?", opts: ["intrumento", "instrumento", "instumento"], ans: 1, exp: "«Instrumento»: ojo a «ins-tru», con la trabada «tru» (t+r)." },
+            { ctx: "Te pongo un ___ para que lo entiendas.", q: "¿Cómo se escribe?", opts: ["ejemplo", "ejenplo", "ejmplo"], ans: 0, exp: "«Ejemplo»: «em» antes de «p» va con «m», y «pl» es trabada." },
+            { ctx: "La casa tiene una buena ___.", q: "¿Cómo se escribe?", opts: ["estrutura", "estructura", "estructora"], ans: 1, exp: "«Estructura»: grupo «str» (es-truc-tu-ra); no se omite ninguna consonante." },
+            { ctx: "El mago hizo un ___ increíble.", q: "¿Cómo se escribe?", opts: ["turco", "truko", "truco"], ans: 2, exp: "«Truco»: trabada «tru» (t+r). «Turco» cambia el orden de las letras." },
+            { ctx: "En la selva vimos un ___ enorme.", q: "¿Cómo se escribe?", opts: ["tige", "trige", "tigre"], ans: 2, exp: "«Tigre»: trabada «gre» (g+r) al final." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Sílabas Trabadas",
+            instructions: "Algunas sílabas juntan dos consonantes (bl, br, tr, pl, gr...). Es fácil olvidar una. Lee la frase y elige la palabra bien escrita.",
+            adoInstructions: "Elige la grafía correcta de palabras con grupos consonánticos (sílabas trabadas), donde es frecuente omitir o desplazar la consonante líquida.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
+    function SeparaPalabras({ patient }) {
+        const BANK = [
+            { ctx: "lacasaesgrande", q: "¿Cómo se separa en palabras?", opts: ["la casa es grande", "lacasa es grande", "la casaes grande"], ans: 0, exp: "Cada palabra va separada: «la / casa / es / grande»." },
+            { ctx: "megustaelchocolate", q: "¿Cómo se separa?", opts: ["megusta el chocolate", "me gusta el chocolate", "me gustael chocolate"], ans: 1, exp: "«Me / gusta / el / chocolate»: «me» y «gusta» son palabras distintas." },
+            { ctx: "vamosalparque", q: "¿Cómo se separa?", opts: ["vamosal parque", "vamos al parque", "vamo salparque"], ans: 1, exp: "«Vamos / al / parque». «Al» es una palabra (a + el)." },
+            { ctx: "elperrocorremucho", q: "¿Cómo se separa?", opts: ["el perrocorre mucho", "elperro corre mucho", "el perro corre mucho"], ans: 2, exp: "«El / perro / corre / mucho»: cuatro palabras separadas." },
+            { ctx: "tengomuchahambre", q: "¿Cómo se separa?", opts: ["tengo mucha hambre", "tengomucha hambre", "tengo muchahambre"], ans: 0, exp: "«Tengo / mucha / hambre»." },
+            { ctx: "hoyhacemuchosol", q: "¿Cómo se separa?", opts: ["hoyhace mucho sol", "hoy hace mucho sol", "hoy hacemucho sol"], ans: 1, exp: "«Hoy / hace / mucho / sol»." },
+            { ctx: "miamigoesmuysimpatico", q: "¿Cómo se separa?", opts: ["mi amigo es muy simpático", "miamigo es muy simpático", "mi amigoes muy simpático"], ans: 0, exp: "«Mi / amigo / es / muy / simpático»." },
+            { ctx: "vivoenunpueblopequeño", q: "¿Cómo se separa?", opts: ["vivoen un pueblo pequeño", "vivo en un pueblopequeño", "vivo en un pueblo pequeño"], ans: 2, exp: "«Vivo / en / un / pueblo / pequeño»." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Separa las Palabras",
+            instructions: "A veces las palabras se escriben todas pegadas. Tu trabajo es ver dónde empieza y acaba cada una. Elige la separación correcta.",
+            adoInstructions: "Identifica los límites de cada palabra (segmentación léxica) para corregir uniones y separaciones indebidas, un error frecuente en la escritura.",
+            bank: BANK,
+            ctxLabel: "Palabras pegadas",
+        });
+    }
+
+    function SilabaTonica({ patient }) {
+        const BANK = [
+            { ctx: "pelota", q: "¿Cuál es la sílaba fuerte (tónica)?", opts: ["pe", "lo", "ta"], ans: 1, exp: "En «pe-LO-ta» la fuerza recae en «lo». Es una palabra llana." },
+            { ctx: "plátano", q: "¿Cuál es la sílaba fuerte?", opts: ["plá", "ta", "no"], ans: 0, exp: "En «PLÁ-ta-no» la fuerza está en «plá»: es esdrújula y por eso lleva tilde." },
+            { ctx: "corazón", q: "¿Cuál es la sílaba fuerte?", opts: ["co", "ra", "zón"], ans: 2, exp: "En «co-ra-ZÓN» la fuerza está en «zón»: es aguda y lleva tilde." },
+            { ctx: "ventana", q: "¿Cuál es la sílaba fuerte?", opts: ["ven", "ta", "na"], ans: 1, exp: "En «ven-TA-na» la fuerza está en «ta». Es llana." },
+            { ctx: "pájaro", q: "¿Cuál es la sílaba fuerte?", opts: ["pá", "ja", "ro"], ans: 0, exp: "En «PÁ-ja-ro» la fuerza está en «pá»: es esdrújula y lleva tilde." },
+            { ctx: "animal", q: "¿Cuál es la sílaba fuerte?", opts: ["a", "ni", "mal"], ans: 2, exp: "En «a-ni-MAL» la fuerza está en «mal». Es aguda terminada en «l», sin tilde." },
+            { ctx: "zapato", q: "¿Cuál es la sílaba fuerte?", opts: ["za", "pa", "to"], ans: 1, exp: "En «za-PA-to» la fuerza está en «pa». Es llana." },
+            { ctx: "médico", q: "¿Cuál es la sílaba fuerte?", opts: ["mé", "di", "co"], ans: 0, exp: "En «MÉ-di-co» la fuerza está en «mé»: es esdrújula y lleva tilde." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Sílaba Tónica",
+            instructions: "Cada palabra tiene una sílaba que suena con más fuerza: la sílaba tónica. Di la palabra en voz alta y nota dónde pones la fuerza.",
+            adoInstructions: "Identifica la sílaba tónica (conciencia prosódica), prerrequisito para aplicar correctamente las reglas de acentuación.",
+            bank: BANK,
+            ctxLabel: "Palabra",
+        });
+    }
+
+
+    // ===== NEW v25.45: PEERS (manejar burlas, hacer planes) =====
+    function ManejarBurlas({ patient }) {
+        const BANK = [
+            { ctx: "Un compañero se ríe de tus zapatillas para picarte.", q: "¿Qué suele funcionar mejor?", opts: ["Insultarle y empujarle", "Encogerte de hombros y decir «vale» sin darle importancia", "Echarte a llorar y salir corriendo"], ans: 1, exp: "Mostrar que la burla no te afecta (restarle importancia) le quita la gracia a quien se mete contigo. Pelear o hundirte suele empeorarlo." },
+            { ctx: "Alguien te dice algo para fastidiarte y espera tu reacción.", q: "¿Qué respuesta corta encaja?", opts: ["Discutir un buen rato para convencerle de que se equivoca", "Algo breve y tranquilo como «¿y qué?» y seguir a lo tuyo", "Hacer como que no oyes nada y tragártelo todo"], ans: 1, exp: "Una respuesta corta y aburrida («¿y qué?») muestra que no te ha hecho mella, sin entrar al trapo ni guardártelo dentro." },
+            { ctx: "Las burlas de un compañero se repiten cada día y te hacen daño de verdad.", q: "¿Qué es lo más adecuado?", opts: ["Aguantarte y no contarlo nunca", "Devolver la burla cada vez, más fuerte", "Contárselo a un adulto de confianza"], ans: 2, exp: "Cuando una burla se vuelve repetida y dañina, ya es acoso: ahí lo correcto es pedir ayuda a un adulto de confianza, no cargar con ello solo." },
+            { ctx: "Un amigo te gasta una broma sin mala intención y se ríe contigo.", q: "¿Qué encaja?", opts: ["Reírte tú también, es una broma amistosa", "Enfadarte mucho y cortar la amistad", "Planear una venganza"], ans: 0, exp: "No toda broma es una burla. Si es amistosa y sin maldad, seguir la risa mantiene la relación; conviene distinguirlo del ataque que sí molesta." },
+            { ctx: "Te hacen un comentario para picarte delante de otros.", q: "¿Qué ayuda más?", opts: ["Quedarte, ponerte rojo y darle muchas vueltas", "Responder algo breve y alejarte con tranquilidad", "Gritarle delante de todos"], ans: 1, exp: "Un comentario corto y alejarte con calma corta la situación sin darle público ni mostrar que te ha afectado." },
+            { ctx: "Alguien intenta picarte una y otra vez para que reacciones.", q: "¿Qué desanima más a quien se burla?", opts: ["Ver que te enfadas y pierdes los nervios", "Ver que no consigue alterarte", "Ver que te escondes y no vuelves"], ans: 1, exp: "Quien se burla busca tu reacción. Si ve que no lo consigue, deja de tener gracia y suele parar." },
+            { ctx: "Un compañero se mete con tu forma de hablar.", q: "¿Cuál es una buena respuesta?", opts: ["«Gracias por avisar» y seguir tan tranquilo", "Imitarle y meterte tú con él más fuerte", "No volver a hablar en clase nunca más"], ans: 0, exp: "Una respuesta tranquila e incluso con humo suave («gracias por avisar») resta poder a la burla sin escalar el conflicto." },
+            { ctx: "Ves que están metiéndose con otro compañero de forma repetida.", q: "¿Qué es lo más adecuado?", opts: ["Reírte con los que se burlan para no ser el siguiente", "Apoyar a quien lo recibe y, si hace falta, avisar a un adulto", "Hacer como que no ves nada"], ans: 1, exp: "Ante el acoso a otra persona, apoyarla y avisar a un adulto ayuda; reírse con el grupo lo refuerza." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Manejar Burlas",
+            instructions: "A veces alguien intenta picarte. Hay formas de responder que cortan la burla y otras que la empeoran. Elige la que suele funcionar mejor.",
+            adoInstructions: "Aplica estrategias de manejo de burlas: respuestas breves que restan importancia, no mostrar que te afecta, y distinguir la burla puntual del acoso (que requiere avisar a un adulto).",
+            bank: BANK,
+            ctxLabel: "Situación",
+        });
+    }
+
+    function HacerPlanes({ patient }) {
+        const BANK = [
+            { ctx: "Quieres quedar con un amigo este fin de semana.", q: "¿Qué funciona mejor?", opts: ["Esperar a que él te lo proponga, como siempre", "Proponerle algo concreto: qué, cuándo y dónde", "Presentarte en su casa sin avisar"], ans: 1, exp: "Para quedar bien, propón un plan concreto (qué, cuándo y dónde). Esperar siempre al otro o aparecer sin avisar funciona peor." },
+            { ctx: "Tu amigo te dice que el sábado no puede.", q: "¿Qué es lo más flexible?", opts: ["Proponerle otro día", "Enfadarte y no volver a invitarle", "Insistir en que sea el sábado igual"], ans: 0, exp: "Que no pueda un día no es un rechazo. Ofrecer otra fecha mantiene el plan y la relación." },
+            { ctx: "Vais a quedar para jugar. ¿Qué conviene dejar claro?", q: "Elige.", opts: ["Solo el día, lo demás ya se verá", "El qué, la hora y el lugar", "Nada, mejor improvisar del todo"], ans: 1, exp: "Acordar qué, cuándo y dónde evita malentendidos y que el plan se quede en nada." },
+            { ctx: "Habíais hablado de quedar, pero no lo habéis confirmado.", q: "¿Qué ayuda?", opts: ["Dar por hecho que se acuerda y presentarte", "Escribirle el día antes para confirmar", "Cancelar por si acaso"], ans: 1, exp: "Confirmar el día antes asegura que los dos contáis con el plan; darlo por hecho lleva a plantones." },
+            { ctx: "A ti te gusta una cosa y a tu amigo otra distinta.", q: "¿Qué es mejor para quedar?", opts: ["Proponer algo que guste a los dos o turnaros", "Hacer siempre solo lo que quieres tú", "No quedar si no es tu plan"], ans: 0, exp: "Buscar algo común o turnaros hace que los dos disfruten y queráis repetir." },
+            { ctx: "Viene un amigo a tu casa a pasar la tarde.", q: "¿Qué hace un buen anfitrión?", opts: ["Estar todo el rato con el móvil a tu aire", "Preguntarle qué le apetece y compartir la actividad", "Ponerte a hacer tus cosas e ignorarle"], ans: 1, exp: "Como anfitrión, interesarte por lo que le apetece y compartir el plan hace que se sienta bien recibido." },
+            { ctx: "Te das cuenta de que tienes que cancelar un plan ya hecho.", q: "¿Qué es lo correcto?", opts: ["Avisar con tiempo y proponer otro día", "No avisar y no aparecer", "Avisar un minuto antes"], ans: 0, exp: "Avisar con antelación y ofrecer otra fecha muestra respeto y cuida la amistad." },
+            { ctx: "Quieres invitar a un compañero nuevo a hacer algo.", q: "¿Qué encaja mejor?", opts: ["Pedirle que lo organice todo él", "Invitarle a algo concreto y sencillo", "No decir nada y esperar a que adivine"], ans: 1, exp: "Una invitación concreta y fácil («¿te vienes a...?») facilita el sí; dejarlo en el aire suele quedar en nada." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Hacer Planes",
+            instructions: "Quedar con amigos también se aprende: proponer, ponerse de acuerdo y confirmar. Elige lo que mejor funciona.",
+            adoInstructions: "Aplica habilidades para organizar quedadas: proponer un plan concreto (qué, cuándo, dónde), confirmarlo, elegir actividades compartidas, ser buen anfitrión y manejar cambios con flexibilidad.",
+            bank: BANK,
+            ctxLabel: "Situación",
+        });
+    }
+
+
+    // ===== NEW v25.45: puente frase-a-frase (puntuación, concordancia, conectores) =====
+    function PuntuacionMayusculas({ patient }) {
+        const BANK = [
+            { ctx: "Fíjate en la mayúscula y el punto.", q: "¿Cuál está bien escrita?", opts: ["Mañana vamos al cine.", "mañana vamos al cine.", "Mañana vamos al cine"], ans: 0, exp: "Empieza con mayúscula y termina en punto." },
+            { ctx: "Es una pregunta.", q: "¿Cuál está bien escrita?", opts: ["vienes hoy?", "¿Vienes hoy?", "¿vienes hoy"], ans: 1, exp: "Las preguntas abren con ¿ y cierran con ?, y empiezan con mayúscula." },
+            { ctx: "Es una exclamación.", q: "¿Cuál está bien escrita?", opts: ["cuidado!", "¡cuidado", "¡Cuidado!"], ans: 2, exp: "Las exclamaciones van entre ¡ ! y empiezan con mayúscula." },
+            { ctx: "Son dos frases seguidas.", q: "¿Cuál está bien escrita?", opts: ["Fuimos al parque. Jugamos mucho.", "Fuimos al parque. jugamos mucho.", "fuimos al parque. jugamos mucho."], ans: 0, exp: "Después de un punto, la siguiente palabra empieza con mayúscula." },
+            { ctx: "Hay un nombre propio.", q: "¿Cuál está bien escrita?", opts: ["mi perro se llama toby.", "Mi perro se llama Toby.", "Mi perro se llama toby."], ans: 1, exp: "Los nombres propios (Toby) van con mayúscula, y la frase empieza con mayúscula." },
+            { ctx: "Es una lista de cosas.", q: "¿Cuál está bien escrita?", opts: ["Compré, pan leche, y huevos.", "Compré pan leche y huevos.", "Compré pan, leche y huevos."], ans: 2, exp: "Los elementos de una lista se separan con comas, y el último con «y»." },
+            { ctx: "Aparece una ciudad.", q: "¿Cuál está bien escrita?", opts: ["Vivo en Madrid.", "vivo en madrid.", "Vivo en madrid."], ans: 0, exp: "Las ciudades (Madrid) son nombres propios: mayúscula. Y la frase empieza con mayúscula." },
+            { ctx: "Pregunta y respuesta.", q: "¿Cuál está bien escrita?", opts: ["¿quieres jugar? si", "¿Quieres jugar? Sí.", "¿Quieres jugar? si"], ans: 1, exp: "La pregunta va entre ¿ ? y la respuesta empieza con mayúscula y acaba en punto." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Te diriges a alguien por su nombre.", q: "¿Cuál está bien escrita?", opts: ["Ven aquí, Marta.", "Ven aquí Marta.", "ven aquí Marta"], ans: 0, exp: "Al dirigirte a alguien (vocativo), se separa con coma: «Ven aquí, Marta»." },
+            { ctx: "Hay un contraste.", q: "¿Cuál está bien escrita?", opts: ["Quería ir pero llovía.", "Quería ir, pero llovía.", "quería ir pero, llovía"], ans: 1, exp: "Antes de «pero» suele escribirse una coma." },
+            { ctx: "Son dos ideas completas.", q: "¿Cuál está bien escrita?", opts: ["Hace sol vamos a la playa.", "Hace sol, vamos a la playa", "Hace sol. Vamos a la playa."], ans: 2, exp: "Dos ideas completas se separan con punto: «Hace sol. Vamos a la playa.»" },
+            { ctx: "Anuncias una lista.", q: "¿Cuál está bien escrita?", opts: ["Necesito tres cosas: lápiz, goma y regla.", "Necesito tres cosas lápiz goma y regla.", "Necesito tres cosas, lápiz goma y regla."], ans: 0, exp: "Antes de una enumeración se usan dos puntos, y los elementos van con comas." },
+            { ctx: "Pregunta y exclamación.", q: "¿Cuál está bien escrita?", opts: ["de verdad? qué bien!", "¿De verdad! ¡qué bien?", "¿De verdad? ¡Qué bien!"], ans: 2, exp: "Cada signo cierra con su pareja: ¿? para preguntar y ¡! para exclamar." },
+            { ctx: "Hay una aclaración en medio.", q: "¿Cuál está bien escrita?", opts: ["Mi hermano, que es médico, vive lejos.", "Mi hermano que es médico vive lejos.", "Mi hermano que es médico, vive lejos."], ans: 0, exp: "La aclaración va entre comas: «Mi hermano, que es médico, vive lejos»." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Puntuación y Mayúsculas",
+            instructions: "Una misma frase cambia según las mayúsculas y los signos. Elige la que está bien escrita.",
+            adoInstructions: "Aplica las convenciones de mayúsculas y puntuación (punto, coma, signos de interrogación y exclamación, dos puntos) para elegir la frase correcta.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Fíjate",
+        });
+    }
+
+    function Concordancia({ patient }) {
+        const BANK = [
+            { ctx: "La casa es ___.", q: "¿Qué palabra encaja?", opts: ["blanco", "blanca", "blancos"], ans: 1, exp: "«Casa» es femenino singular → «blanca»." },
+            { ctx: "Los perros están ___.", q: "¿Qué palabra encaja?", opts: ["cansados", "cansado", "cansada"], ans: 0, exp: "«Perros» es masculino plural → «cansados»." },
+            { ctx: "___ niñas juegan en el patio.", q: "¿Qué palabra encaja?", opts: ["El", "Los", "Las"], ans: 2, exp: "«Niñas» es femenino plural → «Las»." },
+            { ctx: "Compré un coche ___.", q: "¿Qué palabra encaja?", opts: ["roja", "rojo", "rojos"], ans: 1, exp: "«Coche» es masculino singular → «rojo»." },
+            { ctx: "Las flores son muy ___.", q: "¿Qué palabra encaja?", opts: ["bonito", "bonitos", "bonitas"], ans: 2, exp: "«Flores» es femenino plural → «bonitas»." },
+            { ctx: "Mi abuela está ___.", q: "¿Qué palabra encaja?", opts: ["contenta", "contento", "contentos"], ans: 0, exp: "«Abuela» es femenino singular → «contenta»." },
+            { ctx: "Vi ___ gato negro.", q: "¿Qué palabra encaja?", opts: ["una", "unos", "un"], ans: 2, exp: "«Gato» es masculino singular → «un»." },
+            { ctx: "Tengo dos lápices ___.", q: "¿Qué palabra encaja?", opts: ["pequeños", "pequeño", "pequeña"], ans: 0, exp: "«Lápices» es masculino plural → «pequeños»." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "El agua del río está ___.", q: "¿Qué palabra encaja?", opts: ["claro", "clara", "claros"], ans: 1, exp: "«Agua» es femenino (lleva «el» por empezar por a- tónica): «el agua clara»." },
+            { ctx: "Este problema es muy ___.", q: "¿Qué palabra encaja?", opts: ["seria", "serio", "serias"], ans: 1, exp: "«Problema» es masculino aunque acabe en «a»: «problema serio»." },
+            { ctx: "Las casas del pueblo son ___.", q: "¿Qué palabra encaja?", opts: ["antiguo", "antiguos", "antiguas"], ans: 2, exp: "El adjetivo concuerda con «casas» (femenino plural), aunque haya palabras en medio." },
+            { ctx: "Me duele la mano ___.", q: "¿Qué palabra encaja?", opts: ["izquierda", "izquierdo", "izquierdos"], ans: 0, exp: "«Mano» es femenino: «la mano izquierda»." },
+            { ctx: "Encontré un mapa ___.", q: "¿Qué palabra encaja?", opts: ["antigua", "antiguas", "antiguo"], ans: 2, exp: "«Mapa» es masculino: «el mapa antiguo»." },
+            { ctx: "Toda la gente estaba ___.", q: "¿Qué palabra encaja?", opts: ["contentos", "contenta", "contento"], ans: 1, exp: "«Gente» es femenino singular: «la gente contenta», aunque se refiera a muchas personas." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Concordancia",
+            instructions: "Las palabras de una frase tienen que ir en el mismo género (masculino/femenino) y número (singular/plural). Elige la que encaja.",
+            adoInstructions: "Aplica la concordancia de género y número entre artículo, sustantivo y adjetivo, incluidos casos irregulares.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
+    function Conectores({ patient }) {
+        const BANK = [
+            { ctx: "Quería salir, ___ estaba lloviendo.", q: "¿Qué conector encaja?", opts: ["porque", "y", "pero"], ans: 2, exp: "«Pero» une dos ideas que se contraponen." },
+            { ctx: "Estudió mucho, ___ aprobó.", q: "¿Qué conector encaja?", opts: ["así que", "pero", "ni"], ans: 0, exp: "«Así que» introduce la consecuencia de algo." },
+            { ctx: "No fui a clase ___ estaba enfermo.", q: "¿Qué conector encaja?", opts: ["porque", "aunque", "pero"], ans: 0, exp: "«Porque» introduce la causa o el motivo." },
+            { ctx: "Primero desayuno ___ me lavo los dientes.", q: "¿Qué conector encaja?", opts: ["pero", "porque", "y luego"], ans: 2, exp: "«Y luego» ordena acciones en el tiempo." },
+            { ctx: "Me gusta el fútbol ___ el baloncesto.", q: "¿Qué conector encaja?", opts: ["y", "pero", "porque"], ans: 0, exp: "«Y» suma dos cosas." },
+            { ctx: "Llueve, ___ coge el paraguas.", q: "¿Qué conector encaja?", opts: ["aunque", "así que", "ni"], ans: 1, exp: "«Así que» introduce la consecuencia (por eso, coge el paraguas)." },
+            { ctx: "Iré a la fiesta ___ haga frío.", q: "¿Qué conector encaja?", opts: ["porque", "y", "aunque"], ans: 2, exp: "«Aunque» indica que algo no impide lo otro." },
+            { ctx: "Comí mucho ___ tenía hambre.", q: "¿Qué conector encaja?", opts: ["pero", "porque", "aunque"], ans: 1, exp: "«Porque» da el motivo de comer mucho." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Estudió muchísimo; ___, suspendió.", q: "¿Qué conector encaja?", opts: ["por lo tanto", "además", "sin embargo"], ans: 2, exp: "«Sin embargo» marca un contraste fuerte (lo esperable sería aprobar)." },
+            { ctx: "Hizo bien el examen; ___, aprobó.", q: "¿Qué conector encaja?", opts: ["por lo tanto", "sin embargo", "aunque"], ans: 0, exp: "«Por lo tanto» introduce la consecuencia lógica." },
+            { ctx: "A mí me gusta el mar; a ella, ___, la montaña.", q: "¿Qué conector encaja?", opts: ["en cambio", "porque", "así que"], ans: 0, exp: "«En cambio» contrapone dos cosas distintas." },
+            { ctx: "No saldré hoy, ___ tengo mucho trabajo.", q: "¿Qué conector encaja?", opts: ["aunque", "ya que", "pero"], ans: 1, exp: "«Ya que» introduce la causa, parecido a «porque»." },
+            { ctx: "Él cocinaba ___ ella ponía la mesa.", q: "¿Qué conector encaja?", opts: ["mientras", "porque", "sin embargo"], ans: 0, exp: "«Mientras» indica que dos cosas pasan a la vez." },
+            { ctx: "Es muy tarde; ___, deberíamos irnos.", q: "¿Qué conector encaja?", opts: ["sin embargo", "en cambio", "por lo tanto"], ans: 2, exp: "«Por lo tanto» introduce la conclusión o consecuencia." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Conectores",
+            instructions: "Los conectores son palabras que unen ideas (y, pero, porque, así que...). Elige el que tiene sentido en la frase.",
+            adoInstructions: "Elige el conector adecuado según la relación entre las ideas (suma, contraste, causa, consecuencia, tiempo).",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
+
+    // ===== NEW v25.45: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
+    function ComposicionGuiada({ patient }) {
+        const TOPICS = [
+            { t: "Tu animal favorito", plan: ["¿Qué animal es?", "¿Cómo es (color, tamaño)?", "¿Por qué te gusta?"] },
+            { t: "Lo que hiciste el fin de semana", plan: ["¿Qué hiciste o adónde fuiste?", "¿Con quién?", "¿Qué fue lo mejor?"] },
+            { t: "Tu lugar favorito", plan: ["¿Qué lugar es?", "¿Cómo es?", "¿Qué haces allí?"] },
+            { t: "Un día que te lo pasaste muy bien", plan: ["¿Qué pasó?", "¿Con quién estabas?", "¿Cómo te sentiste?"] },
+            { t: "Tu comida favorita", plan: ["¿Cuál es?", "¿A qué sabe?", "¿Cuándo la comes?"] },
+            { t: "Tu mejor amigo o amiga", plan: ["¿Quién es?", "¿Cómo es?", "¿Qué hacéis juntos?"] },
+            { t: "Lo que te gustaría ser de mayor", plan: ["¿Qué te gustaría ser?", "¿Por qué?", "¿Qué harías?"] },
+            { t: "Unas vacaciones soñadas", plan: ["¿Adónde irías?", "¿Con quién?", "¿Qué harías allí?"] },
+        ];
+        const [idx, setIdx] = useState(function () { return randInt(0, TOPICS.length - 1); });
+        const [text, setText] = useState("");
+        const [phase, setPhase] = useState("write");
+        const [loading, setLoading] = useState(false);
+        const [fb, setFb] = useState(null);
+        const topic = TOPICS[idx];
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+
+        const submit = async function () {
+            if (text.trim().length < 8 || loading) return;
+            setLoading(true);
+            const prompt = "Eres un psicólogo infantil que anima a un niño con dislexia a escribir textos. El niño ha escrito esto sobre el tema «" + topic.t + "»:\n\n«" + text + "»\n\nDa un feedback MUY breve, cálido y apropiado para un menor, centrado SOLO en las IDEAS y en cómo las organiza. NUNCA comentes la ortografía, las faltas, la puntuación ni la gramática: el niño tiene dislexia y corregirle eso aquí le desanima. Interpreta lo que quiso decir aunque haya errores. Responde SOLO con un JSON con estas claves: {\"logro\": \"una frase concreta sobre algo que ha hecho bien con sus ideas\", \"idea\": \"una sugerencia sencilla para enriquecer u ordenar mejor las ideas, nunca sobre ortografía\", \"reto\": \"un reto pequeño y motivador para la próxima vez\"}.";
+            let res = null;
+            try { res = await callClaude(prompt); } catch (e) { }
+            setLoading(false);
+            if (res && res.__noKey) {
+                setFb({ noKey: true, logro: "¡Has escrito tu texto! Lo más valiente es atreverse a empezar.", idea: "Prueba a añadir un detalle: un color, un sonido o cómo te sentías.", reto: "La próxima vez, intenta escribir una frase más." });
+            } else if (res && (res.logro || res.idea || res.reto)) {
+                setFb(res);
+            } else {
+                setFb({ logro: "¡Has escrito tu texto, buen trabajo!", idea: "Añade un detalle más para que se entienda todavía mejor.", reto: "Intenta escribir una frase más la próxima vez." });
+            }
+            setPhase("feedback");
+            try { sfx.success(); } catch (e) { }
+            if (_activePatientId) { try { addStar(_activePatientId, _activeAreaId, true); } catch (e) { } logCurrentResult(true); }
+        };
+        const again = function () { setText(""); setFb(null); setPhase("write"); };
+        const other = function () { setIdx(randInt(0, TOPICS.length - 1)); setText(""); setFb(null); setPhase("write"); };
+
+        const fbBox = function (color, bg, titulo, txt) {
+            return React.createElement("div", { style: { background: bg, borderRadius: 12, padding: 12, marginBottom: 10, borderLeft: "4px solid " + color } },
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: color, marginBottom: 4 } }, titulo),
+                React.createElement("div", { style: { fontSize: 14, color: C.text } }, txt));
+        };
+
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Composición Guiada"),
+            React.createElement(Instructions, { adoChildren: "Estrategia de composición (SRSD): planificar ideas, escribir y revisar. El feedback se centra en las ideas y NO penaliza la ortografía, para liberar recursos hacia el contenido." },
+                "Primero piensa tus ideas, luego escribe unas frases. Te diremos qué has hecho bien y una idea para mejorar."),
+            React.createElement("div", { style: { background: "#FAFAF7", borderRadius: 14, padding: 14, marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 800, marginBottom: 8 } }, "✍️ Escribe sobre: " + topic.t),
+                React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.textL, marginBottom: 4 } }, "Piensa primero:"),
+                React.createElement("ul", { style: { margin: "0 0 0 18px", padding: 0, fontSize: 13, color: C.text } },
+                    topic.plan.map(function (q, i) { return React.createElement("li", { key: i, style: { marginBottom: 2 } }, q); }))),
+            phase === "write" ? React.createElement("div", null,
+                React.createElement("textarea", {
+                    value: text, onChange: function (e) { setText(e.target.value); },
+                    placeholder: "Escribe aquí tus frases... No te preocupes por las faltas, ¡lo importante son tus ideas!",
+                    rows: 5, style: { width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, border: "1px solid #d8d8d0", fontSize: 15, fontFamily: "inherit", lineHeight: 1.5, resize: "vertical" }
+                }),
+                React.createElement("div", { style: { fontSize: 12, color: C.textL, margin: "6px 2px 12px" } }, "Antes de enviar: ¿empieza con mayúscula y acaba en punto? · " + words + " palabras"),
+                React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                    React.createElement(Btn, { color: C.primary, small: true, onClick: submit, disabled: text.trim().length < 8, loading: loading }, "Enviar mi texto"),
+                    React.createElement(Btn, { color: C.textL, small: true, outline: true, onClick: other }, "Otro tema"))
+            ) : React.createElement("div", null,
+                React.createElement("div", { style: { background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: 12, marginBottom: 12, fontSize: 14, color: C.text, whiteSpace: "pre-wrap" } }, text),
+                fb && fbBox(C.success, "#eafaf1", "🌟 Lo que has hecho genial", fb.logro),
+                fb && fbBox("#3a5a8a", "#eef3fb", "💡 Una idea para mejorar", fb.idea),
+                fb && fbBox("#b5651d", "#fdf3e7", "🎯 Tu reto para la próxima", fb.reto),
+                fb && fb.noKey ? React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginBottom: 10 } }, "(Para un comentario personalizado, configura tu clave de API en Ajustes.)") : null,
+                React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+                    React.createElement(Btn, { color: C.primary, small: true, onClick: again }, "Escribir otra vez"),
+                    React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: other }, "Otro tema"))
+            )
+        );
+    }
+
+
+    // ===== NEW v25.45: Corrige la Frase (revisión / proofreading) =====
+    function CorrigeFrase({ patient }) {
+        const BANK = [
+            { ctx: "Mi ermano es muy alto.", q: "¿Qué palabra está mal escrita?", opts: ["Mi", "ermano", "alto"], ans: 1, exp: "Se escribe «hermano», con «h» al principio." },
+            { ctx: "El perro mové la cola.", q: "¿Qué palabra está mal escrita?", opts: ["mové", "perro", "cola"], ans: 0, exp: "Se escribe «mueve» (con el diptongo «ue»)." },
+            { ctx: "Bebo un baso de agua.", q: "¿Qué palabra está mal escrita?", opts: ["Bebo", "agua", "baso"], ans: 2, exp: "Se escribe «vaso», con «v»." },
+            { ctx: "Tengo un lapiz nuevo.", q: "¿Qué palabra está mal escrita?", opts: ["lapiz", "Tengo", "nuevo"], ans: 0, exp: "Se escribe «lápiz»: es llana acabada en «z», lleva tilde." },
+            { ctx: "La niña es lista i simpática.", q: "¿Qué palabra está mal escrita?", opts: ["lista", "i", "simpática"], ans: 1, exp: "La conjunción que une se escribe «y», no «i»." },
+            { ctx: "Ai mucha gente en la calle.", q: "¿Qué palabra está mal escrita?", opts: ["gente", "Ai", "calle"], ans: 1, exp: "Se escribe «Hay» (del verbo haber), con «h» e «y»." },
+            { ctx: "Mi gato es muy pekeño.", q: "¿Qué palabra está mal escrita?", opts: ["pekeño", "gato", "muy"], ans: 0, exp: "Se escribe «pequeño», con «qu»." },
+            { ctx: "Boy a jugar al parque.", q: "¿Qué palabra está mal escrita?", opts: ["jugar", "parque", "Boy"], ans: 2, exp: "Se escribe «Voy» (del verbo ir), con «v»." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "Mi madre compro pan ayer.", q: "¿Qué palabra está mal escrita?", opts: ["compro", "madre", "ayer"], ans: 0, exp: "Es pasado: «compró», con tilde. Sin tilde, «compro» es presente." },
+            { ctx: "Los niños están cansadas.", q: "¿Qué palabra está mal escrita?", opts: ["niños", "están", "cansadas"], ans: 2, exp: "«Niños» es masculino: debe concordar → «cansados»." },
+            { ctx: "Ayer fuy al cine con Ana.", q: "¿Qué palabra está mal escrita?", opts: ["Ayer", "fuy", "cine"], ans: 1, exp: "Se escribe «fui» (del verbo ir)." },
+            { ctx: "¿Donde vives tú?", q: "¿Qué palabra está mal escrita?", opts: ["vives", "Donde", "tú"], ans: 1, exp: "En preguntas, «dónde» lleva tilde." },
+            { ctx: "Juan abló con su amigo.", q: "¿Qué palabra está mal escrita?", opts: ["abló", "Juan", "amigo"], ans: 0, exp: "Se escribe «habló»: con «h» y con tilde (aguda acabada en vocal)." },
+            { ctx: "Tengo mas hambre que tú.", q: "¿Qué palabra está mal escrita?", opts: ["Tengo", "hambre", "mas"], ans: 2, exp: "«Más» (cantidad) lleva tilde; «mas» sin tilde significa «pero»." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Corrige la Frase",
+            instructions: "En cada frase hay UNA palabra mal escrita. Encuéntrala. Luego verás cómo se escribe bien.",
+            adoInstructions: "Detecta el error ortográfico o de concordancia en la frase (revisión/proofreading), una habilidad clave para corregir tus propios textos.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase con un error",
+        });
+    }
+
+
+    // ===== NEW v25.45: disortografía — ruta léxica y reglas por la vocal =====
+    function MirarTaparEscribir({ patient }) {
+        const WORDS = ["había", "muy", "también", "porque", "hacer", "vez", "bien", "ahora", "mujer", "jugar", "llave", "abuelo", "vaca", "hueso", "jirafa", "gente", "cielo", "través", "bicicleta", "guitarra"];
+        const [order, setOrder] = useState(function () { return shuffle(WORDS.map(function (_, i) { return i; })); });
+        const [pos, setPos] = useState(0);
+        const [phase, setPhase] = useState("look");
+        const [typed, setTyped] = useState("");
+        const [ok, setOk] = useState(null);
+        const [score, setScore] = useState({ correct: 0, total: 0 });
+        const target = WORDS[order[pos]];
+        const speak = function () { try { const u = new SpeechSynthesisUtterance(target); u.lang = "es-ES"; u.rate = 0.8; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) { } };
+        const toWrite = function () { try { sfx.tap(); } catch (e) { } setTyped(""); setOk(null); setPhase("write"); };
+        const check = function () {
+            if (phase !== "write" || !typed.trim()) return;
+            const correct = typed.trim().toLowerCase() === target.toLowerCase();
+            setOk(correct); setPhase("result");
+            setScore(function (s) { return { correct: s.correct + (correct ? 1 : 0), total: s.total + 1 }; });
+            if (correct) { try { sfx.success(); } catch (e) { } if (_activePatientId) { try { addStar(_activePatientId, _activeAreaId, true); } catch (e) { } logCurrentResult(true); } }
+            else { try { sfx.fail(); } catch (e) { } if (_activePatientId) { try { breakStreak(_activePatientId); } catch (e) { } logCurrentResult(false); } }
+        };
+        const retry = function () { setPhase("look"); setTyped(""); setOk(null); };
+        const next = function () { let np = pos + 1; if (np >= order.length) { setOrder(shuffle(WORDS.map(function (_, i) { return i; }))); np = 0; } setPos(np); setPhase("look"); setTyped(""); setOk(null); };
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Mirar, Tapar y Escribir"),
+            React.createElement(Instructions, { adoChildren: "Método look-cover-write-check: fija la representación ortográfica de la palabra en la memoria visual. Indicado para escritura de palabras de ortografía arbitraria (ruta léxica)." },
+                "1) Mira bien la palabra y fíjate en cada letra. 2) Tápala. 3) Escríbela de memoria. 4) Comprueba."),
+            React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 12 } },
+                React.createElement(Badge, { color: C.success }, score.correct, "/", score.total)),
+            phase === "look" ? React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 6 } }, "Mira bien esta palabra:"),
+                React.createElement("div", { style: { fontSize: 40, fontWeight: 800, letterSpacing: 2, color: C.primary, margin: "8px 0 4px" } }, target),
+                React.createElement("div", { style: { marginBottom: 16 } }, React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: speak }, "🔊 Escuchar")),
+                React.createElement(Btn, { color: C.primary, onClick: toWrite }, "Ya la he mirado · Taparla ▶")
+            ) : phase === "write" ? React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 } }, "🙈 Palabra tapada"),
+                React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 10 } }, "Escríbela de memoria (puedes escucharla):"),
+                React.createElement("div", { style: { marginBottom: 10 } }, React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: speak }, "🔊 Escuchar")),
+                React.createElement("input", { value: typed, onChange: function (e) { setTyped(e.target.value); }, autoFocus: true, placeholder: "Escribe aquí...", style: { fontSize: 22, fontWeight: 700, textAlign: "center", padding: "10px 14px", borderRadius: 12, border: "2px solid " + C.primary, width: "70%", maxWidth: 280, fontFamily: "inherit" } }),
+                React.createElement("div", { style: { marginTop: 14 } }, React.createElement(Btn, { color: C.primary, small: true, onClick: check, disabled: !typed.trim() }, "Comprobar"))
+            ) : React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: ok ? C.success : "#E57373", marginBottom: 8 } }, ok ? "¡Muy bien escrito! 🎉" : "Casi. Fíjate bien:"),
+                !ok && React.createElement("div", { style: { marginBottom: 10 } },
+                    React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Tú escribiste: ", React.createElement("span", { style: { fontWeight: 700, color: "#E57373", textDecoration: "line-through" } }, typed.trim() || "(nada)")),
+                    React.createElement("div", { style: { fontSize: 20, fontWeight: 800, color: C.success, marginTop: 4 } }, "Se escribe: " + target)),
+                ok && React.createElement("div", { style: { fontSize: 28, fontWeight: 800, color: C.success, marginBottom: 10 } }, target),
+                React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 6 } },
+                    !ok && React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: retry }, "Volver a intentarla"),
+                    React.createElement(Btn, { color: C.primary, small: true, onClick: next }, "Otra palabra ▶"))
+            )
+        );
+    }
+
+    function ReglasVocal({ patient }) {
+        const BANK = [
+            { ctx: "Bebo un trozo de ___.", q: "¿Cómo se escribe?", opts: ["ceso", "queso", "keso"], ans: 1, exp: "El sonido /k/ ante «e» o «i» se escribe «qu»: queso." },
+            { ctx: "Duermo en mi ___.", q: "¿Cómo se escribe?", opts: ["cama", "qama", "kama"], ans: 0, exp: "El sonido /k/ ante «a», «o», «u» se escribe «c»: cama." },
+            { ctx: "Hubo una gran ___ en la peli.", q: "¿Cómo se escribe?", opts: ["gerra", "güerra", "guerra"], ans: 2, exp: "El sonido fuerte /g/ ante «e» o «i» se escribe «gu»: guerra." },
+            { ctx: "El ___ maúlla.", q: "¿Cómo se escribe?", opts: ["guato", "jato", "gato"], ans: 2, exp: "El sonido /g/ ante «a», «o», «u» se escribe «g»: gato." },
+            { ctx: "En el ___ brillan las estrellas.", q: "¿Cómo se escribe?", opts: ["zielo", "cielo", "sielo"], ans: 1, exp: "El sonido /z/ ante «e» o «i» se escribe «c»: cielo." },
+            { ctx: "Me pongo el ___ en el pie.", q: "¿Cómo se escribe?", opts: ["zapato", "capato", "sapato"], ans: 0, exp: "El sonido /z/ ante «a», «o», «u» se escribe «z»: zapato." },
+            { ctx: "Ven ___, por favor.", q: "¿Cómo se escribe? (aquí)", opts: ["aci", "aquí", "akí"], ans: 1, exp: "El sonido /k/ ante «i» se escribe «qu»: aquí." },
+            { ctx: "El ___ es un ave grande.", q: "¿Cómo se escribe? (águila)", opts: ["águila", "ágila", "ájila"], ans: 0, exp: "El sonido /g/ ante «i» se escribe «gui»: águila." }
+        ];
+        const BANK_DIFICIL = [
+            { ctx: "En el zoo vimos una ___.", q: "¿Cómo se escribe?", opts: ["girafa", "jirafa", "guirafa"], ans: 1, exp: "Aquí el sonido /j/ ante «i» va con «j»: jirafa. La «g» y la «j» ante e/i se aprenden palabra a palabra." },
+            { ctx: "Había mucha ___ en la plaza.", q: "¿Cómo se escribe?", opts: ["gente", "jente", "guente"], ans: 0, exp: "«Gente» va con «g». Cuándo es «g» o «j» ante e/i hay que memorizarlo." },
+            { ctx: "En el hielo vive el ___.", q: "¿Cómo se escribe?", opts: ["pinguino", "pingüino", "pinquino"], ans: 1, exp: "Para que la «u» suene tras «g» ante «i», se pone diéresis: pingüino." },
+            { ctx: "La ___ tiene el pico largo.", q: "¿Cómo se escribe?", opts: ["cigueña", "ciguueña", "cigüeña"], ans: 2, exp: "«Cigüeña» lleva diéresis: la «u» se pronuncia." },
+            { ctx: "Giramos en la ___ de la calle.", q: "¿Cómo se escribe? (esquina)", opts: ["escina", "esquina", "eskina"], ans: 1, exp: "El sonido /k/ ante «i» se escribe «qu»: esquina." },
+            { ctx: "Hoy toca el ___ de mates.", q: "¿Cómo se escribe? (ejercicio)", opts: ["egercicio", "ejerzicio", "ejercicio"], ans: 2, exp: "«Ejercicio»: /j/ ante «e» con «j» aquí, y /z/ ante «i» con «c»." }
+        ];
+        return React.createElement(SocialQuiz, {
+            patient, title: "Reglas por la Vocal",
+            instructions: "Algunas letras cambian según la vocal que va detrás: c/qu, c/z, g/gu. Elige cómo se escribe.",
+            adoInstructions: "Aplica las reglas grafofonológicas condicionadas por la vocal (c/qu, c/z, g/gu) y, en nivel difícil, casos de g/j y diéresis.",
+            bankByDiff: { normal: BANK, "difícil": BANK_DIFICIL },
+            ctxLabel: "Frase",
+        });
+    }
+
 
 const AREA_ACTIVITIES = {
     atencion: [
@@ -34870,6 +35518,11 @@ const AREA_ACTIVITIES = {
         { id: "prediccion_social", label: "Predicción Social", desc: "¿Qué pasa después? Inferencia social", comp: PrediccionSocial },
         { id: "empatia_dual", label: "Sentir vs Pensar", desc: "Empatía afectiva y cognitiva (separadas)", comp: EmpatiaTask },
         { id: "peabody", label: "Palabra e Imagen", desc: "Vocabulario receptivo (estilo Peabody)", comp: PeabodyTest },
+        { id: "reglas_no_escritas", label: "Reglas No Escritas", desc: "El currículo oculto: reglas sociales que nadie explica", comp: ReglasNoEscritas },
+        { id: "idea_principal", label: "La Idea Principal", desc: "Captar de qué trata, más allá de los detalles", comp: IdeaPrincipal },
+        { id: "plan_b", label: "Plan B", desc: "Flexibilidad cuando los planes cambian", comp: PlanB },
+        { id: "manejar_burlas", label: "Manejar Burlas", desc: "Responder a las burlas sin que te afecte (PEERS)", comp: ManejarBurlas },
+        { id: "hacer_planes", label: "Hacer Planes", desc: "Quedar con amigos: proponer, acordar y confirmar (PEERS)", comp: HacerPlanes },
     ],
     lectoescritura: [
         { id: "forma", label: "Forma Palabras", desc: "Une sílabas", comp: FormaPalabras, hasAI: true },
@@ -34881,6 +35534,11 @@ const AREA_ACTIVITIES = {
         { id: "dictado", label: "Dictado Adaptativo", desc: "Dictado con análisis de errores", comp: DictadoAdaptativo, hasAI: true, complex: true },
         { id: "construye", label: "Construye Oraciones", desc: "Ordena las palabras", comp: ConstruyeOraciones, hasAI: true, complex: true },
         { id: "sintactico", label: "Análisis Sintáctico", desc: "Clasifica palabras (sustantivo, verbo...)", comp: AnalisisSintactico, hasAI: true, complex: true },
+        { id: "puntuacion", label: "Puntuación y Mayúsculas", desc: "Punto, coma, signos y mayúsculas en la frase", comp: PuntuacionMayusculas },
+        { id: "concordancia", label: "Concordancia", desc: "Género y número: «la casa blanca», «los niños altos»", comp: Concordancia },
+        { id: "conectores", label: "Conectores", desc: "Unir ideas: y, pero, porque, así que...", comp: Conectores },
+        { id: "composicion_guiada", label: "Composición Guiada", desc: "Planifica, escribe un texto y recibe ánimo sobre tus ideas (SRSD)", comp: ComposicionGuiada, hasAI: true, complex: true },
+        { id: "corrige_frase", label: "Corrige la Frase", desc: "Encuentra y arregla el error de la frase (revisar)", comp: CorrigeFrase },
     ],
     dislexia: [
         { id: "letras_espejo", label: "Letras Espejo", desc: "Discrimina letras que se confunden (b/d/p/q)", comp: LetrasEspejo },
@@ -34897,6 +35555,15 @@ const AREA_ACTIVITIES = {
         { id: "sinonimos", label: "Sinónimos y Antónimos", desc: "Vocabulario y conciencia semántica", comp: SinonimosAntonimos },
         { id: "comprension_lectora", label: "Comprensión Lectora", desc: "Textos cortos con preguntas literales, inferenciales y de idea principal", comp: ComprensionLectora, hasAI: true, complex: true },
         { id: "pseudopalabras", label: "Pseudopalabras", desc: "Lectura cronometrada de palabras inventadas (ruta fonológica)", comp: Pseudopalabras },
+        { id: "ortografia_reglas", label: "Reglas de Ortografía", desc: "Aplica reglas: m/p, b/v, g/j, h muda, qu, ll, rr", comp: ReglasOrtografia },
+        { id: "tildes", label: "Acentuación", desc: "¿Lleva tilde? Agudas, llanas y esdrújulas", comp: Tildes },
+        { id: "homofonos", label: "Homófonos", desc: "Suenan igual, se escriben distinto (haya/halla, tubo/tuvo)", comp: Homofonos },
+        { id: "ordena_letras", label: "Ordena las Letras", desc: "Construye la palabra con sus letras (producción escrita)", comp: OrdenaLetras },
+        { id: "silabas_trabadas", label: "Sílabas Trabadas", desc: "Grupos consonánticos: bl, br, tr, pl, gr...", comp: SilabasTrabadas },
+        { id: "separa_palabras", label: "Separa las Palabras", desc: "Encuentra dónde empieza y acaba cada palabra", comp: SeparaPalabras },
+        { id: "silaba_tonica", label: "Sílaba Tónica", desc: "¿Qué sílaba suena más fuerte? (base de la acentuación)", comp: SilabaTonica },
+        { id: "mirar_tapar_escribir", label: "Mirar, Tapar y Escribir", desc: "Memoriza cómo se escribe la palabra y escríbela de memoria", comp: MirarTaparEscribir },
+        { id: "reglas_vocal", label: "Reglas por la Vocal", desc: "c/qu, c/z, g/gu según la vocal que va detrás", comp: ReglasVocal },
     ],
     instrumentales: [
         { id: "trazos", label: "Trazos Básicos", desc: "Sigue líneas, ondas, zigzag y espirales", comp: Trazos },
@@ -35097,6 +35764,25 @@ const ACTIVITY_AGE = {
 // and a brief description for parent-facing reports.
 // ═══════════════════════════════════════════════════════════════
 const ACTIVITY_EVIDENCE = {
+    mirar_tapar_escribir: { ref: "Look-Cover-Write-Check; ruta léxica/ortográfica", parents: "Mirar la palabra, taparla, escribirla de memoria y comprobarla es un método con evidencia para fijar la ortografía de palabras de escritura arbitraria (b/v, h, g/j...), apoyándose en la memoria visual de la palabra. Útil en disortografía con lectura conservada." },
+    reglas_vocal: { ref: "Reglas grafofonológicas condicionadas por la vocal", parents: "Las reglas c/qu, c/z y g/gu dependen de la vocal siguiente y son una fuente frecuente de errores al escribir; enseñarlas de forma explícita mejora la ortografía." },
+    corrige_frase: { ref: "Detección de errores (proofreading); monitorización ortográfica", parents: "Encontrar el error en una frase entrena la revisión y refuerza la representación ortográfica; cierra el ciclo planificar–escribir–revisar de la composición." },
+    composicion_guiada: { ref: "SRSD (Graham y Harris); composición escrita", parents: "El desarrollo de estrategias autorreguladas (planificar, escribir y revisar) es el enfoque con más evidencia para mejorar la composición en dislexia/DEA. El feedback se centra en las ideas y no penaliza la ortografía, para liberar recursos hacia el contenido." },
+    puntuacion: { ref: "Convenciones de escritura (puntuación y mayúsculas)", parents: "El uso de mayúsculas y signos de puntuación es una dificultad frecuente en la escritura; practicar con frases modelo mejora la corrección del texto." },
+    concordancia: { ref: "Morfosintaxis: concordancia de género y número", parents: "La concordancia entre artículo, sustantivo y adjetivo estructura la frase; en la dislexia conviene practicarla de forma explícita, sobre todo en los casos irregulares." },
+    conectores: { ref: "Cohesión textual: conectores", parents: "Los conectores enlazan ideas y dan cohesión al texto; elegir el adecuado (causa, contraste, consecuencia, tiempo) es clave para componer y mejora con práctica explícita." },
+    manejar_burlas: { ref: "PEERS (Laugeson y Frankel); manejo de burlas", parents: "El programa PEERS enseña respuestas breves que restan importancia a la burla (no mostrar que afecta) y a distinguir la burla puntual del acoso, que requiere avisar a un adulto." },
+    hacer_planes: { ref: "PEERS (Laugeson y Frankel); quedar con amigos", parents: "PEERS entrena a organizar quedadas (qué, cuándo, dónde), proponer y confirmar planes, elegir actividades compartidas y ser buen anfitrión." },
+    silabas_trabadas: { ref: "Grupos consonánticos (sílabas trabadas); ruta fonológica", parents: "Las sílabas trabadas (bl, br, tr, pl...) son un punto de dificultad frecuente en la dislexia en español: se tiende a omitir o cambiar la consonante líquida. Practicarlas mejora la decodificación y la escritura." },
+    separa_palabras: { ref: "Segmentación léxica (límites de palabra)", parents: "Identificar dónde empieza y acaba cada palabra es una dificultad habitual en la escritura en la dislexia. Entrenar la segmentación léxica reduce las uniones y separaciones indebidas." },
+    silaba_tonica: { ref: "Conciencia prosódica; sílaba tónica", parents: "Reconocer la sílaba tónica es base de la conciencia fonológica y prerrequisito para aplicar las reglas de acentuación; suele estar poco desarrollada en la dislexia." },
+    ordena_letras: { ref: "Producción ortográfica (codificación/spelling)", parents: "Construir la palabra letra a letra (no solo reconocerla) entrena la codificación ortográfica y la secuencia de grafemas, una habilidad clave para escribir sin errores." },
+    reglas_no_escritas: { ref: "Myles, Trautman y Schelvan (2004); currículo oculto", parents: "Las reglas sociales implícitas (que nadie enseña de forma explícita) suelen ser difíciles en el TEA; enseñarlas de forma directa mejora la adaptación social." },
+    idea_principal: { ref: "Frith (1989); Happé y Frith (2006), coherencia central", parents: "En el TEA es frecuente el procesamiento centrado en el detalle por encima del conjunto. Entrenar la extracción de la idea principal favorece la integración de la información." },
+    plan_b: { ref: "Hill (2004); flexibilidad cognitiva / función ejecutiva", parents: "La rigidez ante los cambios y la dificultad para generar alternativas son frecuentes en el TEA. Practicar planes alternativos entrena la flexibilidad cognitiva." },
+    ortografia_reglas: { ref: "Instrucción ortográfica explícita (ruta léxica)", parents: "En ortografías como el español la escritura tiene correspondencias ambiguas (m/p, b/v, g/j, h muda...). La enseñanza explícita de reglas y la práctica fortalecen la representación ortográfica." },
+    tildes: { ref: "Reglas de acentuación; conciencia ortográfica", parents: "La acentuación es una dificultad ortográfica frecuente en la dislexia; trabajar agudas, llanas y esdrújulas de forma explícita mejora la escritura." },
+    homofonos: { ref: "Modelo de doble ruta (Coltheart et al., 2001); ruta léxica", parents: "Los homófonos (haya/halla, tubo/tuvo) suenan igual pero se escriben distinto: exigen acceder a la representación ortográfica de cada palabra, no solo a la fonología." },
     // ── Autoestima ──
     gratitud: { ref: "Tres cosas buenas (Seligman et al., 2005)", parents: "Anotar cada día lo positivo y su causa aumenta el bienestar de forma sostenida." },
     vasos: { ref: "Seguimiento de objetos y memoria de trabajo visuoespacial", parents: "Seguir un objeto que cambia de posición entrena la atención sostenida y la memoria de trabajo visuoespacial." },
@@ -35282,6 +35968,128 @@ function AdivinanzasIA({ patient }) {
 }
 
 const PRINTABLE_GENERATORS = {
+    analisis_errores: (opts = {}) => {
+        const errRows = Array.from({ length: 12 }).map((_, i) => `<tr><td style="border:1pt solid #bbb;padding:6pt;width:6%;text-align:center;color:#aaa;">${i + 1}</td><td style="border:1pt solid #bbb;padding:6pt;width:26%;"></td><td style="border:1pt solid #bbb;padding:6pt;width:26%;"></td><td style="border:1pt solid #bbb;padding:6pt;width:14%;text-align:center;color:#bbb;font-size:9.5pt;">A · R · F</td><td style="border:1pt solid #bbb;padding:6pt;width:28%;"></td></tr>`).join("");
+        const body = `<div style="font-size:10.5pt;color:#555;margin-bottom:10pt;">Niño/a: ________________________  ·  Fecha: ____________  ·  Muestra: ☐ dictado &nbsp; ☐ texto espontáneo &nbsp; ☐ copia</div>
+<div style="background:#f7f6f2;border:1pt solid #ddd;border-radius:4pt;padding:9pt;font-size:10pt;color:#555;margin-bottom:12pt;line-height:1.6;"><strong>Tipos de error:</strong> &nbsp; <strong>A</strong> = arbitraria/léxica (b/v, h, g/j, ll/y: no se deduce del sonido, requiere memoria visual) &nbsp;·&nbsp; <strong>R</strong> = reglada (c/qu, c/z, g/gu, m antes de p/b, mayúsculas, tildes) &nbsp;·&nbsp; <strong>F</strong> = fonológica (omite, cambia o invierte letras; sílabas trabadas o inversas)</div>
+<table style="width:100%;border-collapse:collapse;"><tr style="background:#f0f0ea;"><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">#</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Palabra (como la escribió)</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Forma correcta</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Tipo (A/R/F)</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Regla u observación</th></tr>${errRows}</table>
+<div style="margin-top:14pt;display:flex;gap:20pt;flex-wrap:wrap;font-size:11.5pt;"><div>Total A: <strong>____</strong></div><div>Total R: <strong>____</strong></div><div>Total F: <strong>____</strong></div><div>→ Tipo dominante: <strong>______________</strong></div></div>
+<div style="margin-top:16pt;font-weight:700;margin-bottom:5pt;">Objetivos a partir del análisis</div>
+<div style="font-size:11pt;margin-bottom:5pt;">Palabras-trampa para esta semana (6–8, prioriza las de uso frecuente):</div>
+<div style="border-bottom:1pt solid #999;height:18pt;"></div><div style="border-bottom:1pt solid #999;height:18pt;"></div>
+<div style="font-size:11pt;margin:10pt 0 5pt;">Reglas a enseñar de forma explícita esta(s) semana(s):</div>
+<div style="border-bottom:1pt solid #999;height:18pt;"></div>`;
+        return { title: "Análisis de errores de escritura", instructionsKid: "", body, instructionsTeacher: "Plantilla para orientar la intervención a partir de los errores reales del niño. Recoge una muestra (dictado y texto espontáneo), anota cada palabra fallada con su forma correcta y clasifícala en A (arbitraria), R (reglada) o F (fonológica). El tipo dominante marca la prioridad: para errores ARBITRARIOS, trabaja la ruta léxica con mirar-tapar-escribir usando sus propias palabras, empezando por las de alta frecuencia; para errores REGLADOS, enseñanza explícita de la regla más autocomprobación; los FONOLÓGICOS son menos esperables si la lectura está conservada. Convierte el análisis en 6–8 palabras-objetivo y 1–2 reglas por semana, con práctica distribuida (poco y a menudo) y repaso acumulativo. Prioriza la autocorrección sobre la copia, separa el redactar del corregir la ortografía para no sobrecargarle, y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey: null };
+    },
+
+    plan_semanal_orto: (opts = {}) => {
+        const level = opts.level || 1;
+        const nWords = level === 1 ? 6 : 8;
+        const wordRows = Array.from({ length: nWords }).map((_, i) => `<tr><td style="border:1pt solid #bbb;padding:7pt;width:8%;text-align:center;">${i + 1}</td><td style="border:1pt solid #bbb;padding:7pt;width:25%;"></td><td style="border:1pt solid #bbb;padding:7pt;width:23%;"></td><td style="border:1pt solid #bbb;padding:7pt;width:23%;"></td><td style="border:1pt solid #bbb;padding:7pt;width:21%;text-align:center;color:#bbb;font-size:11pt;">☐ ☐</td></tr>`).join("");
+        const days = [
+            ["Lunes", "Mira, tapa y escribe cada palabra 2 veces (tabla de arriba)."],
+            ["Martes", "Copia las palabras con buena letra y dilas en voz alta."],
+            ["Miércoles", "Que un adulto te las dicte. Marca cuáles fallaste."],
+            ["Jueves", "Escribe una frase con 3 de las palabras."],
+            ["Viernes", "Repaso: escríbelas todas de memoria y comprueba."],
+        ];
+        const dayRows = days.map(d => `<tr><td style="border:1pt solid #bbb;padding:7pt;font-weight:700;width:18%;">${d[0]}</td><td style="border:1pt solid #bbb;padding:7pt;width:50%;font-size:11pt;">${d[1]}</td><td style="border:1pt solid #bbb;padding:7pt;width:13%;text-align:center;color:#bbb;">☐</td><td style="border:1pt solid #bbb;padding:7pt;width:19%;text-align:center;color:#bbb;font-size:12pt;">🙂 😐 🙁</td></tr>`).join("");
+        const body = `<div style="font-weight:700;margin-bottom:5pt;">Palabras de esta semana <span style="font-weight:400;font-size:9.5pt;color:#777;">(las escribe el psicólogo/a; mejor las que el niño suele fallar)</span></div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:16pt;"><tr style="background:#f0f0ea;"><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">#</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Palabra (mírala bien)</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Tápala y escríbela</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Otra vez</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">¿Bien? (Lun/Vie)</th></tr>${wordRows}</table>
+<div style="font-weight:700;margin-bottom:5pt;">Plan de la semana — un ratito corto cada día</div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:16pt;"><tr style="background:#f0f0ea;"><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Día</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Qué hacer</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">Hecho</th><th style="border:1pt solid #bbb;padding:5pt;font-size:9pt;">¿Cómo fue?</th></tr>${dayRows}</table>
+<div style="border:1pt solid #bbb;border-radius:4pt;padding:11pt;">
+<div style="font-weight:700;margin-bottom:6pt;">Para la familia (observa y anota)</div>
+<div style="font-size:11.5pt;margin-bottom:8pt;">El viernes, ¿cuántas palabras escribió bien de memoria? &nbsp; <strong>______ de ${nWords}</strong></div>
+<div style="font-size:11.5pt;">¿Qué le costó más? ¿Qué ha mejorado?</div>
+<div style="border-bottom:1pt solid #999;height:18pt;margin-top:6pt;"></div>
+<div style="border-bottom:1pt solid #999;height:18pt;"></div></div>`;
+        return { title: "Plan semanal de ortografía (para casa)", instructionsKid: "Trabaja un ratito corto cada día con las palabras de la semana. ¡Poco y a menudo es lo que mejor funciona!", body, instructionsTeacher: "Plan de práctica DISTRIBUIDA para casa. El adulto escribe arriba las palabras objetivo (idealmente las que el niño falla en sus textos). Cada día una tarea breve: mirar-tapar-escribir, copia, dictado, uso en frase y repaso. La familia marca lo hecho y observa cuántas se consolidan el viernes. Base: práctica espaciada, repaso acumulativo y método look-cover-write-check. Cómo ayudar a mejorar: parte del análisis de errores y usa sus propias palabras-trampa; práctica distribuida (poco y a menudo) con repaso acumulativo; prioriza la autocorrección sobre la copia; separa el redactar del corregir la ortografía para no sobrecargarle; y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey: null };
+    },
+    registro_progreso_orto: (opts = {}) => {
+        const weeks = 8;
+        const rows = Array.from({ length: weeks }).map((_, i) => `<tr><td style="border:1pt solid #bbb;padding:9pt;text-align:center;font-weight:700;width:10%;">${i + 1}</td><td style="border:1pt solid #bbb;padding:9pt;width:18%;"></td><td style="border:1pt solid #bbb;padding:9pt;width:30%;"></td><td style="border:1pt solid #bbb;padding:9pt;width:17%;text-align:center;color:#bbb;font-size:10pt;">__ de __</td><td style="border:1pt solid #bbb;padding:9pt;width:25%;"></td></tr>`).join("");
+        const body = `<div style="font-size:11.5pt;color:#555;margin-bottom:12pt;line-height:1.5;">Cada semana, anota la fecha, las palabras trabajadas, cuántas escribió <strong>bien de memoria</strong> y cualquier observación. Así veréis cómo va mejorando.</div>
+<table style="width:100%;border-collapse:collapse;"><tr style="background:#f0f0ea;"><th style="border:1pt solid #bbb;padding:6pt;font-size:9pt;">Semana</th><th style="border:1pt solid #bbb;padding:6pt;font-size:9pt;">Fecha</th><th style="border:1pt solid #bbb;padding:6pt;font-size:9pt;">Palabras trabajadas</th><th style="border:1pt solid #bbb;padding:6pt;font-size:9pt;">Bien de memoria</th><th style="border:1pt solid #bbb;padding:6pt;font-size:9pt;">Observaciones</th></tr>${rows}</table>
+<div style="margin-top:14pt;font-size:11pt;color:#555;">Consejo: celebrad los avances, aunque sean pequeños. La constancia (poco y a menudo) es lo que más ayuda.</div>`;
+        return { title: "Registro de progreso en ortografía (para la familia)", instructionsKid: "Aquí anotamos cómo va mejorando tu ortografía, semana a semana.", body, instructionsTeacher: "Hoja de seguimiento para la familia a lo largo de las semanas. Permite observar la evolución (palabras consolidadas), reforzar la implicación familiar y dar feedback. Útil para revisar en consulta el progreso.", answerKey: null };
+    },
+
+    mirar_tapar_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const POOL = {
+            1: ["vaca", "hueso", "gente", "llave", "cielo", "jugar", "queso", "mujer", "bien", "vez"],
+            2: ["había", "porque", "también", "ahora", "jirafa", "guitarra", "abuelo", "través", "bicicleta", "mañana"],
+            3: ["extraordinario", "murciélago", "almohada", "instrumento", "estructura", "pingüino", "exhausto", "trayectoria", "bibliotecario", "vergüenza"],
+        };
+        const words = pick(POOL[level] || POOL[1], level === 1 ? 8 : 10);
+        const rows = words.map(w => `<tr><td style="border:1pt solid #bbb;padding:8pt;font-size:15pt;font-weight:600;width:25%;">${w}</td><td style="border:1pt solid #bbb;padding:8pt;width:30%;"></td><td style="border:1pt solid #bbb;padding:8pt;width:30%;"></td><td style="border:1pt solid #bbb;padding:8pt;width:15%;text-align:center;color:#bbb;font-size:11pt;">☐</td></tr>`).join("");
+        const body = `<table style="width:100%;border-collapse:collapse;"><tr style="background:#f0f0ea;"><th style="border:1pt solid #bbb;padding:6pt;font-size:10pt;">1. Mira la palabra</th><th style="border:1pt solid #bbb;padding:6pt;font-size:10pt;">2. Tápala y escríbela</th><th style="border:1pt solid #bbb;padding:6pt;font-size:10pt;">3. Otra vez</th><th style="border:1pt solid #bbb;padding:6pt;font-size:10pt;">4. ¿Bien?</th></tr>${rows}</table>`;
+        return { title: "Mirar, tapar y escribir", instructionsKid: "Mira bien la palabra de la izquierda. Tápala con la mano y escríbela en las dos casillas. Luego destápala y comprueba si está igual.", body, instructionsTeacher: "Método mirar-tapar-escribir-comprobar (look-cover-write-check) para fijar la ortografía por la ruta léxica (memoria visual de la palabra). Indicado en disortografía con lectura conservada. El niño debe tapar el modelo antes de escribir. Cómo ayudar a mejorar: parte del análisis de errores y usa sus propias palabras-trampa; práctica distribuida (poco y a menudo) con repaso acumulativo; prioriza la autocorrección sobre la copia; separa el redactar del corregir la ortografía para no sobrecargarle; y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey: null };
+    },
+
+    composicion_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const TEMAS = ["Tu animal favorito", "Lo que hiciste el fin de semana", "Tu lugar favorito", "Tu mejor amigo o amiga", "Tu comida favorita", "Unas vacaciones soñadas", "Un día que te lo pasaste muy bien"];
+        const tema = pick(TEMAS, 1)[0];
+        const cols = ["¿De qué o de quién?", "¿Cómo es?", "¿Por qué te gusta / qué pasó?"];
+        const lines = level === 1 ? 6 : level === 2 ? 8 : 11;
+        const body = `<div style="font-size:13pt;margin-bottom:12pt;"><strong>Tema:</strong> ${tema}</div>
+<div style="font-weight:700;margin-bottom:6pt;">1) Piensa tus ideas (escribe palabras sueltas):</div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:16pt;"><tr>${cols.map(q => `<td style="border:1pt solid #bbb;padding:8pt;vertical-align:top;width:33%;font-size:10pt;color:#555;">${q}<div style="height:48pt;"></div></td>`).join("")}</tr></table>
+<div style="font-weight:700;margin-bottom:8pt;">2) Ahora escribe tu texto (no te preocupes por las faltas, lo importante son tus ideas):</div>
+${Array.from({ length: lines }).map(() => `<div style="border-bottom:1pt solid #999;height:22pt;"></div>`).join("")}
+<div style="margin-top:14pt;font-weight:700;">3) Revisa: ¿Empieza con mayúscula? ¿Acaba en punto? ¿Se entiende lo que quieres decir?</div>`;
+        return { title: "Plantilla de redacción", instructionsKid: "Primero piensa tus ideas en los recuadros. Luego escribe tu texto en las líneas. Al final, revísalo con la lista de abajo.", body, instructionsTeacher: "Plantilla de composición (estrategia SRSD: planificar → escribir → revisar). Centra el feedback en las ideas y la organización, no en la ortografía. Puedes cambiar el tema por uno cercano al niño. Cómo ayudar a mejorar: parte del análisis de errores y usa sus propias palabras-trampa; práctica distribuida (poco y a menudo) con repaso acumulativo; prioriza la autocorrección sobre la copia; separa el redactar del corregir la ortografía para no sobrecargarle; y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey: null };
+    },
+    caligrafia_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const POOL = {
+            1: ["casa", "mesa", "sol", "pato", "luna", "oso", "dedo", "gato", "pera", "nube"],
+            2: ["jirafa", "queso", "huevo", "botella", "guitarra", "mariposa", "plátano", "caballo", "llave", "zapato"],
+            3: ["transporte", "instrumento", "estructura", "biblioteca", "almohada", "murciélago", "extraordinario", "hierba", "pingüino", "acción"],
+        };
+        const words = pick(POOL[level] || POOL[1], level === 1 ? 6 : 7);
+        const body = words.map(w => `<div style="margin-bottom:14pt;"><span style="display:inline-block;width:130pt;font-size:17pt;color:#333;">${w}</span><span style="display:inline-block;border-bottom:1pt dotted #aaa;width:55%;height:20pt;"></span></div>`).join("");
+        return { title: "Copia y caligrafía", instructionsKid: "Copia cada palabra al lado, con tu mejor letra. Fíjate bien en todas las letras.", body, instructionsTeacher: "Práctica de copia y caligrafía (transcripción). Observa la formación de las letras, el tamaño y el espaciado. No hay corrección automática: revísalo tú con el niño.", answerKey: null };
+    },
+    ortografia_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const SETS = {
+            1: [["_ueso", "lo tiene el pollo", "hueso"], ["_aca", "da leche", "vaca"], ["_irafa", "cuello largo", "jirafa"], ["_arco", "navega en el mar", "barco"], ["_ente", "muchas personas", "gente"], ["_ilo", "para coser", "hilo"]],
+            2: [["que_o", "se hace con leche", "queso"], ["ca_e", "por donde andas", "calle"], ["pe_o", "ladra y mueve la cola", "perro"], ["_apato", "lo llevas en el pie", "zapato"], ["_irasol", "flor que mira al sol", "girasol"], ["a_eja", "hace miel", "abeja"]],
+            3: [["pin_üino", "vive en el frío", "pingüino"], ["a_ión", "lo hace un héroe", "acción"], ["e_amen", "prueba en el cole", "examen"], ["estru_tura", "cómo está hecho algo", "estructura"], ["_ermano", "hijo de tus padres", "hermano"], ["bi_icleta", "tiene dos ruedas", "bicicleta"]],
+        };
+        const items = SETS[level] || SETS[1];
+        const body = items.map((it, i) => `<div style="margin-bottom:12pt;font-size:13pt;">${i + 1}. <strong style="letter-spacing:2pt;">${it[0].replace("_", "__")}</strong> <span style="color:#888;font-size:10pt;">(${it[1]})</span> &nbsp;→&nbsp; <span style="border-bottom:1pt solid #999;display:inline-block;width:130pt;height:16pt;"></span></div>`).join("");
+        const answerKey = `<ol style="font-size:12pt;line-height:1.9;">${items.map(it => `<li>${it[2]}</li>`).join("")}</ol>`;
+        return { title: "Ortografía: la letra que falta", instructionsKid: "A cada palabra le falta una letra. Escribe la palabra completa en la línea. La pista te ayuda.", body, instructionsTeacher: "Completar la grafía que falta aplicando reglas (h, b/v, g/j, ll, c/z, gü, cc, x). Refuerza la representación ortográfica. La clave de respuestas va al final. Cómo ayudar a mejorar: parte del análisis de errores y usa sus propias palabras-trampa; práctica distribuida (poco y a menudo) con repaso acumulativo; prioriza la autocorrección sobre la copia; separa el redactar del corregir la ortografía para no sobrecargarle; y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey };
+    },
+    tildes_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const SETS = {
+            1: [["arbol", "árbol"], ["lapiz", "lápiz"], ["camion", "camión"], ["cafe", "café"], ["sofa", "sofá"], ["musica", "música"], ["pajaro", "pájaro"], ["platano", "plátano"]],
+            2: [["corazon", "corazón"], ["medico", "médico"], ["jamon", "jamón"], ["arbol", "árbol"], ["facil", "fácil"], ["lampara", "lámpara"], ["azucar", "azúcar"], ["telefono", "teléfono"]],
+            3: [["dia", "día"], ["reir", "reír"], ["pais", "país"], ["raiz", "raíz"], ["aun", "aún"], ["asi", "así"], ["tambien", "también"], ["despues", "después"]],
+        };
+        const items = shuffle((SETS[level] || SETS[1]).slice());
+        const body = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10pt 24pt;">${items.map((it, i) => `<div style="font-size:16pt;border-bottom:1pt solid #ddd;padding-bottom:6pt;">${i + 1}. ${it[0]}</div>`).join("")}</div>`;
+        const answerKey = `<div style="font-size:12pt;line-height:1.9;">${items.map((it, i) => `${i + 1}) ${it[1]}`).join("&nbsp;&nbsp;·&nbsp;&nbsp;")}</div>`;
+        return { title: "Pon la tilde", instructionsKid: "Lee cada palabra en voz alta y nota dónde suena más fuerte. Si le falta la tilde, ponla.", body, instructionsTeacher: "Acentuación: marcar la tilde según las reglas (agudas, llanas, esdrújulas, hiatos y diacríticas). Pídele que diga la sílaba tónica antes de decidir.", answerKey };
+    },
+    corrige_print: (opts = {}) => {
+        const level = opts.level || 1;
+        const SETS = {
+            1: [["Mi ermano es muy alto.", "Mi hermano es muy alto."], ["Bebo un baso de agua.", "Bebo un vaso de agua."], ["Boy a jugar al parque.", "Voy a jugar al parque."], ["Mi gato es muy pekeño.", "Mi gato es muy pequeño."], ["La niña es lista i guapa.", "La niña es lista y guapa."], ["Ai mucha gente aquí.", "Hay mucha gente aquí."]],
+            2: [["tengo un lapiz nuevo", "Tengo un lápiz nuevo."], ["¿donde vives tu?", "¿Dónde vives tú?"], ["el perro mové la cola.", "El perro mueve la cola."], ["compre pan leche y huevos.", "Compré pan, leche y huevos."], ["mi madre es muy buena", "Mi madre es muy buena."], ["fuy al cine con ana", "Fui al cine con Ana."]],
+            3: [["los niños están cansadas.", "Los niños están cansados."], ["juan abló con su amigo", "Juan habló con su amigo."], ["tengo mas hambre que tu", "Tengo más hambre que tú."], ["aller no vino nadie", "Ayer no vino nadie."], ["el agua está muy frio", "El agua está muy fría."], ["¿quieres benir conmigo?", "¿Quieres venir conmigo?"]],
+        };
+        const items = SETS[level] || SETS[1];
+        const body = items.map((it, i) => `<div style="margin-bottom:14pt;"><div style="font-size:13pt;">${i + 1}. ${it[0]}</div><div style="border-bottom:1pt solid #999;height:18pt;margin-top:5pt;"></div></div>`).join("");
+        const answerKey = `<ol style="font-size:12pt;line-height:1.9;">${items.map(it => `<li>${it[1]}</li>`).join("")}</ol>`;
+        return { title: "Corrige las frases", instructionsKid: "Cada frase tiene errores. Reescríbela bien en la línea de abajo (mayúsculas, signos y palabras).", body, instructionsTeacher: "Revisión/proofreading a nivel de frase: detectar y corregir errores de ortografía, tildes, concordancia y puntuación. Cierra el ciclo escribir–revisar. Clave al final. Cómo ayudar a mejorar: parte del análisis de errores y usa sus propias palabras-trampa; práctica distribuida (poco y a menudo) con repaso acumulativo; prioriza la autocorrección sobre la copia; separa el redactar del corregir la ortografía para no sobrecargarle; y protege su autoestima valorando el contenido y reduciendo el volumen de copia.", answerKey };
+    },
+
     sonido_inicial_print: (opts = {}) => {
         const level = opts.level || 1;
         const BY = {
@@ -38026,6 +38834,12 @@ const PRINTABLE_CATALOG = [
         { id: "ran_tablero", label: "Nombrado rápido (RAN)" },
         { id: "pseudopalabras_print", label: "Pseudopalabras" },
         { id: "sinonimos_print", label: "Sinónimos y antónimos" },
+        { id: "ortografia_print", label: "Ortografía: la letra que falta" },
+        { id: "tildes_print", label: "Pon la tilde" },
+        { id: "mirar_tapar_print", label: "Mirar, tapar y escribir" },
+        { id: "plan_semanal_orto", label: "Plan semanal de ortografía (casa)" },
+        { id: "registro_progreso_orto", label: "Registro de progreso (familia)" },
+        { id: "analisis_errores", label: "Análisis de errores (terapeuta)" },
     ] },
     { area: "Discalculia", items: [
         { id: "subitizacion_print", label: "Subitización" },
@@ -38080,6 +38894,9 @@ const PRINTABLE_CATALOG = [
         { id: "clasifica_palabras", label: "Clasifica las palabras" },
         { id: "forma_silabas", label: "Forma palabras con sílabas" },
         { id: "dictado_hoja", label: "Hoja de dictado" },
+        { id: "composicion_print", label: "Plantilla de redacción (planificar y escribir)" },
+        { id: "caligrafia_print", label: "Copia y caligrafía" },
+        { id: "corrige_print", label: "Corrige las frases (revisar)" },
         { id: "lectura_cronometrada", label: "Lectura cronometrada" },
     ] },
     { area: "Grafomotricidad", items: [
@@ -38744,8 +39561,8 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
-// ── Compañero / mascota (v25.24) ──
-// ── Compañero / mascota (v25.24) ── diseños + monedas + tienda de accesorios
+// ── Compañero / mascota (v25.45) ──
+// ── Compañero / mascota (v25.45) ── diseños + monedas + tienda de accesorios
 const COMPANION_DESIGNS = [
     { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
     { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
@@ -39246,7 +40063,7 @@ function AventuraView({ patient, onClose, onLaunch }) {
             body));
 }
 function SeguimientoClinico({ patient, onClose }) {
-    const [tab, setTab] = useState("objetivos"); // objetivos | notas
+    const [tab, setTab] = useState("frescura"); // objetivos | notas
     const [objetivos, setObjetivos] = useState(() => storeLoad("objetivos:" + patient.id) || []);
     const [notas, setNotas] = useState(() => storeLoad("notas_sesion:" + patient.id) || []);
     const [newObjetivo, setNewObjetivo] = useState("");
@@ -39294,8 +40111,8 @@ function SeguimientoClinico({ patient, onClose }) {
             React.createElement("div", { style: { fontSize: 12, color: C.textL, marginBottom: 14, lineHeight: 1.5 } },
                 "Objetivos terapéuticos y notas de sesión. Ambos pueden incluirse en el informe."),
             // Tabs
-            React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 16 } },
-                [{ id: "objetivos", label: "🎯 Objetivos", n: objetivos.length }, { id: "notas", label: "📝 Notas de sesión", n: notas.length }, { id: "evolucion", label: "📈 Evolución" }, { id: "frescura", label: "🌿 Frescura" }].map(t =>
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 } },
+                [{ id: "frescura", label: "🌿 Frescura" }, { id: "objetivos", label: "🎯 Objetivos", n: objetivos.length }, { id: "notas", label: "📝 Notas de sesión", n: notas.length }, { id: "evolucion", label: "📈 Evolución" }].map(t =>
                     React.createElement("button", { key: t.id, onClick: () => { sfx.tap(); setTab(t.id); }, style: {
                         flex: 1, padding: "9px 12px", borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: "pointer",
                         background: tab === t.id ? C.primary : "#fff", color: tab === t.id ? "#fff" : C.text,
@@ -39997,7 +40814,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.24</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.45</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -40166,7 +40983,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.24</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.45</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -40626,7 +41443,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.24", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.45", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -41408,7 +42225,7 @@ function TerapiAppInner() {
                                     transition: "all 0.15s",
                                 } },
                                     React.createElement("div", { style: { fontSize: 10, fontWeight: 800, color: areaObj.color, textTransform: "uppercase", marginBottom: 3 } }, areaObj.label),
-                                    React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 3 } }, m.label),
+                                    React.createElement("div", { style: { fontSize: 14, fontWeight: 800, marginBottom: 3 } }, (((function(){try{return (activePatient && storeLoad("frescuraMarks:"+activePatient.id))||{};}catch(e){return {};}})())[m.areaId+":"+m.id] ? React.createElement("span", null, React.createElement("span",{style:{color:"#1d6a45",fontWeight:800}},"✓ "), m.label) : m.label)),
                                     React.createElement("div", { style: { fontSize: 11, color: C.textL, lineHeight: 1.3 } }, m.desc),
                                     React.createElement("div", { style: { display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" } },
                                         getEvidence(m.id) && React.createElement("button", {
@@ -41581,6 +42398,7 @@ function TerapiAppInner() {
                     area === "discalculia" && React.createElement(Btn, { color: "#5BA3B3", small: true, onClick: () => { sfx.tap(); setShowGuiaDiscalculia(true); } }, "📖 Guía para el profesional")),
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } }, (() => {
                     const lastSession = getLastSessionActivities(activePatient && activePatient.id);
+                    const _fmarks = (function(){ try { return (activePatient && storeLoad("frescuraMarks:" + activePatient.id)) || {}; } catch(e){ return {}; } })();
                     return AREA_ACTIVITIES[area].filter(it => {
                         const ado = isAdolescentMode(activePatient);
                         if (it.adolescentOnly && activePatient && !ado) return false;
@@ -41589,6 +42407,7 @@ function TerapiAppInner() {
                     }).map(it => {
                     const dxList = ACTIVITY_DX[it.id] || [];
                     const usedLast = lastSession.ids.has(it.id);
+                    const fmarked = !!_fmarks[area + ":" + it.id];
                     return (React.createElement("div", { key: it.id, onClick: () => nav(area, it.id), style: {
                         background: C.card, borderRadius: 14, padding: 16, cursor: "pointer",
                         boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
@@ -41598,6 +42417,7 @@ function TerapiAppInner() {
                     React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 } },
                         React.createElement("div", { style: { fontSize: 15, fontWeight: 800, flex: 1, paddingRight: 6 } }, it.label),
                         React.createElement("div", { style: { display: "flex", gap: 4, alignItems: "center" } },
+                        fmarked && React.createElement("span", { title: "Marcada en Frescura", style: { fontSize: 12, fontWeight: 800, color: "#1d6a45", background: "#eafaf1", border: "1px solid #cdeede", borderRadius: 8, padding: "1px 6px" } }, "✓"),
                             it.personal && React.createElement(Badge, { color: C.blue }, "\uD83D\uDD12"),
                             getEvidence(it.id) && React.createElement("button", {
                                 onClick: (e) => { e.stopPropagation(); sfx.tap(); setEvidenceShown(it.id); },
@@ -41669,7 +42489,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.24"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.45"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
