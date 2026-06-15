@@ -17347,6 +17347,73 @@ const storeLoad = (k) => {
         return null;
     }
 };
+// ── Export / Import completo de un paciente (respaldo anti-pérdida) ──
+const PATIENT_EXPORT_VERSION = 2;
+function collectPatientKeys(pid) {
+    // Todas las claves de localStorage que pertenecen a este paciente (sufijo ":pid")
+    const out = {};
+    try {
+        const full = STORAGE_PREFIX; // "terapiapp:"
+        for (let i = 0; i < localStorage.length; i++) {
+            const rawKey = localStorage.key(i);
+            if (!rawKey || rawKey.indexOf(full) !== 0) continue;
+            const key = rawKey.slice(full.length); // sin prefijo
+            if (key === "patients" || key === "apiKey") continue; // globales, no por-paciente
+            if (key.slice(-(pid.length + 1)) === ":" + pid) {
+                try { out[key] = JSON.parse(localStorage.getItem(rawKey)); } catch (e) { }
+            }
+        }
+    } catch (e) { }
+    return out;
+}
+function exportPatientFull(patient) {
+    const pid = patient.id;
+    const payload = {
+        app: "TerapiApp",
+        type: "patient-backup",
+        version: PATIENT_EXPORT_VERSION,
+        exportDate: new Date().toISOString(),
+        patient: patient,
+        data: collectPatientKeys(pid),
+    };
+    try {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const safeName = (patient.nombre || patient.name || "paciente").replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ]+/g, "_");
+        a.href = url;
+        a.download = "terapiapp-" + safeName + "-" + new Date().toISOString().slice(0, 10) + ".json";
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        return true;
+    } catch (e) { return false; }
+}
+// Restaura un paciente desde un objeto de backup. Devuelve {patient} o {error}.
+function importPatientFull(payload, existingPatients, opts) {
+    opts = opts || {};
+    if (!payload || payload.type !== "patient-backup" || !payload.patient) return { error: "El archivo no es un respaldo de paciente válido." };
+    const src = payload.patient;
+    const data = payload.data || {};
+    const oldId = src.id;
+    // ¿Ya existe un paciente con ese id?
+    const clash = (existingPatients || []).some(function (p) { return p.id === oldId; });
+    const newId = (clash && !opts.overwrite) ? uid() : oldId;
+    // reescribir las claves cambiando el sufijo :oldId -> :newId
+    let restored = 0;
+    try {
+        Object.keys(data).forEach(function (k) {
+            let nk = k;
+            if (oldId !== newId && k.slice(-(oldId.length + 1)) === ":" + oldId) {
+                nk = k.slice(0, k.length - oldId.length) + newId;
+            }
+            storeSave(nk, data[k]);
+            restored++;
+        });
+    } catch (e) { return { error: "No se pudieron restaurar los datos: " + e.message }; }
+    const newPatient = Object.assign({}, src, { id: newId });
+    if (clash && !opts.overwrite && newPatient.nombre) newPatient.nombre = newPatient.nombre + " (importado)";
+    return { patient: newPatient, restored: restored, renamed: (oldId !== newId) };
+}
 let _storageWarned = false;
 const storeSave = (k, v) => {
     try {
@@ -21365,6 +21432,25 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
     const [pq, setPq] = useState("");
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
+    const importInputRef = useRef(null);
+    const handleImportFile = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (e.target) e.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+            let payload;
+            try { payload = JSON.parse(ev.target.result); } catch (err) { try { alert("El archivo no es un JSON válido."); } catch (e2) { } return; }
+            const res = importPatientFull(payload, patients, {});
+            if (res.error) { try { alert(res.error); } catch (e2) { } return; }
+            const updated = patients.concat([res.patient]);
+            setPatients(updated);
+            try { storeSave("patients", updated); } catch (e2) { }
+            try { sfx.click(); } catch (e2) { }
+            try { alert("Paciente importado: " + (res.patient.nombre || "(sin nombre)") + (res.renamed ? "\n(Se le asignó un identificador nuevo para no sobrescribir a otro paciente.)" : "") + "\nDatos restaurados: " + res.restored + " bloques."); } catch (e2) { }
+        };
+        reader.readAsText(file);
+    };
     const resetForm = () => setForm({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
     const pqList = [...patients].filter(p => { const q = pq.trim().toLowerCase(); if (!q) return true; return ((p.nombre || "").toLowerCase().includes(q)) || (Array.isArray(p.diagnosticos) && p.diagnosticos.join(" ").toLowerCase().includes(q)); }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
     const save = () => {
@@ -21410,6 +21496,8 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
                 React.createElement("div", { style: { fontSize: 22, fontWeight: 800 } }, "Mis Pacientes"),
                 React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
                     React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setMode("new"); }, small: true }, "+ Nuevo"),
+                    React.createElement(Btn, { color: C.blue, onClick: () => { try { sfx.click(); } catch (e) { } if (importInputRef.current) importInputRef.current.click(); }, small: true, outline: true }, "\uD83D\uDCE5 Importar"),
+                    React.createElement("input", { ref: importInputRef, type: "file", accept: "application/json,.json", onChange: handleImportFile, style: { display: "none" } }),
                     onShowFeedbackAdmin && React.createElement(Btn, { color: C.accent, onClick: () => { sfx.click(); onShowFeedbackAdmin(); }, small: true, outline: true }, "💬 Mensajes"),
                     React.createElement(Btn, { color: C.textL, onClick: onClose, small: true, outline: true }, "Cerrar"))),
             patients.length > 0 && React.createElement("input", { value: pq, onChange: e => setPq(e.target.value), placeholder: "🔍 Buscar por nombre o diagnóstico...", style: { width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 10, border: "1px solid #d8d8d0", marginBottom: 12, fontSize: 14, fontFamily: "inherit" } }),
@@ -24647,6 +24735,432 @@ Formato JSON estricto:
 // ═══════════════════════════════════════════════════════════════
 // NEW v14: RolePlayConversacional (Hab. Sociales) — IA conversational practice
 // ═══════════════════════════════════════════════════════════════
+function AventuraSocialRamificada({ patient }) {
+    const [phase, setPhase] = useState("intro"); // intro | loading | scene | end
+    const [scene, setScene] = useState(null); // {situacion, narracion, opciones:[{texto,id}]}
+    const [history, setHistory] = useState([]); // [{narracion, eleccion}]
+    const [step, setStep] = useState(0);
+    const [ending, setEnding] = useState(null);
+    const [theme, setTheme] = useState(null);
+    const MAX_STEPS = 5;
+    const turnoTtsRef = useRef(null);
+    const THEMES = [
+        { id: "grupo_nuevo", label: "Grupo nuevo en clase", emoji: "👥", seed: "Es tu primer día en un grupo de trabajo nuevo en clase. No conoces bien a nadie." },
+        { id: "recreo", label: "El recreo", emoji: "⚽", seed: "Estás en el recreo y un grupo está jugando a algo a lo que te gustaría unirte." },
+        { id: "malentendido", label: "Un malentendido", emoji: "😕", seed: "Un amigo lleva días raro contigo y no sabes por qué. Hoy te lo cruzas en el pasillo." },
+        { id: "fiesta", label: "Una quedada", emoji: "🎉", seed: "Te han invitado a una quedada donde casi no conoces a nadie." },
+        { id: "proyecto", label: "Trabajo en equipo", emoji: "📚", seed: "Tienes que hacer un trabajo en grupo y uno del equipo no está haciendo su parte." },
+    ];
+
+    const buildScene = async (themeObj, hist, choiceText) => {
+        setPhase("loading");
+        const histText = hist.length
+            ? "HISTORIA HASTA AHORA:\n" + hist.map((h, i) => `Escena ${i + 1}: ${h.narracion}\n→ El paciente eligió: ${h.eleccion}`).join("\n") + "\n\n"
+            : "";
+        const isLast = hist.length >= MAX_STEPS - 1;
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Eres el narrador de una AVENTURA SOCIAL interactiva tipo "elige tu propia aventura", para practicar habilidades sociales de forma realista. Tema: ${themeObj.seed}\n\n` +
+            histText +
+            (choiceText ? `Acaba de elegir: "${choiceText}". Continúa la historia mostrando la CONSECUENCIA REALISTA de esa elección (no siempre positiva, no siempre negativa: como en la vida real, a veces una respuesta correcta no sale bien, y a veces algo torpe se arregla). Las consecuencias pueden no ser inmediatas.\n\n` : "Presenta la primera escena.\n\n") +
+            `REGLAS:\n- Realista y respetuoso, propio de un adolescente. Nada de moralejas explícitas ni de "lección".\n- Las opciones NO son "bien/mal" obvias: son enfoques distintos con matices, alguno tentador pero con coste social.\n- Narración breve (2-3 frases), lenguaje natural de la edad.\n` +
+            (isLast
+                ? `Esta es la ÚLTIMA escena: cierra la historia con un desenlace coherente con las decisiones tomadas y una reflexión MUY breve y cálida (sin sermonear).\nFormato JSON: {"narracion":"texto del desenlace","cierre":"reflexión breve en 1-2 frases","final":true}`
+                : `Ofrece 3 opciones de cómo reaccionar.\nFormato JSON: {"narracion":"texto de la escena","opciones":[{"id":"a","texto":"..."},{"id":"b","texto":"..."},{"id":"c","texto":"..."}]}`);
+        const res = await callClaude(prompt, "aventura_social");
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar esta actividad."); setPhase("intro"); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail)) { alert("No he podido generar la escena. Inténtalo de nuevo."); setPhase(hist.length ? "scene" : "intro"); return; }
+        if (res && res.final) {
+            setEnding({ narracion: res.narracion, cierre: res.cierre });
+            setPhase("end");
+            try { logCurrentResult(true); } catch (e) { }
+            return;
+        }
+        setScene({ narracion: res.narracion, opciones: res.opciones || [] });
+        setPhase("scene");
+    };
+
+    const start = (themeObj) => { try { sfx.tap(); } catch (e) { } setTheme(themeObj); setHistory([]); setStep(0); setEnding(null); buildScene(themeObj, [], null); };
+    const choose = (opt) => {
+        try { sfx.tap(); } catch (e) { }
+        const nh = history.concat([{ narracion: scene.narracion, eleccion: opt.texto }]);
+        setHistory(nh); setStep(step + 1);
+        buildScene(theme, nh, opt.texto);
+    };
+    const speak = (txt) => { try { const u = new SpeechSynthesisUtterance(txt); u.lang = "es-ES"; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) { } };
+
+    if (phase === "intro") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Aventura Social"),
+            React.createElement(Instructions, { adoChildren: "Una historia interactiva donde tus decisiones tienen consecuencias reales, a veces inesperadas. No hay respuestas perfectas: lo interesante es ver adónde te llevan tus elecciones." },
+                "Elige una historia. En cada momento decides qué hacer, y la historia cambia según tus decisiones. ¡A ver cómo acaba!"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 } },
+                THEMES.map(t => React.createElement("button", { key: t.id, onClick: () => start(t), style: { border: "2px solid " + C.border, background: "#fff", borderRadius: 14, padding: "14px 12px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" } },
+                    React.createElement("div", { style: { fontSize: 26, marginBottom: 4 } }, t.emoji),
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: 14, color: C.text } }, t.label)))));
+    }
+    if (phase === "loading") {
+        return React.createElement("div", { style: { textAlign: "center", padding: "50px 16px" } },
+            React.createElement("div", { style: { fontSize: 34, marginBottom: 10 } }, "✨"),
+            React.createElement("div", { style: { fontWeight: 700, color: C.textL } }, "Preparando la historia..."));
+    }
+    if (phase === "end" && ending) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 10, color: C.primary } }, theme.emoji + " Desenlace"),
+            React.createElement("div", { style: { background: "#fff", border: "1px solid " + C.border, borderRadius: 14, padding: 16, fontSize: 15, lineHeight: 1.6, color: C.text, marginBottom: 12 } }, ending.narracion),
+            ending.cierre && React.createElement("div", { style: { background: "#EAF7F0", borderRadius: 12, padding: "12px 14px", fontSize: 14, color: "#2D5C46", fontStyle: "italic", marginBottom: 14 } }, "💭 " + ending.cierre),
+            React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 14, textAlign: "center" } }, "Recorrido: " + history.map(h => "“" + (h.eleccion.length > 28 ? h.eleccion.slice(0, 27) + "…" : h.eleccion) + "”").join(" → ")),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => setPhase("intro") }, "Otra aventura ▶")));
+    }
+    // scene
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.primary } }, theme.emoji + " " + theme.label),
+            React.createElement(Badge, { color: C.blue }, "Escena " + (step + 1) + "/" + MAX_STEPS)),
+        React.createElement("div", { style: { background: "#fff", border: "1px solid " + C.border, borderRadius: 14, padding: 16, fontSize: 15.5, lineHeight: 1.6, color: C.text, marginBottom: 6, position: "relative" } },
+            scene.narracion,
+            React.createElement("button", { onClick: () => speak(scene.narracion), title: "Escuchar", style: { position: "absolute", top: 8, right: 8, border: "none", background: "transparent", cursor: "pointer", fontSize: 16 } }, "🔊")),
+        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, margin: "10px 0 8px", fontWeight: 700 } }, "¿Qué haces?"),
+        React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+            scene.opciones.map((o, i) => React.createElement("button", { key: o.id || i, onClick: () => choose(o), style: { border: "2px solid " + C.border, background: "#fff", borderRadius: 12, padding: "12px 14px", cursor: "pointer", fontFamily: "inherit", fontSize: 14.5, color: C.text, textAlign: "left", lineHeight: 1.4 } },
+                React.createElement("span", { style: { fontWeight: 800, color: C.primary, marginRight: 7 } }, String.fromCharCode(65 + i)), o.texto))));
+}
+function CompaneroEnVivo({ patient }) {
+    const [phase, setPhase] = useState("intro"); // intro | chat | feedback
+    const [scenarioId, setScenarioId] = useState(null);
+    const [speedMode, setSpeedMode] = useState(true);
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [feedback, setFeedback] = useState(null);
+    const [secs, setSecs] = useState(0);
+    const [nudge, setNudge] = useState(null);
+    const turnRef = useRef(0);
+    const timerRef = useRef(null);
+    const MAX_TURNS = 7;
+    const RESP_SECONDS = 8;
+
+    const SCENARIOS = [
+        { id: "recreo", label: "Charla de recreo", emoji: "⚽", persona: "Eres un adolescente en el recreo, espontáneo y con energía. Saltas de tema, te distraes con cosas que pasan alrededor, usas jerga juvenil. A veces preguntas algo de repente o cambias de tema sin avisar." },
+        { id: "nuevo", label: "Conocer a alguien nuevo", emoji: "🙂", persona: "Eres un adolescente que acaba de conocer al paciente. Eres majo pero un poco tímido: si el paciente no aporta, la conversación se apaga; si pregunta e interesa, te abres. Reaccionas de forma natural." },
+        { id: "grupo", label: "Entrar en un grupo", emoji: "👥", persona: "Eres parte de un grupo de amigos que ya está hablando de sus cosas (una serie, un partido, un meme). El paciente intenta unirse. No se lo pones fácil ni difícil: como en la vida real, hay que pillar el hilo y aportar algo." },
+        { id: "bromas", label: "Cuando hay bromas", emoji: "😏", persona: "Eres un adolescente algo bromista que suelta comentarios con doble sentido y pullas amistosas (no crueles). El reto del paciente es leer el tono, seguir la broma o poner un límite con humor, sin ofenderse de más ni picarse." },
+    ];
+    const scenario = SCENARIOS.find(s => s.id === scenarioId);
+
+    const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+    const startTimer = () => {
+        stopTimer(); setSecs(0);
+        if (!speedMode) return;
+        timerRef.current = setInterval(() => { setSecs(s => s + 1); }, 1000);
+    };
+    React.useEffect(() => stopTimer, []);
+
+    const start = async (id) => {
+        const sc = SCENARIOS.find(x => x.id === id);
+        setScenarioId(id); setMessages([]); setFeedback(null); turnRef.current = 0; setPhase("chat"); setLoading(true);
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Vas a hacer de COMPAÑERO en una conversación en vivo para que el paciente practique habilidades sociales del día a día. PERSONAJE: ${sc.persona}\n\nEmpieza tú con UNA frase natural y espontánea que abra la conversación, como hablaría de verdad un adolescente (coloquial, breve). No expliques nada, no des opciones.\nFormato JSON: {"opener":"frase"}`;
+        const res = await callClaude(prompt, "companero_vivo_open");
+        setLoading(false);
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar esta actividad."); setPhase("intro"); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail)) { alert("No he podido empezar. Inténtalo de nuevo."); setPhase("intro"); return; }
+        setMessages([{ role: "assistant", text: res.opener }]);
+        startTimer();
+    };
+
+    const send = async (forceFinal = false) => {
+        if (!input.trim() || loading) return;
+        if (!/[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(input)) { setNudge("Escríbelo con palabras 🙂"); setInput(""); return; }
+        stopTimer();
+        const userMsg = input.trim();
+        const fast = speedMode && secs <= RESP_SECONDS;
+        const newMsgs = [...messages, { role: "user", text: userMsg, fast: speedMode ? fast : null }];
+        setMessages(newMsgs); setInput(""); setNudge(null); turnRef.current += 1; setLoading(true);
+        const convo = newMsgs.map(m => `${m.role === "user" ? "Paciente" : "Compañero"}: ${m.text}`).join("\n");
+        const isFinal = forceFinal || turnRef.current >= MAX_TURNS;
+        // curveball aleatorio para entrenar la respuesta a lo inesperado
+        const curve = (!isFinal && turnRef.current >= 1 && Math.random() < 0.4)
+            ? "\n\nEN ESTE TURNO mete un GIRO INESPERADO realista (cambia de tema de golpe, te distraes con algo, mencionas a otra persona que llega, o haces una pregunta directa que no venía a cuento). Que el paciente tenga que adaptarse." : "";
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Conversación en vivo en curso. PERSONAJE: ${scenario.persona}${curve}\n\nCONVERSACIÓN:\n${convo}\n\n` +
+            `Responde como el personaje: natural, coloquial, breve (máx 25 palabras), reaccionando de verdad a lo último que dijo el paciente. El paciente puede escribir con faltas, sin tildes o abreviaturas (q, xq, tb): interpreta la intención y NO le corrijas la ortografía.\n` +
+            (isFinal
+                ? `Es el ÚLTIMO turno: despídete con naturalidad y además evalúa cómo lo ha hecho el paciente en la conversación.\nFormato JSON: {"reply":"despedida del personaje","feedback":{"bien":"1-2 cosas concretas que hizo bien","mejora":"1 cosa concreta a mejorar, en tono amable","reto":"un mini-reto para la vida real relacionado"}}`
+                : `Formato JSON: {"reply":"frase del personaje"}`);
+        const res = await callClaude(prompt, "companero_vivo");
+        setLoading(false);
+        if (res && (res.__noKey || res.__authError || res.__error || res.__schemaFail)) { setMessages([...newMsgs, { role: "assistant", text: "(Ups, no me llegó la respuesta. Escribe otra vez.)" }]); return; }
+        setMessages([...newMsgs, { role: "assistant", text: res.reply }]);
+        if (isFinal && res.feedback) {
+            setFeedback(res.feedback); setPhase("feedback");
+            try { logCurrentResult(true); } catch (e) { }
+            saveSession(newMsgs.concat([{ role: "assistant", text: res.reply }]), res.feedback);
+        } else { startTimer(); }
+    };
+
+    const saveSession = (msgs, fb) => {
+        try {
+            const k = "companeroVivo:" + patient.id;
+            const arr = storeLoad(k) || [];
+            arr.push({ id: uid(), ts: Date.now(), scenario: scenario.label, turns: turnRef.current, feedback: fb });
+            if (arr.length > 30) arr.splice(0, arr.length - 30);
+            storeSave(k, arr);
+        } catch (e) { }
+    };
+
+    if (phase === "intro") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Compañero en Vivo"),
+            React.createElement(Instructions, { adoChildren: "Conversación libre con un compañero que improvisa y a veces te sorprende con giros inesperados, como en la vida real. El objetivo no es la respuesta perfecta, sino responder en caliente y adaptarte." },
+                "Habla con un compañero como lo harías de verdad. No hay respuestas correctas: se trata de mantener la conversación y reaccionar a lo que pase."),
+            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, margin: "12px 0", fontSize: 13.5, fontWeight: 700, color: C.text, cursor: "pointer" } },
+                React.createElement("input", { type: "checkbox", checked: speedMode, onChange: e => setSpeedMode(e.target.checked) }),
+                "⏱ Modo rápido (responde en ~" + RESP_SECONDS + "s, sin pensarlo demasiado)"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+                SCENARIOS.map(s => React.createElement("button", { key: s.id, onClick: () => start(s.id), style: { border: "2px solid " + C.border, background: "#fff", borderRadius: 14, padding: "14px 12px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" } },
+                    React.createElement("div", { style: { fontSize: 26, marginBottom: 4 } }, s.emoji),
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: 13.5, color: C.text } }, s.label)))));
+    }
+    if (phase === "feedback" && feedback) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 12, color: C.primary } }, "Cómo ha ido 🌟"),
+            React.createElement("div", { style: { background: "#EAF7F0", borderRadius: 12, padding: "12px 14px", marginBottom: 10 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D6A4F", marginBottom: 4 } }, "✅ Lo que hiciste bien"),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.bien)),
+            React.createElement("div", { style: { background: "#FFF7E6", borderRadius: 12, padding: "12px 14px", marginBottom: 10 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#9A7B1F", marginBottom: 4 } }, "🔧 Para la próxima"),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.mejora)),
+            feedback.reto && React.createElement("div", { style: { background: "#EAF1FB", borderRadius: 12, padding: "12px 14px", marginBottom: 14 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D5C8A", marginBottom: 4 } }, "🎯 Mini-reto en la vida real"),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.reto)),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => setPhase("intro") }, "Otra conversación ▶")));
+    }
+    // chat
+    const overtime = speedMode && secs > RESP_SECONDS;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: C.primary } }, scenario.emoji + " " + scenario.label),
+            speedMode && React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: overtime ? C.error : C.textL, background: overtime ? "#FBEAEA" : "#f0f0ec", borderRadius: 20, padding: "3px 10px" } }, "⏱ " + secs + "s")),
+        React.createElement("div", { style: { background: "#F7F7F4", borderRadius: 14, padding: 12, minHeight: 200, maxHeight: 340, overflowY: "auto", marginBottom: 10 } },
+            messages.map((m, i) => React.createElement("div", { key: i, style: { display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 } },
+                React.createElement("div", { style: { maxWidth: "78%", padding: "9px 12px", borderRadius: 14, fontSize: 14.5, lineHeight: 1.4, background: m.role === "user" ? C.primary : "#fff", color: m.role === "user" ? "#fff" : C.text, border: m.role === "user" ? "none" : "1px solid " + C.border } },
+                    m.text,
+                    m.fast === true && React.createElement("span", { title: "Respuesta rápida", style: { marginLeft: 6 } }, "⚡")))),
+            loading && React.createElement("div", { style: { fontSize: 13, color: C.textL, fontStyle: "italic" } }, "escribiendo...")),
+        nudge && React.createElement("div", { style: { fontSize: 12.5, color: C.error, marginBottom: 6 } }, nudge),
+        React.createElement("div", { style: { display: "flex", gap: 8 } },
+            React.createElement("input", { value: input, onChange: e => setInput(e.target.value), onKeyDown: e => { if (e.key === "Enter") send(); }, disabled: loading, placeholder: "Tu respuesta...", autoCapitalize: "sentences", style: { flex: 1, padding: "10px 12px", borderRadius: 12, border: "2px solid " + C.border, fontSize: 15, fontFamily: "inherit" } }),
+            React.createElement(Btn, { color: C.primary, small: true, onClick: () => send(), disabled: loading || !input.trim() }, "Enviar")),
+        React.createElement("div", { style: { textAlign: "center", marginTop: 8 } },
+            React.createElement("button", { onClick: () => send(true), disabled: loading || messages.length < 2, style: { border: "none", background: "transparent", color: C.textL, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" } }, "Terminar y ver cómo lo hice")));
+}
+function RolInvertidoCoach({ patient }) {
+    const [phase, setPhase] = useState("intro"); // intro | loading | scene | feedback
+    const [caso, setCaso] = useState(null); // {nombre, situacion, dilema, pregunta}
+    const [advice, setAdvice] = useState("");
+    const [result, setResult] = useState(null); // {valoracion, queFunciona, queFaltaria, comoLeFue}
+    const [loading, setLoading] = useState(false);
+
+    const newCase = async () => {
+        setPhase("loading"); setAdvice(""); setResult(null);
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Genera el caso de un personaje adolescente FICTICIO que tiene una dificultad social concreta y le pide CONSEJO al paciente (que actúa como coach/experto). El paciente razona muy bien la teoría social, así que aquí usamos su fortaleza: aconsejar a otro.\n\nEl personaje debe tener un nombre, una situación social cotidiana y realista (en el insti, con amigos, en grupo...) y un dilema concreto donde no sabe cómo actuar. Variedad de situaciones.\n\nFormato JSON: {"nombre":"nombre del personaje","emoji":"un emoji que lo represente","situacion":"2-3 frases describiendo qué le pasa, en primera persona del personaje","pregunta":"la pregunta directa que te hace pidiéndote consejo"}`;
+        const res = await callClaude(prompt, "rol_coach_caso");
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar esta actividad."); setPhase("intro"); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail)) { alert("No he podido generar el caso. Inténtalo de nuevo."); setPhase("intro"); return; }
+        setCaso({ nombre: res.nombre, emoji: res.emoji || "🧑", situacion: res.situacion, pregunta: res.pregunta });
+        setPhase("scene");
+    };
+
+    const sendAdvice = async () => {
+        if (!advice.trim() || loading) return;
+        setLoading(true);
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `El paciente actúa como coach social. PERSONAJE: ${caso.nombre}. Su situación: "${caso.situacion}". Pregunta: "${caso.pregunta}".\n\nEl paciente le ha dado este consejo:\n"${advice.trim()}"\n\nValora el consejo con respeto y de forma constructiva (el paciente razona bien, trátalo como a un igual experto). Di qué tiene de bueno, qué matizarías o añadirías, e imagina de forma realista cómo le iría al personaje si siguiera ese consejo (sin garantizar éxito: la vida social es incierta). El paciente puede escribir con faltas o abreviaturas; no le corrijas la ortografía.\n\nFormato JSON: {"valoracion":"valoración general en 1 frase cálida","queFunciona":"qué tiene de acertado el consejo","queFaltaria":"qué matiz o añadido lo haría aún mejor (en tono de colega, no de profe)","comoLeFue":"cómo le iría al personaje si lo aplicara, en 1-2 frases realistas"}`;
+        const res = await callClaude(prompt, "rol_coach_eval");
+        setLoading(false);
+        if (res && (res.__noKey || res.__authError || res.__error || res.__schemaFail)) { alert("No he podido valorar el consejo. Inténtalo de nuevo."); return; }
+        setResult(res); setPhase("feedback");
+        try { logCurrentResult(true); } catch (e) { }
+    };
+
+    if (phase === "intro") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Eres el Coach"),
+            React.createElement(Instructions, { adoChildren: "Aquí el experto eres tú. Un personaje con un lío social te pide consejo: tu trabajo es ayudarle a resolverlo. Explicar a otros es una de las mejores formas de afianzar lo que uno sabe." },
+                "Un personaje te va a contar un problema social y te pedirá consejo. Tú le ayudas. ¡Tú eres quien sabe!"),
+            React.createElement("div", { style: { textAlign: "center", marginTop: 16 } }, React.createElement(Btn, { color: C.primary, onClick: () => { try { sfx.tap(); } catch (e) { } newCase(); } }, "Recibir un caso ▶")));
+    }
+    if (phase === "loading") {
+        return React.createElement("div", { style: { textAlign: "center", padding: "50px 16px" } },
+            React.createElement("div", { style: { fontSize: 34, marginBottom: 10 } }, "💬"),
+            React.createElement("div", { style: { fontWeight: 700, color: C.textL } }, "Alguien necesita tu consejo..."));
+    }
+    if (phase === "feedback" && result) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 6, color: C.primary } }, caso.emoji + " Tu consejo a " + caso.nombre),
+            React.createElement("div", { style: { background: "#fff", border: "1px solid " + C.border, borderRadius: 12, padding: "10px 12px", fontSize: 13.5, color: C.textL, fontStyle: "italic", marginBottom: 12 } }, "“" + advice.trim() + "”"),
+            React.createElement("div", { style: { background: "#EAF7F0", borderRadius: 12, padding: "12px 14px", marginBottom: 10, fontSize: 14, color: "#2D5C46", lineHeight: 1.5 } }, "🌟 " + result.valoracion),
+            React.createElement("div", { style: { marginBottom: 10 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D6A4F", marginBottom: 3 } }, "✅ Lo que acertaste"),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, result.queFunciona)),
+            React.createElement("div", { style: { marginBottom: 10 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#9A7B1F", marginBottom: 3 } }, "💡 Un matiz más"),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, result.queFaltaria)),
+            React.createElement("div", { style: { background: "#EAF1FB", borderRadius: 12, padding: "12px 14px", marginBottom: 14 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D5C8A", marginBottom: 3 } }, "🔮 Cómo le fue a " + caso.nombre),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, result.comoLeFue)),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => newCase() }, "Otro caso ▶")));
+    }
+    // scene: el personaje pide consejo
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.primary, marginBottom: 10 } }, caso.emoji + " " + caso.nombre + " te escribe"),
+        React.createElement("div", { style: { background: "#fff", border: "1px solid " + C.border, borderRadius: 14, padding: 16, fontSize: 15, lineHeight: 1.6, color: C.text, marginBottom: 8 } },
+            React.createElement("div", { style: { marginBottom: 8 } }, caso.situacion),
+            React.createElement("div", { style: { fontWeight: 700, color: C.primary } }, "“" + caso.pregunta + "”")),
+        React.createElement("div", { style: { fontSize: 12.5, color: C.textL, margin: "10px 0 6px", fontWeight: 700 } }, "Tu consejo:"),
+        React.createElement("textarea", { value: advice, onChange: e => setAdvice(e.target.value), rows: 4, placeholder: "¿Qué le aconsejarías hacer? Explícale cómo enfocarlo...", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "2px solid " + C.border, fontSize: 15, fontFamily: "inherit" } }),
+        React.createElement("div", { style: { textAlign: "center", marginTop: 12 } },
+            React.createElement(Btn, { color: C.primary, onClick: sendAdvice, disabled: loading || !advice.trim() }, loading ? "Enviando..." : "Dar mi consejo ▶")));
+}
+function MisionesMundoReal({ patient }) {
+    const pid = patient.id;
+    const KEY = "misionesReales:" + pid;
+    const load = () => { try { return storeLoad(KEY) || { active: null, done: [] }; } catch (e) { return { active: null, done: [] }; } };
+    const [data, setData] = useState(load);
+    const [phase, setPhase] = useState("home"); // home | loading | log
+    const [howItWent, setHowItWent] = useState("");
+    const [outcome, setOutcome] = useState(null); // "bien" | "regular" | "no"
+    const [reflection, setReflection] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const save = (d) => { setData(d); try { storeSave(KEY, d); } catch (e) { } };
+
+    const newMission = async () => {
+        setPhase("loading");
+        const doneLabels = (data.done || []).slice(-6).map(m => m.titulo).join("; ");
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Genera UNA misión social del MUNDO REAL para que el paciente practique fuera de la consulta, entre sesiones. Debe ser pequeña, concreta, realista para su edad y entorno (instituto, casa, barrio), y formulada como un reto alcanzable en pocos días. El objetivo es generalizar habilidades sociales a la vida real.\n\n` +
+            (doneLabels ? `Evita repetir estas ya propuestas: ${doneLabels}.\n` : "") +
+            `Que sea conductual y observable (algo que HACE, no que piensa). Ejemplos del tipo: iniciar una conversación preguntando algo, hacer un cumplido, unirse a un grupo, pedir ayuda, mantener contacto visual al saludar... pero genera una nueva y específica.\n\nFormato JSON: {"titulo":"título corto del reto","detalle":"en qué consiste, en 1-2 frases, dirigido al paciente en segunda persona","pista":"un consejo breve para que le salga mejor","dificultad":"fácil|media|reto"}`;
+        const res = await callClaude(prompt, "mision_real");
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar esta actividad."); setPhase("home"); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail)) { alert("No he podido generar una misión. Inténtalo de nuevo."); setPhase("home"); return; }
+        const active = { id: uid(), ts: Date.now(), titulo: res.titulo, detalle: res.detalle, pista: res.pista, dificultad: res.dificultad || "media" };
+        save(Object.assign({}, data, { active }));
+        setPhase("home");
+    };
+
+    const openLog = () => { setHowItWent(""); setOutcome(null); setReflection(null); setPhase("log"); };
+
+    const submitLog = async () => {
+        if (!outcome || loading) return;
+        setLoading(true);
+        const m = data.active;
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `El paciente tenía esta misión social del mundo real: "${m.titulo}" — ${m.detalle}\n\nResultado que reporta: ${outcome === "bien" ? "le salió bien" : outcome === "regular" ? "salió regular / a medias" : "no pudo o no salió"}.\nLo que cuenta él: "${howItWent.trim() || "(no añade detalles)"}"\n\nResponde con un mensaje BREVE, cálido y NO paternalista, propio de hablar con un adolescente capaz. Reconoce el intento (intentarlo ya cuenta, salga como salga), señala algo concreto y, si encaja, una idea para la próxima. Nada de sermones. El paciente puede escribir con faltas; no le corrijas.\n\nFormato JSON: {"mensaje":"2-3 frases","siguiente_paso":"una sugerencia muy breve y opcional para seguir avanzando"}`;
+        const res = await callClaude(prompt, "mision_real_feedback");
+        setLoading(false);
+        const fb = (res && !res.__noKey && !res.__authError && !res.__error && !res.__schemaFail) ? res : { mensaje: "¡Bien por intentarlo! Cada vez que lo pruebas en la vida real, entrenas lo que de verdad importa.", siguiente_paso: "" };
+        const SPACING = [3, 7, 16, 30]; // días entre repasos (espaciado creciente)
+        const baseTitle = m.repasoDe || m.titulo;
+        const prevReps = (data.done || []).filter(function (d) { return (d.repasoDe || d.titulo) === baseTitle && d.outcome !== "no"; }).length;
+        let repasoAt = null;
+        if (outcome === "bien") { var idx = Math.min(prevReps, SPACING.length - 1); repasoAt = Date.now() + SPACING[idx] * 86400000; }
+        else if (outcome === "regular") { repasoAt = Date.now() + 3 * 86400000; }
+        const entry = { id: m.id, titulo: m.titulo, detalle: m.detalle, pista: m.pista, dificultad: m.dificultad, ts: Date.now(), outcome, nota: howItWent.trim(), feedback: fb.mensaje, repasoDe: baseTitle, repasoAt: repasoAt, repasoHecho: false };
+        const done = (data.done || []).map(function (d) { return ((d.repasoDe || d.titulo) === baseTitle) ? Object.assign({}, d, { repasoHecho: true, repasoAt: null }) : d; }).concat([entry]);
+        save({ active: null, done });
+        setReflection(fb);
+        try { logCurrentResult(outcome !== "no"); } catch (e) { }
+    };
+
+    const streak = (data.done || []).length;
+    const dueRepaso = (function () {
+        try {
+            var now = Date.now();
+            var cand = (data.done || []).filter(function (d) { return d.repasoAt && !d.repasoHecho && d.repasoAt <= now; });
+            if (!cand.length) return null;
+            cand.sort(function (a, b) { return a.repasoAt - b.repasoAt; });
+            return cand[0];
+        } catch (e) { return null; }
+    })();
+    const startRepaso = function (d) {
+        try { sfx.tap(); } catch (e) { }
+        var active = { id: uid(), ts: Date.now(), titulo: d.titulo, detalle: d.detalle || "", pista: d.pista || "", dificultad: d.dificultad || "media", repasoDe: d.repasoDe || d.titulo };
+        save(Object.assign({}, data, { active: active }));
+    };
+    const dismissRepaso = function (d) {
+        save(Object.assign({}, data, { done: (data.done || []).map(function (x) { return x === d ? Object.assign({}, x, { repasoHecho: true, repasoAt: null }) : x; }) }));
+    };
+    const DIFF_COLOR = { "fácil": "#2D6A4F", "media": "#457B9D", "reto": "#9A4FB0" };
+
+    if (phase === "loading") {
+        return React.createElement("div", { style: { textAlign: "center", padding: "50px 16px" } },
+            React.createElement("div", { style: { fontSize: 34, marginBottom: 10 } }, "🎯"),
+            React.createElement("div", { style: { fontWeight: 700, color: C.textL } }, "Buscando tu próxima misión..."));
+    }
+
+    if (phase === "log" && reflection) {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 12, color: C.primary } }, "¡Misión registrada! 🎉"),
+            React.createElement("div", { style: { background: "#EAF7F0", borderRadius: 12, padding: "14px 16px", fontSize: 15, color: "#2D5C46", lineHeight: 1.55, marginBottom: 10 } }, reflection.mensaje),
+            reflection.siguiente_paso && React.createElement("div", { style: { background: "#EAF1FB", borderRadius: 12, padding: "12px 14px", fontSize: 13.5, color: "#2D5C8A", marginBottom: 14 } }, "➡️ " + reflection.siguiente_paso),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => setPhase("home") }, "Volver")));
+    }
+
+    if (phase === "log") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 17, fontWeight: 800, marginBottom: 4, color: C.primary } }, "¿Cómo te fue?"),
+            React.createElement("div", { style: { fontSize: 13.5, color: C.textL, marginBottom: 12 } }, data.active ? data.active.titulo : ""),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+                [["bien", "😃 Bien", "#2D6A4F"], ["regular", "😐 Regular", "#C9942B"], ["no", "😕 No pude", "#9AA0A6"]].map(o =>
+                    React.createElement("button", { key: o[0], onClick: () => { try { sfx.tap(); } catch (e) { } setOutcome(o[0]); }, style: { flex: 1, padding: "10px 6px", borderRadius: 12, border: "2px solid " + (outcome === o[0] ? o[2] : C.border), background: outcome === o[0] ? o[2] + "22" : "#fff", fontWeight: 800, fontSize: 13, color: outcome === o[0] ? o[2] : C.textL, cursor: "pointer", fontFamily: "inherit" } }, o[1]))),
+            React.createElement("textarea", { value: howItWent, onChange: e => setHowItWent(e.target.value), rows: 3, placeholder: "¿Qué pasó? (opcional)", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "2px solid " + C.border, fontSize: 15, fontFamily: "inherit", marginBottom: 12 } }),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: submitLog, disabled: loading || !outcome }, loading ? "Guardando..." : "Registrar"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("home") }, "Cancelar")));
+    }
+
+    // home
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+            React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Misiones Reales"),
+            streak > 0 && React.createElement(Badge, { color: "#9A4FB0" }, "🏅 " + streak + " completadas")),
+        React.createElement(Instructions, { adoChildren: "Retos para llevar lo practicado al mundo real, que es donde de verdad cuenta. Pequeños, concretos y tuyos. Lo importante es intentarlo: salga como salga, cada intento entrena." },
+            "Aquí tienes retos para probar fuera de la consulta, en tu día a día. Acepta una misión, pruébala esta semana y cuéntame cómo te fue."),
+        (dueRepaso && !data.active) && React.createElement("div", { style: { background: "#F3ECFB", border: "2px solid #9A4FB0", borderRadius: 16, padding: 14, margin: "12px 0" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
+                React.createElement("span", { style: { fontSize: 20 } }, "🔁"),
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 15, color: "#7B3F9E", flex: 1 } }, "Toca repasar una habilidad"),
+                React.createElement("span", { style: { fontSize: 10.5, fontWeight: 800, color: "#fff", background: "#9A4FB0", borderRadius: 20, padding: "2px 8px" } }, "repaso")),
+            React.createElement("div", { style: { fontSize: 13.5, color: "#5A3A6E", lineHeight: 1.5, marginBottom: 4 } }, "Ya lo probaste hace unos días. Repetirlo en la vida real es lo que de verdad lo afianza."),
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 700, color: C.text, background: "#fff", borderRadius: 10, padding: "9px 12px", marginBottom: 10 } }, "“" + dueRepaso.titulo + "”"),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement(Btn, { color: "#9A4FB0", small: true, onClick: function () { startRepaso(dueRepaso); } }, "Volver a intentarlo"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: function () { dismissRepaso(dueRepaso); } }, "Ahora no"))),
+
+        data.active
+            ? React.createElement("div", { style: { background: "#fff", border: "2px solid " + C.primary, borderRadius: 16, padding: 16, margin: "12px 0" } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
+                    React.createElement("span", { style: { fontSize: 20 } }, "🎯"),
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: C.text, flex: 1 } }, data.active.titulo),
+                    React.createElement("span", { style: { fontSize: 10.5, fontWeight: 800, color: "#fff", background: DIFF_COLOR[data.active.dificultad] || C.blue, borderRadius: 20, padding: "2px 8px" } }, data.active.dificultad)),
+                React.createElement("div", { style: { fontSize: 14.5, color: C.text, lineHeight: 1.5, marginBottom: 8 } }, data.active.detalle),
+                data.active.pista && React.createElement("div", { style: { fontSize: 13, color: C.textL, background: "#FAFAF7", borderRadius: 10, padding: "8px 11px", marginBottom: 12 } }, "💡 " + data.active.pista),
+                React.createElement("div", { style: { display: "flex", gap: 8 } },
+                    React.createElement(Btn, { color: C.primary, small: true, onClick: openLog }, "Ya lo intenté · contar"),
+                    React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => { if (confirm("¿Cambiar de misión? La actual se descartará.")) { save(Object.assign({}, data, { active: null })); } } }, "Otra")))
+            : React.createElement("div", { style: { textAlign: "center", margin: "18px 0" } },
+                React.createElement("div", { style: { fontSize: 14, color: C.textL, marginBottom: 12 } }, "No tienes ninguna misión activa."),
+                React.createElement(Btn, { color: C.primary, onClick: () => { try { sfx.tap(); } catch (e) { } newMission(); } }, "🎯 Recibir una misión")),
+        (data.done && data.done.length > 0) && React.createElement("div", { style: { marginTop: 10 } },
+            React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: C.textL, marginBottom: 6 } }, "Historial"),
+            data.done.slice().reverse().slice(0, 8).map(d => React.createElement("div", { key: d.id, style: { display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "#fff", border: "1px solid " + C.border, borderRadius: 10, marginBottom: 6 } },
+                React.createElement("span", null, d.outcome === "bien" ? "😃" : d.outcome === "regular" ? "😐" : "😕"),
+                React.createElement("div", { style: { fontSize: 13, color: C.text, flex: 1 } }, d.titulo),
+                React.createElement("span", { style: { fontSize: 10.5, color: C.textL } }, new Date(d.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short" }))))));
+}
 function RolePlayConversacional({ patient }) {
     const SCENARIOS = [
         { id: "compa_dificil", label: "Compañero/a difícil", emoji: "😤", desc: "Un compañero te molesta sin razón aparente",
@@ -30508,7 +31022,20 @@ function SocialQuiz({ patient, title, instructions, adoInstructions, bank, bankB
         setPos(0); setSel(null); setScore({ correct: 0, total: 0 });
     }, [diff]);
 
-    const item = activeBank[order[pos]];
+    const _rawItem = activeBank[order[pos]];
+    const item = (function () {
+        try {
+            if (!_rawItem || !Array.isArray(_rawItem.opts) || _rawItem.opts.length < 2) return _rawItem;
+            // semilla estable por pregunta (índice barajado actual) → no cambia entre renders
+            var seed = (order[pos] + 1) * 2654435761 % 2147483647;
+            var rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+            var idx = _rawItem.opts.map(function (_, i) { return i; });
+            for (var k = idx.length - 1; k > 0; k--) { var j = Math.floor(rnd() * (k + 1)); var t = idx[k]; idx[k] = idx[j]; idx[j] = t; }
+            var newOpts = idx.map(function (oi) { return _rawItem.opts[oi]; });
+            var newAns = idx.indexOf(_rawItem.ans);
+            return Object.assign({}, _rawItem, { opts: newOpts, ans: newAns });
+        } catch (e) { return _rawItem; }
+    })();
     const next = () => {
         let no = order, np = pos + 1;
         if (np >= order.length) { no = shuffle(activeBank.map((_, i) => i)); np = 0; setOrder(no); }
@@ -34818,7 +35345,7 @@ function FrescuraPanel({ patient }) {
     );
 }
 
-    // ===== NEW v25.63: evidence-based exercises (TEA + dislexia escritura) =====
+    // ===== NEW v25.73: evidence-based exercises (TEA + dislexia escritura) =====
     function ReglasNoEscritas({ patient }) {
         const BANK = [
             { ctx: "Estás en la biblioteca y quieres contarle algo divertido a tu amigo.", q: "¿Qué es lo más adecuado?", opts: ["Hablar muy bajito o esperar a salir", "Contarlo en voz alta para que se rían todos", "Darle un grito desde la otra punta"], ans: 0, exp: "Una regla no escrita de la biblioteca es estar en silencio. Nadie lo dice en voz alta, pero se espera." },
@@ -34974,7 +35501,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: producción escrita (construir la palabra letra a letra) =====
+    // ===== NEW v25.73: producción escrita (construir la palabra letra a letra) =====
     function OrdenaLetras({ patient }) {
         const WORDS = [
             { w: "casa", clue: "🏠 El sitio donde vives" },
@@ -35047,7 +35574,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
+    // ===== NEW v25.73: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
     function SilabasTrabadas({ patient }) {
         const BANK = [
             { ctx: "Comí en un ___ blanco.", q: "¿Cómo se escribe?", opts: ["plato", "pato", "palto"], ans: 0, exp: "«Plato» tiene la sílaba trabada «pla» (p+l). «Pato» es otro animal y «palto» cambia el orden." },
@@ -35119,7 +35646,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: PEERS (manejar burlas, hacer planes) =====
+    // ===== NEW v25.73: PEERS (manejar burlas, hacer planes) =====
     function ManejarBurlas({ patient }) {
         const BANK = [
             { ctx: "Un compañero se ríe de tus zapatillas para picarte.", q: "¿Qué suele funcionar mejor?", opts: ["Insultarle y empujarle", "Encogerte de hombros y decir «vale» sin darle importancia", "Echarte a llorar y salir corriendo"], ans: 1, exp: "Mostrar que la burla no te afecta (restarle importancia) le quita la gracia a quien se mete contigo. Pelear o hundirte suele empeorarlo." },
@@ -35161,7 +35688,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: puente frase-a-frase (puntuación, concordancia, conectores) =====
+    // ===== NEW v25.73: puente frase-a-frase (puntuación, concordancia, conectores) =====
     function PuntuacionMayusculas({ patient }) {
         const BANK = [
             { ctx: "Fíjate en la mayúscula y el punto.", q: "¿Cuál está bien escrita?", opts: ["Mañana vamos al cine.", "mañana vamos al cine.", "Mañana vamos al cine"], ans: 0, exp: "Empieza con mayúscula y termina en punto." },
@@ -35247,7 +35774,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
+    // ===== NEW v25.73: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
     function ComposicionGuiada({ patient }) {
         const TOPICS = [
             { t: "Tu animal favorito", plan: ["¿Qué animal es?", "¿Cómo es (color, tamaño)?", "¿Por qué te gusta?"] },
@@ -35327,7 +35854,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: Corrige la Frase (revisión / proofreading) =====
+    // ===== NEW v25.73: Corrige la Frase (revisión / proofreading) =====
     function CorrigeFrase({ patient }) {
         const BANK = [
             { ctx: "Mi ermano es muy alto.", q: "¿Qué palabra está mal escrita?", opts: ["Mi", "ermano", "alto"], ans: 1, exp: "Se escribe «hermano», con «h» al principio." },
@@ -35357,7 +35884,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.63: disortografía — ruta léxica y reglas por la vocal =====
+    // ===== NEW v25.73: disortografía — ruta léxica y reglas por la vocal =====
     function MirarTaparEscribir({ patient }) {
         const DEFAULT_WORDS = ["había", "muy", "también", "porque", "hacer", "vez", "bien", "ahora", "mujer", "jugar", "llave", "abuelo", "vaca", "hueso", "jirafa", "gente", "cielo", "través", "bicicleta", "guitarra"];
         const pid = (patient && patient.id) || _activePatientId;
@@ -35535,6 +36062,10 @@ const AREA_ACTIVITIES = {
         { id: "dbt_skills", label: "Habilidades DBT", desc: "TIPP (crisis) y Acción Opuesta (Linehan)", comp: DBTSkills, adolescentOnly: true, complex: true },
     ],
     social: [
+        { id: "companero_vivo", label: "Compañero en Vivo", desc: "Conversación real con giros inesperados", comp: CompaneroEnVivo, hasAI: true, complex: true },
+        { id: "aventura_social", label: "Aventura Social", desc: "Tus decisiones cambian la historia", comp: AventuraSocialRamificada, hasAI: true, complex: true },
+        { id: "rol_coach", label: "Eres el Coach", desc: "Aconseja a quien se atasca", comp: RolInvertidoCoach, hasAI: true, complex: true },
+        { id: "misiones_reales", label: "Misiones Reales", desc: "Retos para tu día a día", comp: MisionesMundoReal, hasAI: true, complex: true },
         { id: "escenarios", label: "Escenarios Sociales", desc: "Elige la mejor respuesta", comp: EscenariosSociales, hasAI: true },
         { id: "equipo", label: "Jugamos en Equipo", desc: "Juego cooperativo por turnos (2 jugadores)", comp: JuegoEquipo, complex: true },
         { id: "dialogos", label: "¿Qué Dirías?", desc: "Practica respuestas", comp: Dialogos, hasAI: true },
@@ -38962,7 +39493,7 @@ const REEL_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAw
 function DemoReel({ onClose }) {
     const A = (typeof AREAS !== "undefined" && Array.isArray(AREAS)) ? AREAS : [];
     const totalEx = (typeof AREA_ACTIVITIES === "object" && AREA_ACTIVITIES) ? Object.values(AREA_ACTIVITIES).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0) : 0;
-    const VERSION_LABEL = "v25.63";
+    const VERSION_LABEL = "v25.73";
     const mascot = (stage) => (typeof companionSVG === "function") ? companionSVG({ stage: stage, mood: "feliz" }) : "";
     const demoSessions = [];
     const seed = (area, act, nWrong, total, ts0) => { for (let i = 0; i < total; i++) demoSessions.push({ ts: ts0 + i * 1000, area: area, activity: act, result: { correct: i >= nWrong, attempts: 1, stars: i >= nWrong ? 1 : 0 } }); };
@@ -39764,9 +40295,11 @@ function GuiaDiscalculia({ onClose }) {
 }
 
 // buildEvolutionHTML: pure function -> HTML string with inline SVG charts + summary
-function computeAreaScores(sessions, AREAS, adaptiveAll) {
+function computeAreaScores(sessions, AREAS, adaptiveAll, opts) {
     sessions = Array.isArray(sessions) ? sessions : [];
     adaptiveAll = adaptiveAll || {};
+    opts = opts || {};
+    if (opts.until) sessions = sessions.filter(function (s) { return (s.ts || 0) <= opts.until; });
     const isCorrect = r => r && (r.correct === true || (r.correct == null && (r.stars || 0) > 0));
     const hasScore = r => r && (typeof r.correct === "boolean" || typeof r.stars === "number");
     const scored = sessions.filter(s => hasScore(s.result));
@@ -39801,10 +40334,24 @@ function computeAreaScores(sessions, AREAS, adaptiveAll) {
     });
     return out;
 }
-function buildAreaRadarSVG(scores) {
-    const sc = (scores || []).slice(0, 8);
+function autoAreaPrev(pid, days) {
+    try {
+        var sessions = (typeof getSessions === "function") ? getSessions(pid) : [];
+        var adaptive = storeLoad("adaptiveDiff:" + pid) || {};
+        var cutoff = Date.now() - (days || 30) * 86400000;
+        var older = sessions.filter(function (s) { return (s.ts || 0) <= cutoff; });
+        if (older.length < 3) return null;
+        var sc = computeAreaScores(sessions, AREAS, adaptive, { until: cutoff });
+        if (!sc.length) return null;
+        var map = {}; sc.forEach(function (s) { map[s.id] = s.indice; });
+        return map;
+    } catch (e) { return null; }
+}
+function buildAreaRadarSVG(scores, prev) {
+    const sc = (scores || []).slice(0, 11);
     if (sc.length < 3) return "";
-    const W = 340, H = 280, cx = W / 2, cy = H / 2 + 4, R = 88;
+    const many = sc.length > 8;
+    const W = many ? 380 : 340, H = many ? 320 : 280, cx = W / 2, cy = H / 2 + 4, R = many ? 92 : 88;
     const N = sc.length;
     const pt = (i, r) => {
         const a = -Math.PI / 2 + (2 * Math.PI * i) / N;
@@ -39816,17 +40363,30 @@ function buildAreaRadarSVG(scores) {
     sc.forEach((_, i) => { const [x, y] = pt(i, R); svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#e8e8e3" stroke-width="1"/>'; });
     svg += '<text x="' + (cx + 4) + '" y="' + (cy - R - 4) + '" font-size="8" fill="#bbb">100</text>';
     svg += '<text x="' + (cx + 4) + '" y="' + (cy - R * 0.5 - 3) + '" font-size="8" fill="#ccc">50</text>';
+    if (prev && typeof prev === "object") {
+        const hasPrev = sc.some(s => typeof prev[s.id] === "number");
+        if (hasPrev) {
+            const prevPts = sc.map((s, i) => pt(i, R * Math.max((typeof prev[s.id] === "number" ? prev[s.id] : 0), 0) / 100));
+            svg += '<polygon points="' + prevPts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ") + '" fill="#9AA0A6" fill-opacity="0.14" stroke="#9AA0A6" stroke-width="1.5" stroke-dasharray="4 3" stroke-linejoin="round"/>';
+        }
+    }
     const dataPts = sc.map((s, i) => pt(i, R * Math.max(s.indice, 3) / 100));
     svg += '<polygon points="' + dataPts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ") + '" fill="#2D6A4F" fill-opacity="0.18" stroke="#2D6A4F" stroke-width="2" stroke-linejoin="round"/>';
     sc.forEach((s, i) => {
         const [x, y] = dataPts[i];
         svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="4" fill="' + s.color + '" stroke="#fff" stroke-width="1.5"/>';
-        const [lx, ly] = pt(i, R + 16);
+        const [lx, ly] = pt(i, R + (many ? 13 : 16));
         const anchor = Math.abs(lx - cx) < 8 ? "middle" : (lx > cx ? "start" : "end");
-        const lbl = s.label.length > 14 ? s.label.slice(0, 13) + "…" : s.label;
-        svg += '<text x="' + lx.toFixed(1) + '" y="' + (ly + 3).toFixed(1) + '" font-size="9.5" font-weight="700" fill="#555" text-anchor="' + anchor + '">' + lbl + '</text>';
-        svg += '<text x="' + lx.toFixed(1) + '" y="' + (ly + 14).toFixed(1) + '" font-size="9" font-weight="800" fill="' + s.band.c + '" text-anchor="' + anchor + '">' + s.indice + '</text>';
+        const maxLen = many ? 11 : 14;
+        const lbl = s.label.length > maxLen ? s.label.slice(0, maxLen - 1) + "…" : s.label;
+        const fs1 = many ? 8.5 : 9.5, fs2 = many ? 8 : 9;
+        svg += '<text x="' + lx.toFixed(1) + '" y="' + (ly + 2).toFixed(1) + '" font-size="' + fs1 + '" font-weight="700" fill="#555" text-anchor="' + anchor + '">' + lbl + '</text>';
+        svg += '<text x="' + lx.toFixed(1) + '" y="' + (ly + 12).toFixed(1) + '" font-size="' + fs2 + '" font-weight="800" fill="' + s.band.c + '" text-anchor="' + anchor + '">' + s.indice + '</text>';
     });
+    if (prev && typeof prev === "object" && sc.some(s => typeof prev[s.id] === "number")) {
+        svg += '<rect x="8" y="' + (H - 22) + '" width="14" height="3" fill="#9AA0A6"/><text x="26" y="' + (H - 18) + '" font-size="8.5" fill="#888">Mes anterior</text>';
+        svg += '<rect x="92" y="' + (H - 22) + '" width="14" height="4" fill="#2D6A4F"/><text x="110" y="' + (H - 18) + '" font-size="8.5" fill="#888">Ahora</text>';
+    }
     svg += '</svg>';
     return svg;
 }
@@ -39848,7 +40408,7 @@ function buildAreaScoreHTML(sessions, AREAS, adaptiveAll, opts) {
 <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#457B9D;margin-right:4px;"></span>Progresando (50–79)</span>
 <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#2D6A4F;margin-right:4px;"></span>Consolidado (80+)</span></div>`;
     const disclaimer = `<div style="background:#FAF3E0;border-left:4px solid #E9A23B;border-radius:6px;padding:10px 13px;font-size:12px;color:#7a5d1f;line-height:1.5;margin-bottom:14px;">Refleja el <strong>progreso en las actividades de la app</strong> (influido por la práctica, la constancia y la dificultad alcanzada). No es una evaluación clínica ni un test normalizado.</div>`;
-    const radar = buildAreaRadarSVG(scores);
+    const radar = buildAreaRadarSVG(scores, opts.prev || null);
     const radarBlock = radar ? `<div style="background:#fff;border:1px solid #eee;border-radius:14px;padding:10px 6px 4px;margin-bottom:14px;page-break-inside:avoid;">${radar}</div>` : "";
     const titleBlock = opts.title === false ? "" : '<div style="font-weight:800;font-size:16px;color:#333;margin-bottom:4px;">Índice de progreso por área</div>';
     return `<div>${titleBlock}${disclaimer}${radarBlock}${legend}${cards}</div>`;
@@ -39866,7 +40426,8 @@ function AreaScorePanel({ patient }) {
         setExcluded(nx);
         try { storeSave("areaScoreSel:" + pid, nx); } catch (e) { }
     };
-    const html = buildAreaScoreHTML(sessions, AREAS, adaptive, { exclude: excluded });
+    const prevMap = autoAreaPrev(pid, 30);
+    const html = buildAreaScoreHTML(sessions, AREAS, adaptive, { exclude: excluded, prev: prevMap });
     return React.createElement("div", null,
         scoresAll.length > 1 && React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 } },
             scoresAll.map(function (s) {
@@ -39928,8 +40489,8 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
-// ── Compañero / mascota (v25.63) ──
-// ── Compañero / mascota (v25.63) ── diseños + monedas + tienda de accesorios
+// ── Compañero / mascota (v25.73) ──
+// ── Compañero / mascota (v25.73) ── diseños + monedas + tienda de accesorios
 const COMPANION_DESIGNS = [
     { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
     { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
@@ -40273,6 +40834,40 @@ const COMPANION_REACT_MSGS = {
     bien: ["\u00a1Bien hecho!", "\u00a1Lo lograste!", "\u00a1Genial!", "\u00a1Qu\u00e9 bien!", "\u00a1Sigue as\u00ed!"],
     animo: ["\u00a1Casi! Sigue.", "\u00a1Buen intento!", "\u00a1T\u00fa puedes!", "No pasa nada, sigue.", "\u00a1Vas mejorando!"],
 };
+function QuickSwitcher({ patients, activePatient, onPick, onHome }) {
+    const [open, setOpen] = useState(false);
+    const [q, setQ] = useState("");
+    if (!patients || patients.length < 2) return null;
+    const norm = function (s) { return (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); };
+    const list = patients.filter(function (p) { return !q.trim() || norm(p.name).indexOf(norm(q)) >= 0; });
+    const initials = function (p) { const n = (p.name || "?").trim().split(/\s+/); return ((n[0] || "")[0] || "") + ((n[1] || "")[0] || ""); };
+    const fab = React.createElement("button", {
+        onClick: function () { try { sfx.tap(); } catch (e) { } setOpen(true); setQ(""); },
+        title: "Cambiar de paciente",
+        style: { position: "fixed", right: 18, bottom: 18, zIndex: 4500, width: 54, height: 54, borderRadius: "50%", background: C.primary, color: "#fff", border: "3px solid #fff", boxShadow: "0 6px 20px rgba(0,0,0,0.28)", cursor: "pointer", fontSize: 22, fontWeight: 800, fontFamily: "inherit" }
+    }, "⇄");
+    if (!open) return fab;
+    const panel = React.createElement("div", { onClick: function () { setOpen(false); }, style: { position: "fixed", inset: 0, zIndex: 4600, background: "rgba(20,30,25,0.45)", display: "flex", alignItems: "flex-end", justifyContent: "center" } },
+        React.createElement("div", { onClick: function (e) { e.stopPropagation(); }, style: { background: "#fff", borderRadius: "22px 22px 0 0", width: "100%", maxWidth: 460, maxHeight: "72vh", display: "flex", flexDirection: "column", boxShadow: "0 -10px 40px rgba(0,0,0,0.3)", padding: "16px 16px 22px" } },
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.primary } }, "Cambiar de paciente"),
+                React.createElement("button", { onClick: function () { setOpen(false); }, style: { border: "none", background: "#eee", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, fontWeight: 800, color: "#555" } }, "×")),
+            React.createElement("input", { value: q, onChange: function (e) { setQ(e.target.value); }, autoFocus: true, placeholder: "Buscar paciente...", autoCapitalize: "off", autoCorrect: "off", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "2px solid " + C.border, fontSize: 15, fontFamily: "inherit", marginBottom: 10 } }),
+            React.createElement("div", { style: { overflowY: "auto", flex: 1 } },
+                list.length === 0
+                    ? React.createElement("div", { style: { textAlign: "center", color: "#999", padding: "20px 0", fontSize: 14 } }, "Sin coincidencias")
+                    : list.map(function (p) {
+                        const isActive = activePatient && p.id === activePatient.id;
+                        return React.createElement("button", { key: p.id, onClick: function () { try { sfx.tap(); } catch (e) { } setOpen(false); if (!isActive) onPick(p); }, style: { display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 13, border: "1.5px solid " + (isActive ? C.primary : "#eee"), background: isActive ? "#EAF7F0" : "#fff", marginBottom: 7, cursor: "pointer", fontFamily: "inherit" } },
+                            React.createElement("div", { style: { width: 38, height: 38, borderRadius: "50%", background: C.primaryL, color: "#fff", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", textTransform: "uppercase", flexShrink: 0 } }, initials(p) || "🙂"),
+                            React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                                React.createElement("div", { style: { fontWeight: 700, fontSize: 15, color: "#333", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, p.name || "(sin nombre)"),
+                                React.createElement("div", { style: { fontSize: 12, color: "#888" } }, (p.age ? p.age + " años" : "") + (isActive ? " · activo ahora" : ""))),
+                            !isActive && React.createElement("span", { style: { color: C.primary, fontWeight: 800, fontSize: 13 } }, "Abrir ▶"));
+                    })),
+            React.createElement("button", { onClick: function () { try { sfx.tap(); } catch (e) { } setOpen(false); if (onHome) onHome(); }, style: { marginTop: 8, width: "100%", padding: "11px", borderRadius: 12, border: "2px dashed " + C.border, background: "#fafafa", color: "#666", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" } }, "🏠 Ir a la pantalla de inicio")));
+    return React.createElement(React.Fragment, null, fab, panel);
+}
 function CompanionReactions() {
     const [toast, setToast] = React.useState(null);
     React.useEffect(() => {
@@ -40591,9 +41186,55 @@ function SeguimientoClinico({ patient, onClose }) {
 function SessionReport({ patient, onClose }) {
     var _a, _b;
     const [includeCharts, setIncludeCharts] = useState(true);
+    const [includeAreas, setIncludeAreas] = useState(true);
+    const [showEvolution, setShowEvolution] = useState(true);
+    const _autoPrev = (function () { try { return autoAreaPrev(patient.id, 30); } catch (e) { return null; } })();
     const [familyMode, setFamilyMode] = useState(false);
     const [detailLevel, setDetailLevel] = useState("completo"); // compacto | completo
     const [clinicalNote, setClinicalNote] = useState("");
+    const [genResumen, setGenResumen] = useState(false);
+    const generarResumenSesion = async () => {
+        if (genResumen) return;
+        if (clinicalNote.trim() && !confirm("Esto generará un borrador nuevo y reemplazará el texto actual de la valoración. ¿Continuar?")) return;
+        setGenResumen(true);
+        try {
+            const sessions = (typeof getSessions === "function" ? getSessions(patient.id) : []) || [];
+            const scored = sessions.filter(s => s.result && (typeof s.result.correct === "boolean" || typeof s.result.stars === "number"));
+            const recientes = scored.slice(-40);
+            // resumen por área: nº actividades + % acierto
+            const byArea = {};
+            recientes.forEach(s => {
+                const a = s.area || "?"; byArea[a] = byArea[a] || { n: 0, ok: 0, acts: {} };
+                byArea[a].n++; if (s.result.correct === true || (s.result.correct == null && (s.result.stars || 0) > 0)) byArea[a].ok++;
+                if (s.activity) byArea[a].acts[s.activity] = (byArea[a].acts[s.activity] || 0) + 1;
+            });
+            const areaResumen = Object.keys(byArea).map(a => {
+                const d = byArea[a]; const lbl = (typeof areaLabel === "function") ? areaLabel(a) : a;
+                return "- " + lbl + ": " + d.n + " actividades, " + Math.round(d.ok / d.n * 100) + "% de acierto";
+            }).join("\n");
+            // índice por áreas y tendencia
+            let scoresTxt = "";
+            try {
+                const sc = computeAreaScores(sessions, AREAS, storeLoad("adaptiveDiff:" + patient.id) || {});
+                scoresTxt = sc.map(s => "- " + s.label + ": índice " + s.indice + "/100 (" + s.band.t + ")" + (s.trendTxt ? ", " + s.trendTxt : "")).join("\n");
+            } catch (e) { }
+            const objetivos = storeLoad("objetivos:" + patient.id);
+            const objTxt = (Array.isArray(objetivos) && objetivos.length) ? objetivos.map(o => "- " + (o.texto || o.title || JSON.stringify(o))).join("\n") : "";
+            const edad = patient.edad || patient.age || "";
+            const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+                "Eres un psicólogo redactando el BORRADOR de la valoración profesional para un informe de seguimiento. Escribe en español, en tercera persona, tono clínico, profesional y mesurado, SIN exagerar ni prometer resultados. Es un borrador para que el clínico lo revise y edite.\n\n" +
+                "DATOS OBJETIVOS DE LA APP (úsalos, no inventes nada que no esté aquí):\n" +
+                "Actividad reciente por área:\n" + (areaResumen || "(sin actividad registrada)") + "\n\n" +
+                (scoresTxt ? ("Índice de progreso por área (métrica interna de la app, NO test normalizado):\n" + scoresTxt + "\n\n") : "") +
+                (objTxt ? ("Objetivos terapéuticos definidos:\n" + objTxt + "\n\n") : "") +
+                "INSTRUCCIONES:\n- 2 o 3 párrafos breves: (1) trabajo realizado y áreas trabajadas, (2) evolución/rendimiento observado en la app, (3) orientación para el próximo periodo.\n- Deja claro que las métricas reflejan el desempeño EN LAS ACTIVIDADES de la app y no constituyen una evaluación clínica ni un test normalizado.\n- No inventes datos clínicos, diagnósticos ni observaciones de sesión que no estén en los datos. Si faltan datos, dilo con prudencia.\n- Es un borrador editable: no firmes ni pongas fecha.\n\nFormato JSON: {\"resumen\":\"texto del borrador con saltos de línea \\n entre párrafos\"}";
+            const res = await callClaude(prompt, "resumen_sesion");
+            if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar el resumen automático."); return; }
+            if (res && (res.__authError || res.__error || res.__schemaFail) || !res || !res.resumen) { alert("No he podido generar el resumen. Inténtalo de nuevo."); return; }
+            setClinicalNote(res.resumen);
+            try { sfx.click(); } catch (e) { }
+        } finally { setGenResumen(false); }
+    };
     // Which sections to include. Sections without data are auto-disabled in the UI.
     const ALL_SECTIONS = [
         { id: "datos", label: "Datos del paciente", always: true },
@@ -41220,7 +41861,7 @@ ${roleplayList.length > 0 ? (() => {
 </div>`;
 })() : ''}
 
-${(function () { try { if (typeof computeAreaScores !== "function") return ""; const _excl = storeLoad("areaScoreSel:" + patient.id) || []; const _sc = computeAreaScores(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}).filter(function (s) { return _excl.indexOf(s.id) === -1; }); if (!_sc.length) return ""; return '<div class="print-section print-avoid-break"><div class="print-section-title">Progreso por áreas en la app</div>' + buildAreaScoreHTML(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}, { title: false, exclude: _excl }) + '</div>'; } catch (e) { return ""; } })()}
+${(function () { try { if (typeof computeAreaScores !== "function") return ""; const _excl = storeLoad("areaScoreSel:" + patient.id) || []; const _sc = computeAreaScores(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}).filter(function (s) { return _excl.indexOf(s.id) === -1; }); if (!includeAreas) return ""; if (!_sc.length) return ""; var _snap = (showEvolution && _autoPrev) ? _autoPrev : null; return '<div class="print-section print-avoid-break"><div class="print-section-title">Progreso por áreas en la app</div>' + buildAreaScoreHTML(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}, { title: false, exclude: _excl, prev: _snap }) + '</div>'; } catch (e) { return ""; } })()}
 
 <div class="print-section print-avoid-break">
   <div class="print-section-title">Cómo podéis apoyar desde casa</div>
@@ -41243,7 +41884,7 @@ ${(function () { try { if (typeof computeAreaScores !== "function") return ""; c
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.63</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.73</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -41318,6 +41959,8 @@ ${(sections.areas && areasWorkedHTML) ? `
   <div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Detalle de ejercicios trabajados, frecuencia y rendimiento por área terapéutica.</div>
   ${areasWorkedHTML}
 </div>` : ''}
+
+${(function () { try { if (!includeAreas || typeof computeAreaScores !== "function") return ""; var _excl = storeLoad("areaScoreSel:" + patient.id) || []; var _sc = computeAreaScores(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}).filter(function (s) { return _excl.indexOf(s.id) === -1; }); if (!_sc.length) return ""; var _snap = (showEvolution && _autoPrev) ? _autoPrev : null; return '<div class="print-section print-avoid-break"><div class="print-section-title">Progreso por áreas en la app</div>' + buildAreaScoreHTML(getSessions(patient.id), AREAS, storeLoad("adaptiveDiff:" + patient.id) || {}, { title: false, exclude: _excl, prev: _snap }) + '</div>'; } catch (e) { return ""; } })()}
 
 ${(sections.evidencia && evidenciaHTML) ? `
 <div class="print-section">
@@ -41412,7 +42055,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.63</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.73</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -41434,23 +42077,8 @@ ${(sections.linea && lineaHTML) ? `
     };
     const exportJSON = () => {
         sfx.click();
-        const data = {
-            patient,
-            progress: getPatientProgress(patient.id),
-            sessions: getSessions(patient.id),
-            bests: storeLoad("bests:" + patient.id) || {},
-            adaptiveDiff: storeLoad("adaptiveDiff:" + patient.id) || {},
-            selfPerception: storeLoad("selfPerception:" + patient.id) || [],
-            worries: storeLoad("worries:" + patient.id) || [],
-            exportDate: new Date().toISOString(),
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `terapiapp-${patient.nombre.replace(/\s+/g, "_")}-${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const ok = exportPatientFull(patient);
+        if (!ok) { try { alert("No se pudo generar el archivo de respaldo."); } catch (e) { } }
     };
     const AREA_LABELS = {
         atencion: "Atención", memoria: "Memoria", emocional: "Reg. Emocional",
@@ -41628,6 +42256,12 @@ ${(sections.linea && lineaHTML) ? `
                         React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: C.textL, cursor: "pointer", padding: "5px 10px", background: includeCharts ? C.primary + "22" : "#fff", borderRadius: 10, border: `1px solid ${includeCharts ? C.primary : C.border}` } },
                             React.createElement("input", { type: "checkbox", checked: includeCharts, onChange: e => setIncludeCharts(e.target.checked), style: { margin: 0 } }),
                             "📈 Incluir gráficos"),
+                        React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 9px", background: includeAreas ? C.primary + "22" : "#fff", borderRadius: 10, border: `1px solid ${includeAreas ? C.primary : C.border}` } },
+                            React.createElement("input", { type: "checkbox", checked: includeAreas, onChange: e => setIncludeAreas(e.target.checked), style: { margin: 0 } }),
+                            "📊 Progreso por áreas"),
+                        (includeAreas && _autoPrev) && React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 9px", background: showEvolution ? C.primary + "22" : "#fff", borderRadius: 10, border: `1px solid ${showEvolution ? C.primary : C.border}` } },
+                            React.createElement("input", { type: "checkbox", checked: showEvolution, onChange: e => setShowEvolution(e.target.checked), style: { margin: 0 } }),
+                            "📈 Mostrar evolución (vs hace ~1 mes)"),
                         React.createElement("div", { style: { display: "flex", gap: 4, alignItems: "center", padding: "3px 4px", background: "#fff", borderRadius: 10, border: `1px solid ${C.border}` } },
                             React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, paddingLeft: 6 } }, "Detalle:"),
                             ["compacto", "completo"].map(d => React.createElement("button", { key: d, onClick: () => { sfx.tap(); setDetailLevel(d); }, style: {
@@ -41664,6 +42298,9 @@ ${(sections.linea && lineaHTML) ? `
                             width: "100%", padding: "9px 11px", borderRadius: 10, border: `2px solid ${C.border}`,
                             fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", resize: "vertical",
                         } }),
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" } },
+                            React.createElement("button", { onClick: generarResumenSesion, disabled: genResumen, style: { border: "1.5px solid " + C.primary, background: genResumen ? "#eee" : C.primary, color: genResumen ? "#999" : "#fff", borderRadius: 20, padding: "6px 12px", fontSize: 12.5, fontWeight: 800, cursor: genResumen ? "default" : "pointer", fontFamily: "inherit" } }, genResumen ? "Generando..." : "\u2728 Generar resumen"),
+                            React.createElement("span", { style: { fontSize: 11, color: C.textL } }, "Borrador a partir de la actividad registrada. Revísalo antes de usarlo.")),
                         familyMode && clinicalNote.trim() && React.createElement("div", { style: { fontSize: 10.5, color: C.textL, fontStyle: "italic", marginTop: 3 } }, "Nota: la valoración del profesional solo aparece en la versión profesional, no en la de familia."))),
                 React.createElement("div", { style: { background: C.warm, borderRadius: 14, padding: 16, marginBottom: 16 } },
                     React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.textL, marginBottom: 4 } }, "Datos del paciente"),
@@ -41872,7 +42509,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.63", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.73", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -42138,6 +42775,21 @@ function TerapiAppInner() {
     const [showGuiaDiscalculia, setShowGuiaDiscalculia] = useState(false);
     const [area, setArea] = useState(null);
     const [activity, setActivity] = useState(null);
+    const [navRestore, setNavRestore] = useState(null);
+    React.useEffect(function () {
+        try {
+            if (activePatient) storeSave("navState", { pid: activePatient.id, area: area, activity: activity, ts: Date.now() });
+        } catch (e) { }
+    }, [activePatient, area, activity]);
+    React.useEffect(function () {
+        try {
+            var ns = storeLoad("navState");
+            if (ns && ns.pid && !activePatient && (Date.now() - (ns.ts || 0) < 86400000)) {
+                var p = (storeLoad("patients") || []).find(function (x) { return x.id === ns.pid; });
+                if (p && (ns.area || ns.activity)) setNavRestore({ patient: p, area: ns.area, activity: ns.activity });
+            }
+        } catch (e) { }
+    }, []);
     const [mascotState, setMascotState] = useState("idle");
     const [achievementToast, setAchievementToast] = useState(null);
     const [scoreRefresh, setScoreRefresh] = useState(0);
@@ -42461,6 +43113,11 @@ function TerapiAppInner() {
             showMascota && React.createElement(Mascota, { patient: activePatient, onClose: () => setShowMascota(false) }),
             showAlbum && React.createElement(AlbumCromos, { patient: activePatient, onClose: () => setShowAlbum(false) }),
             React.createElement(CompanionReactions, null),
+            React.createElement(QuickSwitcher, { patients: patients, activePatient: activePatient, onPick: function (p) { setActivePatient(p); setArea(null); setActivity(null); try { storeSave("lastActivePatientId", p.id); } catch (e) { } window.scrollTo(0, 0); }, onHome: function () { setActivePatient(null); setArea(null); setActivity(null); } }),
+            navRestore && React.createElement("div", { style: { position: "fixed", left: "50%", bottom: 86, transform: "translateX(-50%)", zIndex: 4400, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.22)", border: "2px solid " + C.primaryL, padding: "12px 14px", width: "min(420px, 92vw)", display: "flex", alignItems: "center", gap: 10 } },
+                React.createElement("div", { style: { flex: 1, fontSize: 13.5, color: "#333", lineHeight: 1.4 } }, "¿Seguir donde lo dejaste con ", React.createElement("strong", null, navRestore.patient.name || "el paciente"), "?"),
+                React.createElement("button", { onClick: function () { var r = navRestore; setNavRestore(null); setActivePatient(r.patient); try { storeSave("lastActivePatientId", r.patient.id); } catch (e) { } if (r.area) setArea(r.area); if (r.activity) setActivity(r.activity); window.scrollTo(0, 0); }, style: { background: C.primary, color: "#fff", border: "none", borderRadius: 10, padding: "8px 12px", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" } }, "Seguir"),
+                React.createElement("button", { onClick: function () { setNavRestore(null); try { storeSave("navState", null); } catch (e) { } }, style: { background: "#eee", color: "#666", border: "none", borderRadius: 10, padding: "8px 10px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" } }, "No")),
             showAventura && React.createElement(AventuraView, { patient: activePatient, onClose: () => setShowAventura(false), onLaunch: (areaId, activityId) => { setShowAventura(false); nav(areaId, activityId); } }),
             showGuiaDislexia && React.createElement(GuiaDislexia, { onClose: () => setShowGuiaDislexia(false) }),
             showGuiaDiscalculia && React.createElement(GuiaDiscalculia, { onClose: () => setShowGuiaDiscalculia(false) }),
@@ -42923,7 +43580,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.63"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.73"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
