@@ -19867,13 +19867,13 @@ function MemoryParejas({ patient }) {
         setMoves(0);
     };
     const genLocal = useCallback(() => {
-        const n = { "fácil": 4, "medio": 6, "difícil": 8 }[diff];
+        const n = { "fácil": 4, "medio": 6, "difícil": 8, "experto": 10 }[diff];
         buildFrom(ALL_OBJECTS, n);
         setSource("local");
     }, [diff]);
     const genAI = useCallback(async () => {
         setLoading(true);
-        const n = { "fácil": 4, "medio": 6, "difícil": 8 }[diff];
+        const n = { "fácil": 4, "medio": 6, "difícil": 8, "experto": 10 }[diff];
         const valid = ALL_OBJECTS.join(", ");
         const prompt = `${PatientContext(patient)}
 Elige ${n} objetos temáticamente relacionados para un juego de memoria. Los objetos DEBEN venir de esta lista: ${valid}
@@ -19924,11 +19924,11 @@ Formato JSON:
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
                 React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Memory de Parejas"),
                 source === "ai" && React.createElement(AIBadge, null)),
-            React.createElement(DiffSelect, { value: diff, onChange: setDiff })),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, ["fácil", "medio", "difícil", "experto"].map(function (d) { return React.createElement("button", { key: d, onClick: function () { setDiff(d); }, style: { padding: "6px 11px", borderRadius: 10, border: "2px solid " + (diff === d ? C.accent : C.border), background: diff === d ? C.accent : "#fff", color: diff === d ? "#fff" : C.text, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" } }, d); }))),
         React.createElement(Instructions, null,
             "Encuentra las parejas iguales. Movimientos: ",
             React.createElement("strong", null, moves)),
-        loading ? React.createElement(LoadingCard, null) : (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, maxWidth: 380, margin: "0 auto 14px" } }, cards.map((c, i) => {
+        loading ? React.createElement(LoadingCard, null) : (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(" + (cards.length >= 16 ? 5 : 4) + ", 1fr)", gap: cards.length >= 16 ? 6 : 8, maxWidth: cards.length >= 16 ? 440 : 380, margin: "0 auto 14px" } }, cards.map((c, i) => {
             const show = flipped.includes(i) || matched.includes(c);
             return (React.createElement("div", { key: i, onClick: () => tap(i), style: {
                     aspectRatio: "1", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
@@ -24825,15 +24825,21 @@ function AventuraSocialRamificada({ patient }) {
                 React.createElement("span", { style: { fontWeight: 800, color: C.primary, marginRight: 7 } }, String.fromCharCode(65 + i)), o.texto))));
 }
 function CompaneroEnVivo({ patient }) {
-    const [phase, setPhase] = useState("intro"); // intro | chat | feedback
+    const [phase, setPhase] = useState("intro"); // intro | chat | feedback | history
     const [scenarioId, setScenarioId] = useState(null);
     const [speedMode, setSpeedMode] = useState(true);
+    const [intensity, setIntensity] = useState("normal"); // amable | normal | dificil
+    const [goalId, setGoalId] = useState("libre");
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [feedback, setFeedback] = useState(null);
     const [secs, setSecs] = useState(0);
     const [nudge, setNudge] = useState(null);
+    const [hint, setHint] = useState(null);
+    const [hintLoading, setHintLoading] = useState(false);
+    const [hintsUsed, setHintsUsed] = useState(0);
+    const [savedToReport, setSavedToReport] = useState(false);
     const turnRef = useRef(0);
     const timerRef = useRef(null);
     const MAX_TURNS = 7;
@@ -24845,7 +24851,20 @@ function CompaneroEnVivo({ patient }) {
         { id: "grupo", label: "Entrar en un grupo", emoji: "👥", persona: "Eres parte de un grupo de amigos que ya está hablando de sus cosas (una serie, un partido, un meme). El paciente intenta unirse. No se lo pones fácil ni difícil: como en la vida real, hay que pillar el hilo y aportar algo." },
         { id: "bromas", label: "Cuando hay bromas", emoji: "😏", persona: "Eres un adolescente algo bromista que suelta comentarios con doble sentido y pullas amistosas (no crueles). El reto del paciente es leer el tono, seguir la broma o poner un límite con humor, sin ofenderse de más ni picarse." },
     ];
+    const INTENSITY = {
+        amable: { label: "Amable", emoji: "😌", desc: "Te lo pone fácil, paciente y receptivo", curve: 0.12, note: "Eres MUY receptivo y paciente: mantienes la conversación viva aunque el paciente aporte poco, le das pie, no te ofendes." },
+        normal: { label: "Normal", emoji: "🙂", desc: "Como en la vida real", curve: 0.40, note: "Reaccionas de forma natural y realista." },
+        dificil: { label: "Difícil", emoji: "😬", desc: "Más seco, más giros, hay que currárselo", curve: 0.6, note: "Eres más seco y exigente: si el paciente no aporta, te aburres y la conversación se apaga; metes más giros y respuestas cortas. Realista, nunca cruel." },
+    };
+    const GOALS = [
+        { id: "libre", label: "Sin objetivo (conversar)" },
+        { id: "preguntas", label: "Hacer 2+ preguntas al otro", instr: "El objetivo del paciente es HACER AL MENOS 2 PREGUNTAS al personaje sobre lo que dice." },
+        { id: "tema", label: "Mantener un tema 3 turnos", instr: "El objetivo del paciente es MANTENER UN MISMO TEMA durante al menos 3 turnos sin saltar de uno a otro." },
+        { id: "iniciar", label: "Llevar la iniciativa", instr: "El objetivo del paciente es LLEVAR LA INICIATIVA: proponer temas, no limitarse a responder." },
+        { id: "cierre", label: "Cerrar bien la conversación", instr: "El objetivo del paciente es CERRAR la conversación de forma natural (despedirse, proponer verse, etc.) en vez de dejarla colgada." },
+    ];
     const scenario = SCENARIOS.find(s => s.id === scenarioId);
+    const goal = GOALS.find(g => g.id === goalId) || GOALS[0];
 
     const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
     const startTimer = () => {
@@ -24855,11 +24874,15 @@ function CompaneroEnVivo({ patient }) {
     };
     React.useEffect(() => stopTimer, []);
 
+    const personaFull = () => scenario.persona + " " + (INTENSITY[intensity] ? INTENSITY[intensity].note : "");
+    const goalLine = () => goal && goal.instr ? ("OBJETIVO DE ESTA CONVERSACIÓN para el paciente: " + goal.instr + "\n") : "";
+
     const start = async (id) => {
         const sc = SCENARIOS.find(x => x.id === id);
-        setScenarioId(id); setMessages([]); setFeedback(null); turnRef.current = 0; setPhase("chat"); setLoading(true);
+        setScenarioId(id); setMessages([]); setFeedback(null); setHint(null); setHintsUsed(0); setSavedToReport(false); turnRef.current = 0; setPhase("chat"); setLoading(true);
+        const persona = sc.persona + " " + (INTENSITY[intensity] ? INTENSITY[intensity].note : "");
         const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
-            `Vas a hacer de COMPAÑERO en una conversación en vivo para que el paciente practique habilidades sociales del día a día. PERSONAJE: ${sc.persona}\n\nEmpieza tú con UNA frase natural y espontánea que abra la conversación, como hablaría de verdad un adolescente (coloquial, breve). No expliques nada, no des opciones.\nFormato JSON: {"opener":"frase"}`;
+            `Vas a hacer de COMPAÑERO en una conversación en vivo para que el paciente practique habilidades sociales del día a día. PERSONAJE: ${persona}\n\nEmpieza tú con UNA frase natural y espontánea que abra la conversación, como hablaría de verdad un adolescente (coloquial, breve). No expliques nada, no des opciones.\nFormato JSON: {"opener":"frase"}`;
         const res = await callClaude(prompt, "companero_vivo_open");
         setLoading(false);
         if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar esta actividad."); setPhase("intro"); return; }
@@ -24868,90 +24891,181 @@ function CompaneroEnVivo({ patient }) {
         startTimer();
     };
 
+    const askHint = async () => {
+        if (hintLoading || loading) return;
+        setHintLoading(true);
+        const convo = messages.map(m => `${m.role === "user" ? "Paciente" : "Compañero"}: ${m.text}`).join("\n");
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `El paciente está practicando una conversación y se ha quedado sin saber qué decir. PERSONAJE: ${scenario.persona}\n\nCONVERSACIÓN:\n${convo}\n\nDale UNA pista de cómo ENFOCAR su próxima respuesta, SIN dársela hecha (no escribas la frase por él). Pista breve, una sola idea, en segunda persona, cálida. Por ejemplo orientarle a preguntar algo de lo que dijo el otro, compartir algo propio, o seguir la broma.\nFormato JSON: {"pista":"texto breve"}`;
+        const res = await callClaude(prompt, "companero_vivo_hint");
+        setHintLoading(false);
+        if (res && (res.__noKey || res.__authError || res.__error || res.__schemaFail) || !res || !res.pista) { setHint("Prueba a preguntarle algo sobre lo último que dijo."); }
+        else { setHint(res.pista); }
+        setHintsUsed(h => h + 1);
+    };
+
     const send = async (forceFinal = false) => {
         if (!input.trim() || loading) return;
         if (!/[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(input)) { setNudge("Escríbelo con palabras 🙂"); setInput(""); return; }
-        stopTimer();
+        stopTimer(); setHint(null);
         const userMsg = input.trim();
         const fast = speedMode && secs <= RESP_SECONDS;
         const newMsgs = [...messages, { role: "user", text: userMsg, fast: speedMode ? fast : null }];
         setMessages(newMsgs); setInput(""); setNudge(null); turnRef.current += 1; setLoading(true);
         const convo = newMsgs.map(m => `${m.role === "user" ? "Paciente" : "Compañero"}: ${m.text}`).join("\n");
         const isFinal = forceFinal || turnRef.current >= MAX_TURNS;
-        // curveball aleatorio para entrenar la respuesta a lo inesperado
-        const curve = (!isFinal && turnRef.current >= 1 && Math.random() < 0.4)
+        const curve = (!isFinal && turnRef.current >= 1 && Math.random() < (INTENSITY[intensity] ? INTENSITY[intensity].curve : 0.4))
             ? "\n\nEN ESTE TURNO mete un GIRO INESPERADO realista (cambia de tema de golpe, te distraes con algo, mencionas a otra persona que llega, o haces una pregunta directa que no venía a cuento). Que el paciente tenga que adaptarse." : "";
         const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
-            `Conversación en vivo en curso. PERSONAJE: ${scenario.persona}${curve}\n\nCONVERSACIÓN:\n${convo}\n\n` +
+            `Conversación en vivo en curso. PERSONAJE: ${personaFull()}\n${goalLine()}${curve}\n\nCONVERSACIÓN:\n${convo}\n\n` +
             `Responde como el personaje: natural, coloquial, breve (máx 25 palabras), reaccionando de verdad a lo último que dijo el paciente. El paciente puede escribir con faltas, sin tildes o abreviaturas (q, xq, tb): interpreta la intención y NO le corrijas la ortografía.\n` +
             (isFinal
-                ? `Es el ÚLTIMO turno: despídete con naturalidad y además evalúa cómo lo ha hecho el paciente en la conversación.\nFormato JSON: {"reply":"despedida del personaje","feedback":{"bien":"1-2 cosas concretas que hizo bien","mejora":"1 cosa concreta a mejorar, en tono amable","reto":"un mini-reto para la vida real relacionado"}}`
+                ? `Es el ÚLTIMO turno: despídete con naturalidad y además evalúa cómo lo ha hecho el paciente.\n${goal && goal.instr ? "Valora especialmente si cumplió el objetivo: " + goal.instr + "\n" : ""}Formato JSON: {"reply":"despedida del personaje","feedback":{"bien":"1-2 cosas concretas que hizo bien","mejora":"1 cosa concreta a mejorar, en tono amable","reto":"un mini-reto para la vida real relacionado","objetivo_cumplido":${goal && goal.instr ? '"sí|parcial|no, según el objetivo"' : '"no aplica"'},"habilidades":{"iniciativa":1,"escucha":1,"mantener_tema":1,"cierre":1}}}\nEn "habilidades" puntúa de 0 a 2 cada micro-habilidad (0 flojo, 1 aceptable, 2 bien).`
                 : `Formato JSON: {"reply":"frase del personaje"}`);
         const res = await callClaude(prompt, "companero_vivo");
         setLoading(false);
         if (res && (res.__noKey || res.__authError || res.__error || res.__schemaFail)) { setMessages([...newMsgs, { role: "assistant", text: "(Ups, no me llegó la respuesta. Escribe otra vez.)" }]); return; }
-        setMessages([...newMsgs, { role: "assistant", text: res.reply }]);
+        const finalMsgs = newMsgs.concat([{ role: "assistant", text: res.reply }]);
+        setMessages(finalMsgs);
         if (isFinal && res.feedback) {
             setFeedback(res.feedback); setPhase("feedback");
             try { logCurrentResult(true); } catch (e) { }
-            saveSession(newMsgs.concat([{ role: "assistant", text: res.reply }]), res.feedback);
+            saveSession(finalMsgs, res.feedback);
         } else { startTimer(); }
     };
 
+    const lastSavedRef = useRef(null);
     const saveSession = (msgs, fb) => {
         try {
             const k = "companeroVivo:" + patient.id;
             const arr = storeLoad(k) || [];
-            arr.push({ id: uid(), ts: Date.now(), scenario: scenario.label, turns: turnRef.current, feedback: fb });
+            const rec = { id: uid(), ts: Date.now(), scenario: scenario.label, intensity: intensity, goal: goal.label, turns: turnRef.current, hintsUsed: hintsUsed, feedback: fb, messages: msgs.map(m => ({ role: m.role, text: m.text })), inReport: false };
+            arr.push(rec);
             if (arr.length > 30) arr.splice(0, arr.length - 30);
             storeSave(k, arr);
+            lastSavedRef.current = rec.id;
+        } catch (e) { }
+    };
+
+    // 5) convertir el mini-reto en una Misión Real
+    const retoToMision = () => {
+        if (!feedback || !feedback.reto) return;
+        try {
+            const k = "misionesReales:" + patient.id;
+            const data = storeLoad(k) || { active: null, done: [] };
+            const active = { id: uid(), ts: Date.now(), titulo: "Reto social: " + (scenario ? scenario.label : "conversación"), detalle: feedback.reto, pista: "Surgió de tu práctica con el Compañero en Vivo.", dificultad: "media" };
+            data.active = active;
+            storeSave(k, data);
+            try { sfx.success(); } catch (e) { }
+            try { alert("¡Reto guardado en Misiones Reales! Lo encontrarás allí para probarlo en tu día a día."); } catch (e) { }
+        } catch (e) { }
+    };
+
+    // 8) marcar/desmarcar la conversación para el informe
+    const toggleReport = () => {
+        try {
+            const k = "companeroVivo:" + patient.id;
+            const arr = storeLoad(k) || [];
+            const id = lastSavedRef.current;
+            const rec = arr.find(r => r.id === id);
+            if (rec) { rec.inReport = !rec.inReport; storeSave(k, arr); setSavedToReport(rec.inReport); }
         } catch (e) { }
     };
 
     if (phase === "intro") {
+        const history = (function () { try { return storeLoad("companeroVivo:" + patient.id) || []; } catch (e) { return []; } })();
         return React.createElement("div", null,
-            React.createElement("div", { style: { fontSize: 20, fontWeight: 800, marginBottom: 8 } }, "Compañero en Vivo"),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 20, fontWeight: 800 } }, "Compañero en Vivo"),
+                history.length > 0 && React.createElement("button", { onClick: () => { try { sfx.tap(); } catch (e) { } setPhase("history"); }, style: { border: "1.5px solid " + C.border, background: "#fff", borderRadius: 20, padding: "5px 11px", fontSize: 12, fontWeight: 700, color: C.textL, cursor: "pointer", fontFamily: "inherit" } }, "🗂 Historial (" + history.length + ")")),
             React.createElement(Instructions, { adoChildren: "Conversación libre con un compañero que improvisa y a veces te sorprende con giros inesperados, como en la vida real. El objetivo no es la respuesta perfecta, sino responder en caliente y adaptarte." },
                 "Habla con un compañero como lo harías de verdad. No hay respuestas correctas: se trata de mantener la conversación y reaccionar a lo que pase."),
-            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, margin: "12px 0", fontSize: 13.5, fontWeight: 700, color: C.text, cursor: "pointer" } },
+            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, margin: "12px 0 10px", fontSize: 13.5, fontWeight: 700, color: C.text, cursor: "pointer" } },
                 React.createElement("input", { type: "checkbox", checked: speedMode, onChange: e => setSpeedMode(e.target.checked) }),
                 "⏱ Modo rápido (responde en ~" + RESP_SECONDS + "s, sin pensarlo demasiado)"),
+            React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: C.textL, margin: "4px 0 6px" } }, "Cómo es el compañero"),
+            React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" } },
+                Object.keys(INTENSITY).map(k => React.createElement("button", { key: k, onClick: () => { try { sfx.tap(); } catch (e) { } setIntensity(k); }, title: INTENSITY[k].desc, style: { flex: "1 1 30%", padding: "8px 6px", borderRadius: 10, border: "2px solid " + (intensity === k ? C.primary : C.border), background: intensity === k ? C.primary : "#fff", color: intensity === k ? "#fff" : C.text, fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" } }, INTENSITY[k].emoji + " " + INTENSITY[k].label))),
+            React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginBottom: 12 } }, INTENSITY[intensity].desc),
+            React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: C.textL, margin: "4px 0 6px" } }, "Objetivo de hoy"),
+            React.createElement("select", { value: goalId, onChange: e => setGoalId(e.target.value), style: { width: "100%", boxSizing: "border-box", padding: "9px 11px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14, fontFamily: "inherit", marginBottom: 14, background: "#fff" } },
+                GOALS.map(g => React.createElement("option", { key: g.id, value: g.id }, g.label))),
+            React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: C.textL, margin: "4px 0 6px" } }, "Elige una situación"),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
                 SCENARIOS.map(s => React.createElement("button", { key: s.id, onClick: () => start(s.id), style: { border: "2px solid " + C.border, background: "#fff", borderRadius: 14, padding: "14px 12px", cursor: "pointer", fontFamily: "inherit", textAlign: "left" } },
                     React.createElement("div", { style: { fontSize: 26, marginBottom: 4 } }, s.emoji),
                     React.createElement("div", { style: { fontWeight: 800, fontSize: 13.5, color: C.text } }, s.label)))));
     }
+
+    if (phase === "history") {
+        const history = (function () { try { return (storeLoad("companeroVivo:" + patient.id) || []).slice().reverse(); } catch (e) { return []; } })();
+        const renderItem = function (h) {
+            const meta = (h.goal && h.goal !== "Sin objetivo (conversar)" ? ("\uD83C\uDFAF " + h.goal + " \u00b7 ") : "") + (h.turns || 0) + " turnos" + (h.hintsUsed ? (" \u00b7 " + h.hintsUsed + " pista(s)") : "") + (h.inReport ? " \u00b7 \uD83D\uDCC4 en informe" : "");
+            return React.createElement("div", { key: h.id, style: { background: "#fff", border: "1px solid " + C.border, borderRadius: 12, padding: "11px 13px", marginBottom: 9 } },
+                React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 } },
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: 14, color: C.text } }, h.scenario),
+                    React.createElement("div", { style: { fontSize: 11, color: C.textL } }, new Date(h.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short" }))),
+                React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginBottom: 6 } }, meta),
+                h.feedback ? React.createElement("div", { style: { fontSize: 12.5, color: C.text, lineHeight: 1.45 } }, React.createElement("span", { style: { color: "#2D6A4F", fontWeight: 700 } }, "\u2705 "), (h.feedback.bien || "")) : null);
+        };
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C.primary } }, "\uD83D\uDDC2 Historial de conversaciones"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: function () { setPhase("intro"); } }, "Volver")),
+            history.length === 0
+                ? React.createElement("div", { style: { color: C.textL, textAlign: "center", padding: "30px 0" } }, "A\u00fan no hay conversaciones guardadas.")
+                : React.createElement("div", null, history.map(renderItem)));
+    }
     if (phase === "feedback" && feedback) {
+        const HAB_LABEL = { iniciativa: "Iniciativa", escucha: "Escucha / preguntas", mantener_tema: "Mantener el tema", cierre: "Cierre" };
+        const dot = (v) => v >= 2 ? "#2D6A4F" : v >= 1 ? "#C9942B" : "#C0392B";
+        const dotTxt = (v) => v >= 2 ? "Bien" : v >= 1 ? "Aceptable" : "A mejorar";
+        const oc = feedback.objetivo_cumplido;
         return React.createElement("div", null,
             React.createElement("div", { style: { fontSize: 18, fontWeight: 800, marginBottom: 12, color: C.primary } }, "Cómo ha ido 🌟"),
+            (goal && goal.instr && oc && oc !== "no aplica") && React.createElement("div", { style: { background: oc.indexOf("sí") === 0 || oc === "sí" ? "#EAF7F0" : oc.indexOf("parcial") >= 0 ? "#FFF7E6" : "#FBEAEA", borderRadius: 12, padding: "10px 13px", marginBottom: 10, fontSize: 13.5, fontWeight: 700, color: C.text } },
+                "🎯 Objetivo (" + goal.label + "): " + (oc.indexOf("sí") === 0 || oc === "sí" ? "conseguido ✅" : oc.indexOf("parcial") >= 0 ? "a medias 🟡" : "no esta vez 🔴")),
+            feedback.habilidades && React.createElement("div", { style: { background: "#F7F7F4", borderRadius: 12, padding: "10px 13px", marginBottom: 10 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 12.5, color: C.textL, marginBottom: 7 } }, "Habilidades en esta charla"),
+                Object.keys(HAB_LABEL).filter(kk => typeof feedback.habilidades[kk] === "number").map(kk => React.createElement("div", { key: kk, style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 } },
+                    React.createElement("span", { style: { fontSize: 13, color: C.text } }, HAB_LABEL[kk]),
+                    React.createElement("span", { style: { fontSize: 11.5, fontWeight: 800, color: dot(feedback.habilidades[kk]) } }, "● " + dotTxt(feedback.habilidades[kk]))))),
             React.createElement("div", { style: { background: "#EAF7F0", borderRadius: 12, padding: "12px 14px", marginBottom: 10 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D6A4F", marginBottom: 4 } }, "✅ Lo que hiciste bien"),
                 React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.bien)),
             React.createElement("div", { style: { background: "#FFF7E6", borderRadius: 12, padding: "12px 14px", marginBottom: 10 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#9A7B1F", marginBottom: 4 } }, "🔧 Para la próxima"),
                 React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.mejora)),
-            feedback.reto && React.createElement("div", { style: { background: "#EAF1FB", borderRadius: 12, padding: "12px 14px", marginBottom: 14 } },
+            feedback.reto && React.createElement("div", { style: { background: "#EAF1FB", borderRadius: 12, padding: "12px 14px", marginBottom: 10 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#2D5C8A", marginBottom: 4 } }, "🎯 Mini-reto en la vida real"),
-                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5 } }, feedback.reto)),
+                React.createElement("div", { style: { fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 8 } }, feedback.reto),
+                React.createElement(Btn, { color: "#2D5C8A", small: true, onClick: retoToMision }, "➕ Guardarlo en Misiones Reales")),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, margin: "4px 0 14px", flexWrap: "wrap" } },
+                React.createElement("button", { onClick: toggleReport, style: { border: "1.5px solid " + (savedToReport ? C.primary : C.border), background: savedToReport ? C.primary : "#fff", color: savedToReport ? "#fff" : C.text, borderRadius: 20, padding: "7px 12px", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" } }, savedToReport ? "📄 Se incluirá en el informe ✓" : "📄 Incluir esta conversación en el informe"),
+                React.createElement("span", { style: { fontSize: 11, color: C.textL } }, "Para que la familia la lea")),
             React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => setPhase("intro") }, "Otra conversación ▶")));
     }
+
     // chat
     const overtime = speedMode && secs > RESP_SECONDS;
     return React.createElement("div", null,
-        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
             React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: C.primary } }, scenario.emoji + " " + scenario.label),
             speedMode && React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: overtime ? C.error : C.textL, background: overtime ? "#FBEAEA" : "#f0f0ec", borderRadius: 20, padding: "3px 10px" } }, "⏱ " + secs + "s")),
-        React.createElement("div", { style: { background: "#F7F7F4", borderRadius: 14, padding: 12, minHeight: 200, maxHeight: 340, overflowY: "auto", marginBottom: 10 } },
+        goal && goal.instr && React.createElement("div", { style: { fontSize: 11.5, color: "#2D5C8A", background: "#EAF1FB", borderRadius: 8, padding: "4px 9px", marginBottom: 8, display: "inline-block" } }, "🎯 " + goal.label),
+        React.createElement("div", { style: { background: "#F7F7F4", borderRadius: 14, padding: 12, minHeight: 200, maxHeight: 320, overflowY: "auto", marginBottom: 8 } },
             messages.map((m, i) => React.createElement("div", { key: i, style: { display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 8 } },
                 React.createElement("div", { style: { maxWidth: "78%", padding: "9px 12px", borderRadius: 14, fontSize: 14.5, lineHeight: 1.4, background: m.role === "user" ? C.primary : "#fff", color: m.role === "user" ? "#fff" : C.text, border: m.role === "user" ? "none" : "1px solid " + C.border } },
                     m.text,
                     m.fast === true && React.createElement("span", { title: "Respuesta rápida", style: { marginLeft: 6 } }, "⚡")))),
             loading && React.createElement("div", { style: { fontSize: 13, color: C.textL, fontStyle: "italic" } }, "escribiendo...")),
+        hint && React.createElement("div", { style: { background: "#FFF7E6", border: "1px solid #F0DFA8", borderRadius: 10, padding: "8px 11px", marginBottom: 8, fontSize: 13, color: "#7a5d1f" } }, "💡 " + hint),
         nudge && React.createElement("div", { style: { fontSize: 12.5, color: C.error, marginBottom: 6 } }, nudge),
         React.createElement("div", { style: { display: "flex", gap: 8 } },
             React.createElement("input", { value: input, onChange: e => setInput(e.target.value), onKeyDown: e => { if (e.key === "Enter") send(); }, disabled: loading, placeholder: "Tu respuesta...", autoCapitalize: "sentences", style: { flex: 1, padding: "10px 12px", borderRadius: 12, border: "2px solid " + C.border, fontSize: 15, fontFamily: "inherit" } }),
             React.createElement(Btn, { color: C.primary, small: true, onClick: () => send(), disabled: loading || !input.trim() }, "Enviar")),
-        React.createElement("div", { style: { textAlign: "center", marginTop: 8 } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, gap: 8 } },
+            React.createElement("button", { onClick: askHint, disabled: hintLoading || loading || messages.length < 1, style: { border: "1.5px solid " + C.border, background: "#fff", color: C.textL, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit", borderRadius: 20, padding: "6px 11px", fontWeight: 700 } }, hintLoading ? "..." : "💡 ¿Y ahora qué digo?"),
             React.createElement("button", { onClick: () => send(true), disabled: loading || messages.length < 2, style: { border: "none", background: "transparent", color: C.textL, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" } }, "Terminar y ver cómo lo hice")));
 }
 function RolInvertidoCoach({ patient }) {
@@ -34980,14 +35094,15 @@ function JuegoTopo({ patient }) {
     const LEVELS = {
         facil: { label: "Fácil", stayMs: 1300, gapMs: 500, bombProb: 0.12, target: 8, emoji: "🐢" },
         medio: { label: "Medio", stayMs: 950, gapMs: 380, bombProb: 0.24, target: 12, emoji: "🙂" },
-        dificil: { label: "Difícil", stayMs: 700, gapMs: 280, bombProb: 0.34, target: 15, emoji: "⚡" },
+        dificil: { label: "Difícil", stayMs: 760, gapMs: 280, bombProb: 0.30, target: 11, emoji: "⚡" },
     };
     const [level, setLevel] = useState(function(){ try { var __d = getAdaptiveDiff(_activePatientId, _activeActivityId, "fácil"); return __d === "difícil" ? "dificil" : (__d === "medio" ? "medio" : "facil"); } catch (e) { return "facil"; } });
     const [phase, setPhase] = useState("ready");
     const [active, setActive] = useState(null);
     const [score, setScore] = useState(0);
     const [tleft, setTleft] = useState(30);
-    const activeRef = useRef(null), running = useRef(false), timers = useRef([]), iv = useRef(null);
+    const [flash, setFlash] = useState(null); // { slot, kind: "hit"|"bomb" }
+    const activeRef = useRef(null), running = useRef(false), timers = useRef([]), iv = useRef(null), flashIdRef = useRef(0);
     const after = (ms, fn) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
     const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; if (iv.current) clearInterval(iv.current); };
     useEffect(() => () => { running.current = false; clearAll(); }, []);
@@ -35004,7 +35119,7 @@ function JuegoTopo({ patient }) {
     };
     const start = () => {
         clearAll(); setScore(0); setTleft(30); setActive(null); activeRef.current = null;
-        running.current = true; setPhase("play");
+        running.current = true; setPhase("play"); setFlash(null);
         try { sfx.tap(); } catch (e) { }
         after(300, spawn);
         iv.current = setInterval(() => { setTleft(t => { if (t <= 1) { finish(); return 0; } return t - 1; }); }, 1000);
@@ -35023,8 +35138,9 @@ function JuegoTopo({ patient }) {
         const a = activeRef.current;
         if (!a || a.slot !== slot) return;
         activeRef.current = null; setActive(null);
-        if (a.type === "topo") { setScore(s => s + 1); try { sfx.success(); } catch (e) { } }
-        else { setScore(s => Math.max(0, s - 1)); try { sfx.fail(); } catch (e) { } }
+        if (a.type === "topo") { setScore(s => s + 1); try { sfx.success(); } catch (e) { } setFlash({ slot: slot, kind: "hit", id: Math.random() }); }
+        else { setScore(s => Math.max(0, s - 1)); try { sfx.fail(); } catch (e) { } setFlash({ slot: slot, kind: "bomb", id: Math.random() }); }
+        (function () { var fid = flashIdRef.current = Math.random(); after(420, function () { if (flashIdRef.current === fid) setFlash(null); }); })();
         after(LV.gapMs, spawn);
     };
 
@@ -35040,7 +35156,11 @@ function JuegoTopo({ patient }) {
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, maxWidth: 300, margin: "0 auto" } },
             [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => {
                 const a = active && active.slot === i ? active : null;
-                return React.createElement("div", { key: i, onClick: () => tap(i), style: { aspectRatio: "1 / 1", borderRadius: 14, background: "#EAF3EE", border: "2px solid #d6e6dd", cursor: phase === "play" ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 }, dangerouslySetInnerHTML: { __html: a ? (a.type === "topo" ? topoSVG : bombaSVG) : hole } });
+                const fl = flash && flash.slot === i ? flash : null;
+                const bg = fl ? (fl.kind === "hit" ? "#B7E4C7" : "#F8C9C9") : "#EAF3EE";
+                const bd = fl ? (fl.kind === "hit" ? "#2D6A4F" : "#C0392B") : "#d6e6dd";
+                return React.createElement("div", { key: i, onClick: () => tap(i), style: { position: "relative", aspectRatio: "1 / 1", borderRadius: 14, background: bg, border: "3px solid " + bd, cursor: phase === "play" ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", padding: 4, transition: "background 0.12s, border-color 0.12s", transform: fl ? "scale(1.06)" : "scale(1)" }, dangerouslySetInnerHTML: a ? { __html: a.type === "topo" ? topoSVG : bombaSVG } : (fl ? undefined : { __html: hole }) },
+                    fl ? React.createElement("span", { style: { fontSize: 26, fontWeight: 900, color: fl.kind === "hit" ? "#1B5E3A" : "#A93226" } }, fl.kind === "hit" ? "+1" : "−1") : null);
             })),
         React.createElement("div", { style: { marginTop: 12 } }, (phase === "play") ? React.createElement("div", { style: { height: 40 } }) : React.createElement(Btn, { color: C.primary, onClick: start }, phase === "done" ? "Jugar otra vez" : "▶ Empezar")),
     );
@@ -35345,7 +35465,7 @@ function FrescuraPanel({ patient }) {
     );
 }
 
-    // ===== NEW v25.73: evidence-based exercises (TEA + dislexia escritura) =====
+    // ===== NEW v25.76: evidence-based exercises (TEA + dislexia escritura) =====
     function ReglasNoEscritas({ patient }) {
         const BANK = [
             { ctx: "Estás en la biblioteca y quieres contarle algo divertido a tu amigo.", q: "¿Qué es lo más adecuado?", opts: ["Hablar muy bajito o esperar a salir", "Contarlo en voz alta para que se rían todos", "Darle un grito desde la otra punta"], ans: 0, exp: "Una regla no escrita de la biblioteca es estar en silencio. Nadie lo dice en voz alta, pero se espera." },
@@ -35501,7 +35621,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: producción escrita (construir la palabra letra a letra) =====
+    // ===== NEW v25.76: producción escrita (construir la palabra letra a letra) =====
     function OrdenaLetras({ patient }) {
         const WORDS = [
             { w: "casa", clue: "🏠 El sitio donde vives" },
@@ -35574,7 +35694,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
+    // ===== NEW v25.76: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
     function SilabasTrabadas({ patient }) {
         const BANK = [
             { ctx: "Comí en un ___ blanco.", q: "¿Cómo se escribe?", opts: ["plato", "pato", "palto"], ans: 0, exp: "«Plato» tiene la sílaba trabada «pla» (p+l). «Pato» es otro animal y «palto» cambia el orden." },
@@ -35646,7 +35766,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: PEERS (manejar burlas, hacer planes) =====
+    // ===== NEW v25.76: PEERS (manejar burlas, hacer planes) =====
     function ManejarBurlas({ patient }) {
         const BANK = [
             { ctx: "Un compañero se ríe de tus zapatillas para picarte.", q: "¿Qué suele funcionar mejor?", opts: ["Insultarle y empujarle", "Encogerte de hombros y decir «vale» sin darle importancia", "Echarte a llorar y salir corriendo"], ans: 1, exp: "Mostrar que la burla no te afecta (restarle importancia) le quita la gracia a quien se mete contigo. Pelear o hundirte suele empeorarlo." },
@@ -35688,7 +35808,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: puente frase-a-frase (puntuación, concordancia, conectores) =====
+    // ===== NEW v25.76: puente frase-a-frase (puntuación, concordancia, conectores) =====
     function PuntuacionMayusculas({ patient }) {
         const BANK = [
             { ctx: "Fíjate en la mayúscula y el punto.", q: "¿Cuál está bien escrita?", opts: ["Mañana vamos al cine.", "mañana vamos al cine.", "Mañana vamos al cine"], ans: 0, exp: "Empieza con mayúscula y termina en punto." },
@@ -35774,7 +35894,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
+    // ===== NEW v25.76: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
     function ComposicionGuiada({ patient }) {
         const TOPICS = [
             { t: "Tu animal favorito", plan: ["¿Qué animal es?", "¿Cómo es (color, tamaño)?", "¿Por qué te gusta?"] },
@@ -35854,7 +35974,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: Corrige la Frase (revisión / proofreading) =====
+    // ===== NEW v25.76: Corrige la Frase (revisión / proofreading) =====
     function CorrigeFrase({ patient }) {
         const BANK = [
             { ctx: "Mi ermano es muy alto.", q: "¿Qué palabra está mal escrita?", opts: ["Mi", "ermano", "alto"], ans: 1, exp: "Se escribe «hermano», con «h» al principio." },
@@ -35884,7 +36004,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.73: disortografía — ruta léxica y reglas por la vocal =====
+    // ===== NEW v25.76: disortografía — ruta léxica y reglas por la vocal =====
     function MirarTaparEscribir({ patient }) {
         const DEFAULT_WORDS = ["había", "muy", "también", "porque", "hacer", "vez", "bien", "ahora", "mujer", "jugar", "llave", "abuelo", "vaca", "hueso", "jirafa", "gente", "cielo", "través", "bicicleta", "guitarra"];
         const pid = (patient && patient.id) || _activePatientId;
@@ -39493,7 +39613,7 @@ const REEL_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAw
 function DemoReel({ onClose }) {
     const A = (typeof AREAS !== "undefined" && Array.isArray(AREAS)) ? AREAS : [];
     const totalEx = (typeof AREA_ACTIVITIES === "object" && AREA_ACTIVITIES) ? Object.values(AREA_ACTIVITIES).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0) : 0;
-    const VERSION_LABEL = "v25.73";
+    const VERSION_LABEL = "v25.76";
     const mascot = (stage) => (typeof companionSVG === "function") ? companionSVG({ stage: stage, mood: "feliz" }) : "";
     const demoSessions = [];
     const seed = (area, act, nWrong, total, ts0) => { for (let i = 0; i < total; i++) demoSessions.push({ ts: ts0 + i * 1000, area: area, activity: act, result: { correct: i >= nWrong, attempts: 1, stars: i >= nWrong ? 1 : 0 } }); };
@@ -40489,8 +40609,8 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
-// ── Compañero / mascota (v25.73) ──
-// ── Compañero / mascota (v25.73) ── diseños + monedas + tienda de accesorios
+// ── Compañero / mascota (v25.76) ──
+// ── Compañero / mascota (v25.76) ── diseños + monedas + tienda de accesorios
 const COMPANION_DESIGNS = [
     { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
     { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
@@ -41188,6 +41308,8 @@ function SessionReport({ patient, onClose }) {
     const [includeCharts, setIncludeCharts] = useState(true);
     const [includeAreas, setIncludeAreas] = useState(true);
     const [showEvolution, setShowEvolution] = useState(true);
+    const [includeConvos, setIncludeConvos] = useState(true);
+    const _reportConvos = (function () { try { return (storeLoad("companeroVivo:" + patient.id) || []).filter(function (c) { return c.inReport && Array.isArray(c.messages) && c.messages.length; }); } catch (e) { return []; } })();
     const _autoPrev = (function () { try { return autoAreaPrev(patient.id, 30); } catch (e) { return null; } })();
     const [familyMode, setFamilyMode] = useState(false);
     const [detailLevel, setDetailLevel] = useState("completo"); // compacto | completo
@@ -41884,7 +42006,8 @@ ${(function () { try { if (typeof computeAreaScores !== "function") return ""; c
 </div>
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.73</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  ${(includeConvos && _reportConvos.length) ? ('<div class="print-section" style="margin-top:14pt"><div class="print-section-title">Conversaciones practicadas</div><div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Estas son algunas de las conversaciones que ' + esc(patient.nombre.split(' ')[0]) + ' ha practicado con el compañero virtual de la app. Pod\u00e9is leerlas juntos en casa y comentar c\u00f3mo lo hizo.</div>' + _reportConvos.map(function (c) { return '<div style="border:1pt solid #e0e0e0;border-radius:8pt;padding:9pt 11pt;margin-bottom:9pt;page-break-inside:avoid"><div style="font-weight:bold;font-size:9.5pt;color:#2D6A4F;margin-bottom:6pt">' + esc(c.scenario || 'Conversaci\u00f3n') + (c.goal && c.goal !== 'Sin objetivo (conversar)' ? ' <span style=\\"font-weight:normal;color:#888\\">\u00b7 objetivo: ' + esc(c.goal) + '</span>' : '') + '</div>' + c.messages.map(function (m) { var mine = m.role === 'user'; return '<div style="margin:3pt 0;text-align:' + (mine ? 'right' : 'left') + '"><span style="display:inline-block;max-width:80%;padding:4pt 8pt;border-radius:8pt;font-size:9pt;background:' + (mine ? '#D7EFE1' : '#f0f0f0') + ';color:#333">' + esc(m.text) + '</span></div>'; }).join('') + (c.feedback && c.feedback.bien ? '<div style="font-size:8.5pt;color:#2D6A4F;margin-top:6pt">\u2705 ' + esc(c.feedback.bien) + '</div>' : '') + '</div>'; }).join('') + '</div>') : ''}
+  <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center"><strong>TerapiApp v25.76</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -42055,7 +42178,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.73</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.76</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -42262,6 +42385,9 @@ ${(sections.linea && lineaHTML) ? `
                         (includeAreas && _autoPrev) && React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 9px", background: showEvolution ? C.primary + "22" : "#fff", borderRadius: 10, border: `1px solid ${showEvolution ? C.primary : C.border}` } },
                             React.createElement("input", { type: "checkbox", checked: showEvolution, onChange: e => setShowEvolution(e.target.checked), style: { margin: 0 } }),
                             "📈 Mostrar evolución (vs hace ~1 mes)"),
+                        _reportConvos.length > 0 && React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, cursor: "pointer", padding: "5px 9px", background: includeConvos ? C.primary + "22" : "#fff", borderRadius: 10, border: `1px solid ${includeConvos ? C.primary : C.border}` } },
+                            React.createElement("input", { type: "checkbox", checked: includeConvos, onChange: e => setIncludeConvos(e.target.checked), style: { margin: 0 } }),
+                            "💬 Conversaciones marcadas (" + _reportConvos.length + ")"),
                         React.createElement("div", { style: { display: "flex", gap: 4, alignItems: "center", padding: "3px 4px", background: "#fff", borderRadius: 10, border: `1px solid ${C.border}` } },
                             React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: C.textL, paddingLeft: 6 } }, "Detalle:"),
                             ["compacto", "completo"].map(d => React.createElement("button", { key: d, onClick: () => { sfx.tap(); setDetailLevel(d); }, style: {
@@ -42509,7 +42635,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.73", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.76", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -43580,7 +43706,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.73"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.76"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
