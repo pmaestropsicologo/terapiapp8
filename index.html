@@ -17638,7 +17638,7 @@ const logCurrentResult = (correct, attempts = 1) => {
     logSession(_activePatientId, _activeAreaId, _activeActivityId, {
         correct, attempts, stars: correct ? 1 : 0,
     });
-    try { if (typeof window !== "undefined" && window.dispatchEvent) window.dispatchEvent(new CustomEvent("terapiapp-companion-react", { detail: { correct: correct, patientId: _activePatientId, areaId: _activeAreaId, activityId: _activeActivityId } })); } catch (e) { }
+    try { var _lud = !(_activePatientFull && _activePatientFull.enfoque === "clinico"); if (_lud && typeof window !== "undefined" && window.dispatchEvent) window.dispatchEvent(new CustomEvent("terapiapp-companion-react", { detail: { correct: correct, patientId: _activePatientId, areaId: _activeAreaId, activityId: _activeActivityId } })); } catch (e) { }
     try { return updateAdaptiveDiff(_activePatientId, _activeActivityId, correct); } catch (e) { }
 };
 // ═══════════════════════════════════════════════════════════════
@@ -17808,6 +17808,15 @@ const themeLight = {
     warning: "#FFF3CD", bgGradient: "linear-gradient(160deg, #F5F3EE, #EDE8E0)",
     cardShadow: "0 3px 16px rgba(0,0,0,0.05)", mode: "light",
 };
+const themeSobrio = {
+    bg: "#F4F6F8", card: "#FFFFFF", primary: "#2C5C7A", primaryL: "#3E7CA0",
+    primaryPale: "#E3EEF5", accent: "#5A7184", accentL: "#7E94A6",
+    warm: "#F2F5F7", blue: "#2C5C7A", blueL: "#9DB4C6", purple: "#5A6B8C",
+    purpleL: "#B9C2D6", text: "#1F2A37", textL: "#6B7480", border: "#DDE3E9",
+    yellow: "#C9A24B", pink: "#8C6B7A", success: "#E3F0E8", error: "#FBE6E6",
+    warning: "#FBF1DA", bgGradient: "linear-gradient(160deg, #F4F6F8, #ECEFF3)",
+    cardShadow: "0 2px 12px rgba(0,0,0,0.06)", mode: "sobrio",
+};
 const themeDark = {
     bg: "#1A1F2E", card: "#252B3D", primary: "#52B788", primaryL: "#74C69D",
     primaryPale: "#1B4332", accent: "#F4A261", accentL: "#E9C46A",
@@ -17819,6 +17828,33 @@ const themeDark = {
 };
 // Theme accessor (live — updated by ThemeContext)
 let C = themeLight;
+// ── v26 fase 1: arquitectura de perfiles (enfoque + etapa) ──
+const PROFILE_CONFIG = {
+    ludico: {
+        gamificacion: true, theme: "ludico", contentSet: "ludico", reportPreset: "pediatrico",
+        labels: { area: "Área", areas: "Áreas", activity: "Actividad", activities: "Actividades" },
+    },
+    clinico: {
+        gamificacion: false, theme: "sobrio", contentSet: "clinico", reportPreset: "clinico",
+        labels: { area: "Módulo", areas: "Módulos", activity: "Herramienta", activities: "Herramientas" },
+    },
+};
+// Migración no destructiva: deriva enfoque/etapa de los campos antiguos.
+function normalizePatient(p) {
+    if (!p || typeof p !== "object") return p;
+    if (!p.enfoque) p.enfoque = "ludico";
+    if (!p.etapa) p.etapa = p.modoAdolescente ? "adolescente" : "infantil";
+    if (!p.registro) p.registro = (p.enfoque === "clinico") ? "tu" : "tu";
+    return p;
+}
+function baseThemeFor(patient) {
+    return (patient && patient.enfoque === "clinico") ? themeSobrio : themeLight;
+}
+function getProfileConfig(patient) {
+    const enf = (patient && patient.enfoque) ? patient.enfoque : "ludico";
+    return PROFILE_CONFIG[enf] || PROFILE_CONFIG.ludico;
+}
+function isLudico(patient) { return getProfileConfig(patient).gamificacion === true; }
 const ThemeContext = React.createContext({ theme: themeLight, toggleTheme: () => { }, mode: "light" });
 const useTheme = () => React.useContext(ThemeContext);
 // ═══════════════════════════════════════════════════════════════
@@ -21431,7 +21467,7 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
     const [mode, setMode] = useState("list");
     const [pq, setPq] = useState("");
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
+    const [form, setForm] = useState({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false, enfoque: "ludico", etapa: "infantil" });
     const importInputRef = useRef(null);
     const handleImportFile = (e) => {
         const file = e.target.files && e.target.files[0];
@@ -21451,7 +21487,7 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
         };
         reader.readAsText(file);
     };
-    const resetForm = () => setForm({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false });
+    const resetForm = () => setForm({ nombre: "", edad: "", diagnosticos: [], notas: "", areas: [], modoAdolescente: false, enfoque: "ludico", etapa: "infantil" });
     const pqList = [...patients].filter(p => { const q = pq.trim().toLowerCase(); if (!q) return true; return ((p.nombre || "").toLowerCase().includes(q)) || (Array.isArray(p.diagnosticos) && p.diagnosticos.join(" ").toLowerCase().includes(q)); }).sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
     const save = () => {
         if (!form.nombre.trim())
@@ -21485,7 +21521,7 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
     };
     const startEdit = (p) => {
         setEditing(p);
-        setForm({ nombre: p.nombre, edad: p.edad, diagnosticos: getPatientDiagnosticos(p), notas: p.notas || "", areas: p.areas || [], modoAdolescente: !!p.modoAdolescente });
+        setForm({ nombre: p.nombre, edad: p.edad, diagnosticos: getPatientDiagnosticos(p), notas: p.notas || "", areas: p.areas || [], modoAdolescente: !!p.modoAdolescente, enfoque: p.enfoque || "ludico", etapa: p.etapa || (p.modoAdolescente ? "adolescente" : "infantil") });
         setMode("edit");
     };
     const toggleArea = (a) => setForm(f => ({ ...f, areas: f.areas.includes(a) ? f.areas.filter(x => x !== a) : [...f.areas, a] }));
@@ -21546,10 +21582,23 @@ function PatientRegistry({ patients, setPatients, activePatient, setActivePatien
                     const suggest = !isNaN(ageNum) && ageNum >= 13;
                     setForm(f => ({ ...f, edad: newAge, modoAdolescente: suggest && !f._adolescenteTouched ? true : f.modoAdolescente }));
                 }, placeholder: "Ej: 8", style: { width: "100%", padding: "10px 12px", borderRadius: 12, border: `2px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" } })),
+React.createElement("div", { style: { padding: 12, background: "#f9f9f9", borderRadius: 12, marginBottom: 4 } },
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 800, marginBottom: 7, color: C.text } }, "Tipo de paciente"),
+                React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginBottom: 5 } }, "Enfoque del trabajo"),
+                React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
+                    [["ludico", "🎲 Lúdico", "Juegos y gamificación (infancia/adolescencia)"], ["clinico", "📋 Clínico", "Sobrio, sin juegos (TCC, adultos…)"]].map(function (o) {
+                        return React.createElement("button", { key: o[0], type: "button", title: o[2], onClick: function () { setForm(function (f) { return Object.assign({}, f, { enfoque: o[0] }); }); }, style: { flex: 1, padding: "9px 8px", borderRadius: 10, border: "2px solid " + (form.enfoque === o[0] ? C.primary : C.border), background: form.enfoque === o[0] ? C.primary : "#fff", color: form.enfoque === o[0] ? "#fff" : C.text, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" } }, o[1]);
+                    })),
+                React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginBottom: 5 } }, "Etapa"),
+                React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    [["infantil", "Infantil"], ["adolescente", "Adolescente"], ["adulto", "Adulto"]].map(function (o) {
+                        return React.createElement("button", { key: o[0], type: "button", onClick: function () { setForm(function (f) { return Object.assign({}, f, { etapa: o[0], modoAdolescente: o[0] === "adolescente", _adolescenteTouched: true }); }); }, style: { flex: 1, padding: "8px 6px", borderRadius: 10, border: "2px solid " + (form.etapa === o[0] ? C.blue : C.border), background: form.etapa === o[0] ? C.blue : "#fff", color: form.etapa === o[0] ? "#fff" : C.text, fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" } }, o[1]);
+                    })),
+                form.enfoque === "clinico" && React.createElement("div", { style: { fontSize: 11, color: C.textL, marginTop: 8, fontStyle: "italic" } }, "Modo clínico: interfaz sobria, sin gamificación. Las herramientas TCC (autorregistros, reestructuración…) se irán activando.")),
             // Adolescent mode toggle
             React.createElement("div", { style: { padding: 12, background: form.modoAdolescente ? `${C.primary}11` : "#f9f9f9", borderRadius: 12, border: `2px solid ${form.modoAdolescente ? C.primary + "55" : "transparent"}`, transition: "all 0.2s" } },
                 React.createElement("label", { style: { display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" } },
-                    React.createElement("input", { type: "checkbox", checked: form.modoAdolescente, onChange: e => setForm(f => ({ ...f, modoAdolescente: e.target.checked, _adolescenteTouched: true })), style: { marginTop: 3, width: 18, height: 18, accentColor: C.primary, cursor: "pointer" } }),
+                    React.createElement("input", { type: "checkbox", checked: form.modoAdolescente, onChange: e => setForm(f => ({ ...f, modoAdolescente: e.target.checked, etapa: e.target.checked ? "adolescente" : (f.etapa === "adolescente" ? "infantil" : f.etapa), _adolescenteTouched: true })), style: { marginTop: 3, width: 18, height: 18, accentColor: C.primary, cursor: "pointer" } }),
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontSize: 13, fontWeight: 700 } }, "Perfil adolescente"),
                         React.createElement("div", { style: { fontSize: 11, color: C.textL, marginTop: 2, lineHeight: 1.4 } }, "Activa un tono visual y de lenguaje adaptado a adolescentes: sin elementos infantiles, ",
@@ -25274,6 +25323,348 @@ function MisionesMundoReal({ patient }) {
                 React.createElement("span", null, d.outcome === "bien" ? "😃" : d.outcome === "regular" ? "😐" : "😕"),
                 React.createElement("div", { style: { fontSize: 13, color: C.text, flex: 1 } }, d.titulo),
                 React.createElement("span", { style: { fontSize: 10.5, color: C.textL } }, new Date(d.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short" }))))));
+}
+// ═══════════════════════════════════════════════════════════════
+// CONTENIDO CLÍNICO (enfoque "clinico") — v26 fase 3
+// ═══════════════════════════════════════════════════════════════
+const DISTORSIONES = [
+    { id: "todonada", label: "Todo o nada" },
+    { id: "catastrofismo", label: "Catastrofismo" },
+    { id: "adivinacion", label: "Adivinar el futuro" },
+    { id: "lectura", label: "Lectura de mente" },
+    { id: "sobregeneralizacion", label: "Sobregeneralización" },
+    { id: "filtromental", label: "Filtro mental" },
+    { id: "personalizacion", label: "Personalización" },
+    { id: "deberia", label: "Debería / tendría que" },
+    { id: "etiquetado", label: "Etiquetado" },
+    { id: "razonemocional", label: "Razonamiento emocional" },
+];
+
+function RegistroPensamientos({ patient }) {
+    const KEY = "registroPensamientos:" + patient.id;
+    const load = () => { try { return storeLoad(KEY) || []; } catch (e) { return []; } };
+    const [phase, setPhase] = useState("intro"); // intro | s1 | s2 | s3 | done | history
+    const [situacion, setSituacion] = useState("");
+    const [pensamiento, setPensamiento] = useState("");
+    const [credIni, setCredIni] = useState(70);
+    const [emocion, setEmocion] = useState("");
+    const [intensIni, setIntensIni] = useState(70);
+    const [distors, setDistors] = useState([]);
+    const [preguntas, setPreguntas] = useState(null);
+    const [reflexion, setReflexion] = useState("");
+    const [alternativo, setAlternativo] = useState("");
+    const [credFin, setCredFin] = useState(40);
+    const [intensFin, setIntensFin] = useState(40);
+    const [loading, setLoading] = useState(false);
+
+    const reset = () => { setSituacion(""); setPensamiento(""); setCredIni(70); setEmocion(""); setIntensIni(70); setDistors([]); setPreguntas(null); setReflexion(""); setAlternativo(""); setCredFin(40); setIntensFin(40); };
+
+    const generarPreguntas = async () => {
+        if (loading) return;
+        setLoading(true);
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Estás ayudando en una tarea de REESTRUCTURACIÓN COGNITIVA dentro de terapia cognitivo-conductual, como apoyo al terapeuta. Registro de la persona:\n` +
+            `- Situación: "${situacion}"\n- Pensamiento automático: "${pensamiento}" (se lo cree al ${credIni}%)\n- Emoción: "${emocion}" (intensidad ${intensIni}%)\n` +
+            (distors.length ? `- Posibles distorsiones señaladas: ${distors.map(d => (DISTORSIONES.find(x => x.id === d) || {}).label).filter(Boolean).join(", ")}\n` : "") +
+            `\nGenera 3-4 PREGUNTAS SOCRÁTICAS, respetuosas y en tono profesional adulto, que ayuden a la persona a examinar ese pensamiento por sí misma (evidencia a favor/en contra, interpretaciones alternativas, utilidad del pensamiento, qué le diría a alguien a quien aprecia). NO des tú la respuesta ni un pensamiento alternativo: solo preguntas que inviten a reflexionar. No diagnostiques.\n` +
+            `IMPORTANTE: si el contenido sugiere riesgo para la persona o para terceros, o una crisis, NO hagas reestructuración: responde con una única pregunta amable que invite a comentarlo directamente con su terapeuta o profesional de referencia.\n` +
+            `Formato JSON: {"preguntas":["...","..."]}`;
+        const res = await callClaude(prompt, "registro_pensamientos");
+        setLoading(false);
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar la reestructuración asistida."); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail) || !res || !Array.isArray(res.preguntas)) { alert("No he podido generar las preguntas. Inténtalo de nuevo."); return; }
+        setPreguntas(res.preguntas);
+    };
+
+    const guardar = () => {
+        try {
+            const arr = load();
+            arr.push({ id: uid(), ts: Date.now(), situacion: situacion.trim(), pensamiento: pensamiento.trim(), credIni, emocion: emocion.trim(), intensIni, distors: distors.slice(), reflexion: reflexion.trim(), alternativo: alternativo.trim(), credFin, intensFin });
+            if (arr.length > 100) arr.splice(0, arr.length - 100);
+            storeSave(KEY, arr);
+        } catch (e) { }
+        setPhase("done");
+    };
+
+    const slider = (val, setVal, color) => React.createElement("input", { type: "range", min: 0, max: 100, value: val, onChange: e => setVal(parseInt(e.target.value, 10)), style: { width: "100%", accentColor: color || C.primary } });
+    const field = (label, node) => React.createElement("div", { style: { marginBottom: 14 } },
+        React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 5 } }, label), node);
+    const ta = (val, setVal, ph, rows) => React.createElement("textarea", { value: val, onChange: e => setVal(e.target.value), rows: rows || 3, placeholder: ph, style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14.5, fontFamily: "inherit", resize: "vertical" } });
+
+    if (phase === "intro") {
+        const hist = load();
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 19, fontWeight: 800, color: C.text } }, "Registro de pensamientos"),
+                hist.length > 0 && React.createElement("button", { onClick: () => setPhase("history"), style: { border: "1.5px solid " + C.border, background: C.card, borderRadius: 20, padding: "5px 11px", fontSize: 12, fontWeight: 700, color: C.textL, cursor: "pointer", fontFamily: "inherit" } }, "Historial (" + hist.length + ")")),
+            React.createElement("div", { style: { fontSize: 13.5, color: C.textL, lineHeight: 1.55, marginBottom: 16, background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "12px 14px" } },
+                "Herramienta de apoyo para identificar un pensamiento automático, examinarlo y formular una alternativa más equilibrada. Pensada para usarse junto al trabajo en terapia, no como sustituto."),
+            React.createElement("div", { style: { textAlign: "center" } }, React.createElement(Btn, { color: C.primary, onClick: () => { reset(); setPhase("s1"); } }, "Nuevo registro")));
+    }
+
+    if (phase === "history") {
+        const hist = load().slice().reverse();
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text } }, "Registros anteriores"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("intro") }, "Volver")),
+            hist.length === 0 ? React.createElement("div", { style: { color: C.textL, textAlign: "center", padding: "20px 0" } }, "Sin registros todavía.")
+                : React.createElement("div", null, hist.map(function (r) {
+                    return React.createElement("div", { key: r.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "11px 13px", marginBottom: 9 } },
+                        React.createElement("div", { style: { fontSize: 11, color: C.textL, marginBottom: 4 } }, new Date(r.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })),
+                        React.createElement("div", { style: { fontSize: 13.5, color: C.text, marginBottom: 4 } }, React.createElement("strong", null, "Pensamiento: "), r.pensamiento),
+                        r.alternativo ? React.createElement("div", { style: { fontSize: 13, color: C.primary, marginBottom: 4 } }, React.createElement("strong", null, "Alternativa: "), r.alternativo) : null,
+                        React.createElement("div", { style: { fontSize: 11.5, color: C.textL } }, "Credibilidad " + r.credIni + "% → " + r.credFin + "%  ·  Malestar " + r.intensIni + "% → " + r.intensFin + "%"));
+                })));
+    }
+
+    if (phase === "done") {
+        const dCred = credIni - credFin, dInt = intensIni - intensFin;
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C.primary, marginBottom: 12 } }, "Registro guardado"),
+            React.createElement("div", { style: { background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "14px 16px", marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 13.5, color: C.text, marginBottom: 8, lineHeight: 1.5 } }, React.createElement("strong", null, "Pensamiento alternativo: "), alternativo || "(no formulado)"),
+                React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Credibilidad del pensamiento inicial: " + credIni + "% → " + credFin + "% " + (dCred > 0 ? "(↓ " + dCred + ")" : "") ),
+                React.createElement("div", { style: { fontSize: 13, color: C.textL } }, "Intensidad del malestar: " + intensIni + "% → " + intensFin + "% " + (dInt > 0 ? "(↓ " + dInt + ")" : ""))),
+            React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "center" } },
+                React.createElement(Btn, { color: C.primary, onClick: () => { reset(); setPhase("s1"); } }, "Otro registro"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("intro") }, "Terminar")));
+    }
+
+    // pasos del formulario
+    const stepHeader = (n, t) => React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 } },
+        React.createElement("div", { style: { width: 26, height: 26, borderRadius: "50%", background: C.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 } }, n),
+        React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.text } }, t),
+        React.createElement("div", { style: { marginLeft: "auto", fontSize: 11.5, color: C.textL } }, "Paso " + n + "/3"));
+
+    if (phase === "s1") {
+        return React.createElement("div", null,
+            stepHeader(1, "Situación, pensamiento y emoción"),
+            field("¿Qué pasó? (situación)", ta(situacion, setSituacion, "Describe brevemente la situación...", 2)),
+            field("¿Qué pensaste? (pensamiento automático)", ta(pensamiento, setPensamiento, "El pensamiento concreto que apareció...", 2)),
+            field("¿Cuánto te lo creías? " + credIni + "%", slider(credIni, setCredIni)),
+            field("¿Qué sentiste? (emoción)", ta(emocion, setEmocion, "Emoción o emociones...", 1)),
+            field("Intensidad del malestar: " + intensIni + "%", slider(intensIni, setIntensIni, C.accent)),
+            React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 6 } }, "¿Reconoces alguna distorsión? (opcional)"),
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 } },
+                DISTORSIONES.map(function (d) {
+                    const on = distors.indexOf(d.id) >= 0;
+                    return React.createElement("button", { key: d.id, onClick: () => setDistors(on ? distors.filter(x => x !== d.id) : distors.concat([d.id])), style: { padding: "5px 10px", borderRadius: 16, border: "1.5px solid " + (on ? C.primary : C.border), background: on ? C.primary : C.card, color: on ? "#fff" : C.textL, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" } }, d.label);
+                })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("intro") }, "Cancelar"),
+                React.createElement(Btn, { color: C.primary, onClick: () => setPhase("s2"), disabled: !situacion.trim() || !pensamiento.trim() }, "Siguiente ▶")));
+    }
+
+    if (phase === "s2") {
+        return React.createElement("div", null,
+            stepHeader(2, "Examina el pensamiento"),
+            React.createElement("div", { style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 12px", fontSize: 13, color: C.textL, marginBottom: 14 } }, React.createElement("strong", { style: { color: C.text } }, "Pensamiento: "), pensamiento),
+            !preguntas
+                ? React.createElement("div", { style: { textAlign: "center", margin: "10px 0 16px" } },
+                    React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 10 } }, "Genera preguntas que te ayuden a examinar el pensamiento (no te darán la respuesta: te ayudan a pensarlo)."),
+                    React.createElement(Btn, { color: C.primary, onClick: generarPreguntas, disabled: loading }, loading ? "Generando..." : "Generar preguntas para reflexionar"))
+                : React.createElement("div", { style: { marginBottom: 14 } },
+                    preguntas.map(function (q, i) { return React.createElement("div", { key: i, style: { display: "flex", gap: 8, marginBottom: 8, fontSize: 14, color: C.text, lineHeight: 1.45 } }, React.createElement("span", { style: { color: C.primary, fontWeight: 800 } }, (i + 1) + "."), q); }),
+                    React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.text, margin: "12px 0 5px" } }, "Tus reflexiones (opcional)"),
+                    ta(reflexion, setReflexion, "Lo que te surja al responder a las preguntas...", 4)),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("s1") }, "◀ Atrás"),
+                React.createElement(Btn, { color: C.primary, onClick: () => setPhase("s3") }, "Siguiente ▶")));
+    }
+
+    // s3
+    return React.createElement("div", null,
+        stepHeader(3, "Pensamiento alternativo"),
+        field("Un pensamiento más equilibrado o realista", ta(alternativo, setAlternativo, "A la luz de lo anterior, ¿cómo podrías verlo de forma más ajustada?", 3)),
+        field("Ahora, ¿cuánto te crees el pensamiento inicial? " + credFin + "%", slider(credFin, setCredFin)),
+        field("¿Cómo está ahora el malestar? " + intensFin + "%", slider(intensFin, setIntensFin, C.accent)),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginTop: 6 } },
+            React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("s2") }, "◀ Atrás"),
+            React.createElement(Btn, { color: C.primary, onClick: guardar }, "Guardar registro")));
+}
+
+// ── Registro de módulos clínicos (paralelo a AREAS / AREA_ACTIVITIES) ──
+const CLINIC_MODULES = [
+    { id: "reestructuracion", label: "Reestructuración cognitiva", desc: "Identificar y reevaluar pensamientos", emoji: "🧠" },
+    { id: "activacion", label: "Activación conductual", desc: "Registrar y planificar actividades", emoji: "📆" },
+];
+const CLINIC_TOOLS = {
+    reestructuracion: [
+        { id: "registro_pensamientos", label: "Registro de pensamientos", desc: "Situación · pensamiento · alternativa", comp: RegistroPensamientos, hasAI: true },
+    ],
+    activacion: [
+        { id: "registro_actividades", label: "Registro de actividades", desc: "Agrado y dominio · planificación", comp: ActivacionConductual, hasAI: true },
+    ],
+};
+
+function EspacioClinico({ patient }) {
+    const [mod, setMod] = useState(null);
+    const [tool, setTool] = useState(null);
+    const moduleData = CLINIC_MODULES.find(m => m.id === mod);
+    const toolList = mod ? (CLINIC_TOOLS[mod] || []) : [];
+    const toolData = (mod && tool) ? toolList.find(t => t.id === tool) : null;
+
+    if (toolData && toolData.comp) {
+        return React.createElement("div", null,
+            React.createElement("button", { onClick: () => setTool(null), style: { border: "none", background: "transparent", color: C.primary, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 } }, "◀ " + moduleData.label),
+            React.createElement(toolData.comp, { patient: patient }));
+    }
+    if (moduleData) {
+        return React.createElement("div", null,
+            React.createElement("button", { onClick: () => setMod(null), style: { border: "none", background: "transparent", color: C.primary, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 } }, "◀ Módulos"),
+            React.createElement("div", { style: { fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 12 } }, moduleData.emoji + " " + moduleData.label),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } },
+                toolList.map(function (t) {
+                    return React.createElement("button", { key: t.id, onClick: () => setTool(t.id), style: { textAlign: "left", background: C.card, border: "1px solid " + C.border, borderRadius: 14, padding: 14, cursor: "pointer", fontFamily: "inherit" } },
+                        React.createElement("div", { style: { fontSize: 14.5, fontWeight: 800, color: C.text, marginBottom: 3 } }, t.label),
+                        React.createElement("div", { style: { fontSize: 11.5, color: C.textL, lineHeight: 1.3 } }, t.desc));
+                })));
+    }
+    return React.createElement("div", null,
+        React.createElement("div", { style: { fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 4 } }, "Espacio clínico"),
+        React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 14, lineHeight: 1.5 } }, "Herramientas de trabajo para este paciente. Más módulos se irán incorporando."),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 } },
+            CLINIC_MODULES.map(function (m) {
+                return React.createElement("button", { key: m.id, onClick: () => { setMod(m.id); setTool(null); }, style: { textAlign: "left", background: C.card, border: "1px solid " + C.border, borderRadius: 14, padding: 16, cursor: "pointer", fontFamily: "inherit" } },
+                    React.createElement("div", { style: { fontSize: 24, marginBottom: 6 } }, m.emoji),
+                    React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 3 } }, m.label),
+                    React.createElement("div", { style: { fontSize: 11.5, color: C.textL, lineHeight: 1.3 } }, m.desc));
+            })));
+}
+function ActivacionConductual({ patient }) {
+    const KEY = "activacionConductual:" + patient.id;
+    const load = () => { try { return storeLoad(KEY) || { registros: [], planificadas: [] }; } catch (e) { return { registros: [], planificadas: [] }; } };
+    const [data, setData] = useState(load);
+    const [phase, setPhase] = useState("intro"); // intro | registrar | planificar | sugerencias | history
+    const [actividad, setActividad] = useState("");
+    const [agrado, setAgrado] = useState(5);
+    const [dominio, setDominio] = useState(5);
+    const [nota, setNota] = useState("");
+    const [cuando, setCuando] = useState("");
+    const [fromPlan, setFromPlan] = useState(null);
+    const [sugerencias, setSugerencias] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const save = (d) => { setData(d); try { storeSave(KEY, d); } catch (e) { } };
+    const resetForm = () => { setActividad(""); setAgrado(5); setDominio(5); setNota(""); setCuando(""); setFromPlan(null); };
+
+    const guardarRegistro = () => {
+        if (!actividad.trim()) return;
+        const reg = { id: uid(), ts: Date.now(), actividad: actividad.trim(), agrado, dominio, nota: nota.trim() };
+        const nd = { registros: data.registros.concat([reg]), planificadas: fromPlan ? data.planificadas.filter(p => p.id !== fromPlan) : data.planificadas };
+        if (nd.registros.length > 200) nd.registros.splice(0, nd.registros.length - 200);
+        save(nd); resetForm(); setPhase("history");
+    };
+    const guardarPlan = () => {
+        if (!actividad.trim()) return;
+        const pl = { id: uid(), ts: Date.now(), actividad: actividad.trim(), cuando: cuando.trim(), hecha: false };
+        save({ registros: data.registros, planificadas: data.planificadas.concat([pl]) });
+        resetForm(); setPhase("intro");
+    };
+    const completarPlan = (pl) => { resetForm(); setActividad(pl.actividad); setFromPlan(pl.id); setPhase("registrar"); };
+    const borrarPlan = (id) => { save({ registros: data.registros, planificadas: data.planificadas.filter(p => p.id !== id) }); };
+
+    const sugerir = async () => {
+        if (loading) return;
+        setLoading(true);
+        const recientes = data.registros.slice(-8).map(r => r.actividad + " (agrado " + r.agrado + ", dominio " + r.dominio + ")").join("; ");
+        const prompt = (typeof PatientContext === "function" ? PatientContext(patient) : "") +
+            `Estás apoyando una tarea de ACTIVACIÓN CONDUCTUAL en terapia cognitivo-conductual. La activación conductual busca recuperar actividades que aporten AGRADO (placer) y/o DOMINIO (sensación de logro), de forma gradual y realista.\n` +
+            (recientes ? `Actividades recientes de la persona: ${recientes}.\n` : "") +
+            `Propón 5 ideas de actividades sencillas, concretas y realistas, equilibrando agrado y dominio, apropiadas y seguras. Para cada una, una etiqueta breve de si aporta más agrado, más dominio o ambos. No des consejos médicos ni promesas terapéuticas; son sugerencias para elegir junto al terapeuta.\n` +
+            `Formato JSON: {"ideas":[{"actividad":"...","tipo":"agrado|dominio|ambos"}]}`;
+        const res = await callClaude(prompt, "activacion_conductual");
+        setLoading(false);
+        if (res && res.__noKey) { alert("Configura tu API key en ⚙️ Ajustes para usar las sugerencias."); return; }
+        if (res && (res.__authError || res.__error || res.__schemaFail) || !res || !Array.isArray(res.ideas)) { alert("No he podido generar sugerencias. Inténtalo de nuevo."); return; }
+        setSugerencias(res.ideas);
+    };
+
+    const slider = (val, setVal, color) => React.createElement("input", { type: "range", min: 0, max: 10, value: val, onChange: e => setVal(parseInt(e.target.value, 10)), style: { width: "100%", accentColor: color || C.primary } });
+    const field = (label, node) => React.createElement("div", { style: { marginBottom: 14 } }, React.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 5 } }, label), node);
+
+    if (phase === "intro") {
+        const nReg = data.registros.length;
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 8 } }, "Activación conductual"),
+            React.createElement("div", { style: { fontSize: 13.5, color: C.textL, lineHeight: 1.55, marginBottom: 14, background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "12px 14px" } },
+                "Registrar y planificar actividades valorando el ", React.createElement("strong", null, "agrado"), " (placer) y el ", React.createElement("strong", null, "dominio"), " (logro) que aportan. Apoyo al trabajo en terapia."),
+            (data.planificadas.filter(p => !p.hecha).length > 0) && React.createElement("div", { style: { marginBottom: 14 } },
+                React.createElement("div", { style: { fontSize: 12.5, fontWeight: 800, color: C.textL, marginBottom: 6 } }, "Planificadas"),
+                data.planificadas.filter(p => !p.hecha).map(function (p) {
+                    return React.createElement("div", { key: p.id, style: { display: "flex", alignItems: "center", gap: 8, background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "8px 11px", marginBottom: 6 } },
+                        React.createElement("div", { style: { flex: 1 } },
+                            React.createElement("div", { style: { fontSize: 13.5, color: C.text, fontWeight: 600 } }, p.actividad),
+                            p.cuando ? React.createElement("div", { style: { fontSize: 11, color: C.textL } }, p.cuando) : null),
+                        React.createElement(Btn, { color: C.primary, small: true, onClick: () => completarPlan(p) }, "Hecha"),
+                        React.createElement("button", { onClick: () => borrarPlan(p.id), style: { border: "none", background: "transparent", color: C.textL, cursor: "pointer", fontSize: 16 } }, "×"));
+                })),
+            React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
+                React.createElement(Btn, { color: C.primary, onClick: () => { resetForm(); setPhase("registrar"); } }, "Registrar actividad"),
+                React.createElement(Btn, { color: C.blue, small: true, outline: true, onClick: () => { resetForm(); setPhase("planificar"); } }, "Planificar"),
+                React.createElement(Btn, { color: C.blue, small: true, outline: true, onClick: () => { setSugerencias(null); setPhase("sugerencias"); } }, "💡 Ideas"),
+                nReg > 0 && React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("history") }, "Historial (" + nReg + ")")));
+    }
+
+    if (phase === "registrar") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 14 } }, "Registrar una actividad"),
+            field("¿Qué hiciste?", React.createElement("input", { value: actividad, onChange: e => setActividad(e.target.value), placeholder: "p. ej. Salir a caminar 20 min", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14.5, fontFamily: "inherit" } })),
+            field("Agrado (placer): " + agrado + "/10", slider(agrado, setAgrado, C.primary)),
+            field("Dominio (logro): " + dominio + "/10", slider(dominio, setDominio, C.blue)),
+            field("Nota (opcional)", React.createElement("textarea", { value: nota, onChange: e => setNota(e.target.value), rows: 2, placeholder: "Cómo te sentiste, qué notaste...", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14.5, fontFamily: "inherit", resize: "vertical" } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => { resetForm(); setPhase("intro"); } }, "Cancelar"),
+                React.createElement(Btn, { color: C.primary, onClick: guardarRegistro, disabled: !actividad.trim() }, "Guardar")));
+    }
+
+    if (phase === "planificar") {
+        return React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 14 } }, "Planificar una actividad"),
+            field("¿Qué te gustaría hacer?", React.createElement("input", { value: actividad, onChange: e => setActividad(e.target.value), placeholder: "p. ej. Llamar a un amigo", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14.5, fontFamily: "inherit" } })),
+            field("¿Cuándo? (opcional)", React.createElement("input", { value: cuando, onChange: e => setCuando(e.target.value), placeholder: "p. ej. mañana por la tarde", style: { width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "2px solid " + C.border, fontSize: 14.5, fontFamily: "inherit" } })),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } },
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => { resetForm(); setPhase("intro"); } }, "Cancelar"),
+                React.createElement(Btn, { color: C.primary, onClick: guardarPlan, disabled: !actividad.trim() }, "Planificar")));
+    }
+
+    if (phase === "sugerencias") {
+        const tipoColor = { agrado: C.primary, dominio: C.blue, ambos: C.accent };
+        return React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text } }, "Ideas de actividades"),
+                React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("intro") }, "Volver")),
+            !sugerencias
+                ? React.createElement("div", { style: { textAlign: "center", margin: "10px 0" } },
+                    React.createElement("div", { style: { fontSize: 13, color: C.textL, marginBottom: 10 } }, "Sugerencias personalizadas para elegir junto al terapeuta."),
+                    React.createElement(Btn, { color: C.primary, onClick: sugerir, disabled: loading }, loading ? "Generando..." : "Generar ideas"))
+                : React.createElement("div", null, sugerencias.map(function (s, i) {
+                    return React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "9px 12px", marginBottom: 7 } },
+                        React.createElement("div", { style: { flex: 1, fontSize: 13.5, color: C.text } }, s.actividad,
+                            React.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, color: "#fff", background: tipoColor[s.tipo] || C.textL, borderRadius: 12, padding: "1px 7px", marginLeft: 7 } }, s.tipo)),
+                        React.createElement(Btn, { color: C.primary, small: true, onClick: () => { resetForm(); setActividad(s.actividad); setPhase("registrar"); } }, "Registrar"));
+                })));
+    }
+
+    // history
+    const regs = data.registros.slice().reverse();
+    const avg = (k) => regs.length ? Math.round(regs.reduce((a, r) => a + (r[k] || 0), 0) / regs.length * 10) / 10 : 0;
+    return React.createElement("div", null,
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+            React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text } }, "Historial de actividades"),
+            React.createElement(Btn, { color: C.accent, small: true, outline: true, onClick: () => setPhase("intro") }, "Volver")),
+        regs.length === 0 ? React.createElement("div", { style: { color: C.textL, textAlign: "center", padding: "20px 0" } }, "Sin actividades registradas.")
+            : React.createElement("div", null,
+                React.createElement("div", { style: { fontSize: 12.5, color: C.textL, marginBottom: 10 } }, "Media — agrado: " + avg("agrado") + "/10 · dominio: " + avg("dominio") + "/10"),
+                regs.map(function (r) {
+                    return React.createElement("div", { key: r.id, style: { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "9px 12px", marginBottom: 7 } },
+                        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                            React.createElement("div", { style: { fontSize: 13.5, color: C.text, fontWeight: 600, flex: 1 } }, r.actividad),
+                            React.createElement("div", { style: { fontSize: 11, color: C.textL } }, new Date(r.ts).toLocaleDateString("es-ES", { day: "numeric", month: "short" }))),
+                        React.createElement("div", { style: { fontSize: 11.5, color: C.textL, marginTop: 3 } }, "Agrado " + r.agrado + "/10 · Dominio " + r.dominio + "/10"),
+                        r.nota ? React.createElement("div", { style: { fontSize: 12, color: C.textL, marginTop: 3, fontStyle: "italic" } }, r.nota) : null);
+                })));
 }
 function RolePlayConversacional({ patient }) {
     const SCENARIOS = [
@@ -35465,7 +35856,7 @@ function FrescuraPanel({ patient }) {
     );
 }
 
-    // ===== NEW v25.76: evidence-based exercises (TEA + dislexia escritura) =====
+    // ===== NEW v25.81: evidence-based exercises (TEA + dislexia escritura) =====
     function ReglasNoEscritas({ patient }) {
         const BANK = [
             { ctx: "Estás en la biblioteca y quieres contarle algo divertido a tu amigo.", q: "¿Qué es lo más adecuado?", opts: ["Hablar muy bajito o esperar a salir", "Contarlo en voz alta para que se rían todos", "Darle un grito desde la otra punta"], ans: 0, exp: "Una regla no escrita de la biblioteca es estar en silencio. Nadie lo dice en voz alta, pero se espera." },
@@ -35621,7 +36012,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: producción escrita (construir la palabra letra a letra) =====
+    // ===== NEW v25.81: producción escrita (construir la palabra letra a letra) =====
     function OrdenaLetras({ patient }) {
         const WORDS = [
             { w: "casa", clue: "🏠 El sitio donde vives" },
@@ -35694,7 +36085,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
+    // ===== NEW v25.81: más ejercicios de dislexia (trabadas, segmentación, sílaba tónica) =====
     function SilabasTrabadas({ patient }) {
         const BANK = [
             { ctx: "Comí en un ___ blanco.", q: "¿Cómo se escribe?", opts: ["plato", "pato", "palto"], ans: 0, exp: "«Plato» tiene la sílaba trabada «pla» (p+l). «Pato» es otro animal y «palto» cambia el orden." },
@@ -35766,7 +36157,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: PEERS (manejar burlas, hacer planes) =====
+    // ===== NEW v25.81: PEERS (manejar burlas, hacer planes) =====
     function ManejarBurlas({ patient }) {
         const BANK = [
             { ctx: "Un compañero se ríe de tus zapatillas para picarte.", q: "¿Qué suele funcionar mejor?", opts: ["Insultarle y empujarle", "Encogerte de hombros y decir «vale» sin darle importancia", "Echarte a llorar y salir corriendo"], ans: 1, exp: "Mostrar que la burla no te afecta (restarle importancia) le quita la gracia a quien se mete contigo. Pelear o hundirte suele empeorarlo." },
@@ -35808,7 +36199,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: puente frase-a-frase (puntuación, concordancia, conectores) =====
+    // ===== NEW v25.81: puente frase-a-frase (puntuación, concordancia, conectores) =====
     function PuntuacionMayusculas({ patient }) {
         const BANK = [
             { ctx: "Fíjate en la mayúscula y el punto.", q: "¿Cuál está bien escrita?", opts: ["Mañana vamos al cine.", "mañana vamos al cine.", "Mañana vamos al cine"], ans: 0, exp: "Empieza con mayúscula y termina en punto." },
@@ -35894,7 +36285,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
+    // ===== NEW v25.81: Composición Guiada (SRSD) — feedback IA centrado en ideas =====
     function ComposicionGuiada({ patient }) {
         const TOPICS = [
             { t: "Tu animal favorito", plan: ["¿Qué animal es?", "¿Cómo es (color, tamaño)?", "¿Por qué te gusta?"] },
@@ -35974,7 +36365,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: Corrige la Frase (revisión / proofreading) =====
+    // ===== NEW v25.81: Corrige la Frase (revisión / proofreading) =====
     function CorrigeFrase({ patient }) {
         const BANK = [
             { ctx: "Mi ermano es muy alto.", q: "¿Qué palabra está mal escrita?", opts: ["Mi", "ermano", "alto"], ans: 1, exp: "Se escribe «hermano», con «h» al principio." },
@@ -36004,7 +36395,7 @@ function FrescuraPanel({ patient }) {
     }
 
 
-    // ===== NEW v25.76: disortografía — ruta léxica y reglas por la vocal =====
+    // ===== NEW v25.81: disortografía — ruta léxica y reglas por la vocal =====
     function MirarTaparEscribir({ patient }) {
         const DEFAULT_WORDS = ["había", "muy", "también", "porque", "hacer", "vez", "bien", "ahora", "mujer", "jugar", "llave", "abuelo", "vaca", "hueso", "jirafa", "gente", "cielo", "través", "bicicleta", "guitarra"];
         const pid = (patient && patient.id) || _activePatientId;
@@ -39613,7 +40004,7 @@ const REEL_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAw
 function DemoReel({ onClose }) {
     const A = (typeof AREAS !== "undefined" && Array.isArray(AREAS)) ? AREAS : [];
     const totalEx = (typeof AREA_ACTIVITIES === "object" && AREA_ACTIVITIES) ? Object.values(AREA_ACTIVITIES).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0) : 0;
-    const VERSION_LABEL = "v25.76";
+    const VERSION_LABEL = "v25.81";
     const mascot = (stage) => (typeof companionSVG === "function") ? companionSVG({ stage: stage, mood: "feliz" }) : "";
     const demoSessions = [];
     const seed = (area, act, nWrong, total, ts0) => { for (let i = 0; i < total; i++) demoSessions.push({ ts: ts0 + i * 1000, area: area, activity: act, result: { correct: i >= nWrong, attempts: 1, stars: i >= nWrong ? 1 : 0 } }); };
@@ -40609,8 +41000,8 @@ function buildEvolutionHTML(sessions, AREAS) {
     return html;
 }
 
-// ── Compañero / mascota (v25.76) ──
-// ── Compañero / mascota (v25.76) ── diseños + monedas + tienda de accesorios
+// ── Compañero / mascota (v25.81) ──
+// ── Compañero / mascota (v25.81) ── diseños + monedas + tienda de accesorios
 const COMPANION_DESIGNS = [
     { id: "brote", name: "Brotecito", body: "#7FD1A6", cheek: "#F7A8A8", shape: "blob" },
     { id: "cielo", name: "Nubecita", body: "#8FC7E8", cheek: "#F4B6C2", shape: "blob" },
@@ -42007,7 +42398,7 @@ ${(function () { try { if (typeof computeAreaScores !== "function") return ""; c
 
 <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
   ${(includeConvos && _reportConvos.length) ? ('<div class="print-section" style="margin-top:14pt"><div class="print-section-title">Conversaciones practicadas</div><div style="font-size:9pt;color:#666;margin-bottom:8pt;font-style:italic">Estas son algunas de las conversaciones que ' + esc(patient.nombre.split(' ')[0]) + ' ha practicado con el compañero virtual de la app. Pod\u00e9is leerlas juntos en casa y comentar c\u00f3mo lo hizo.</div>' + _reportConvos.map(function (c) { return '<div style="border:1pt solid #e0e0e0;border-radius:8pt;padding:9pt 11pt;margin-bottom:9pt;page-break-inside:avoid"><div style="font-weight:bold;font-size:9.5pt;color:#2D6A4F;margin-bottom:6pt">' + esc(c.scenario || 'Conversaci\u00f3n') + (c.goal && c.goal !== 'Sin objetivo (conversar)' ? ' <span style=\\"font-weight:normal;color:#888\\">\u00b7 objetivo: ' + esc(c.goal) + '</span>' : '') + '</div>' + c.messages.map(function (m) { var mine = m.role === 'user'; return '<div style="margin:3pt 0;text-align:' + (mine ? 'right' : 'left') + '"><span style="display:inline-block;max-width:80%;padding:4pt 8pt;border-radius:8pt;font-size:9pt;background:' + (mine ? '#D7EFE1' : '#f0f0f0') + ';color:#333">' + esc(m.text) + '</span></div>'; }).join('') + (c.feedback && c.feedback.bien ? '<div style="font-size:8.5pt;color:#2D6A4F;margin-top:6pt">\u2705 ' + esc(c.feedback.bien) + '</div>' : '') + '</div>'; }).join('') + '</div>') : ''}
-  <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center"><strong>TerapiApp v25.76</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <div style="margin-top:20pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center"><strong>TerapiApp v25.81</strong> · Resumen para la familia · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Compártelo solo con familiares directos del paciente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -42178,7 +42569,7 @@ ${(sections.linea && lineaHTML) ? `
 </div>` : ''}
 
 <div style="margin-top:18pt;padding-top:8pt;border-top:1pt solid #ddd;font-size:8pt;color:#888;text-align:center">
-  <strong>TerapiApp v25.76</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
+  <strong>TerapiApp v25.81</strong> · Pablo Maestro Redondo · Psicólogo General Sanitario · ${esc(today)}<br>
   Documento confidencial. Información clínica generada localmente. © 2026 Todos los derechos reservados.
 </div>
 `;
@@ -42635,7 +43026,7 @@ function SettingsModal({ onClose }) {
                 }
             }
             const patientCount = data.patients ? JSON.parse(data.patients).length : 0;
-            const backup = { app: "TerapiApp", version: "v25.76", exportDate: new Date().toISOString(), patientCount, data };
+            const backup = { app: "TerapiApp", version: "v25.81", exportDate: new Date().toISOString(), patientCount, data };
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -42880,7 +43271,7 @@ function TerapiAppInner() {
     const { theme, toggleTheme, mode: themeMode } = useTheme();
     // Force re-renders on theme change by destructuring it
     const _c = theme; // eslint-disable-line
-    const [patients, setPatients] = useState(() => storeLoad("patients") || []);
+    const [patients, setPatients] = useState(() => (storeLoad("patients") || []).map(function (p) { return normalizePatient(p); }));
     const [activePatient, setActivePatient] = useState(null);
     const [showRegistry, setShowRegistry] = useState(false);
     const [showMascota, setShowMascota] = useState(false);
@@ -43121,6 +43512,7 @@ function TerapiAppInner() {
         setActivePatientGlobal((activePatient === null || activePatient === void 0 ? void 0 : activePatient.id) || null);
         setActivePatientFull(activePatient);
         setAdolescentModeGlobal(isAdolescentMode(activePatient));
+        try { window.dispatchEvent(new CustomEvent("tap:patientchange")); } catch (e) { }
     }, [activePatient]);
     useEffect(() => { setActiveAreaGlobal(area); }, [area]);
     useEffect(() => { setActiveActivityGlobal(activity); }, [activity]);
@@ -43205,12 +43597,12 @@ function TerapiAppInner() {
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                     }, title: "Biblioteca de fichas imprimibles" }, "🖨 Fichas"),
-                React.createElement("button", { onClick: () => { sfx.tap(); setShowMascota(true); }, style: {
+                isLudico(activePatient) && React.createElement("button", { onClick: () => { sfx.tap(); setShowMascota(true); }, style: {
                         background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                     }, title: "Mi compañero" }, "🐣 Compañero"),
-                React.createElement("button", { onClick: () => { sfx.tap(); setShowAlbum(true); }, style: {
+                isLudico(activePatient) && React.createElement("button", { onClick: () => { sfx.tap(); setShowAlbum(true); }, style: {
                         background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.35)",
                         borderRadius: 12, padding: "9px 16px", color: "#fff", fontSize: 13, fontWeight: 700,
                         cursor: "pointer", fontFamily: "inherit", minHeight: 44,
@@ -43236,9 +43628,9 @@ function TerapiAppInner() {
             showRegistry && (React.createElement(PatientRegistry, { patients: patients, setPatients: setPatients, activePatient: activePatient, setActivePatient: setActivePatient, onClose: () => setShowRegistry(false), onShowReport: (p) => { setShowRegistry(false); setReportPatient(p); }, onShowTracking: (p) => { setShowRegistry(false); setTrackingPatient(p); }, onShowFeedbackAdmin: () => { setShowRegistry(false); setShowFeedbackAdmin(true); } })),
             reportPatient && React.createElement(SessionReport, { patient: reportPatient, onClose: () => setReportPatient(null) }),
             trackingPatient && React.createElement(SeguimientoClinico, { patient: trackingPatient, onClose: () => setTrackingPatient(null) }),
-            showMascota && React.createElement(Mascota, { patient: activePatient, onClose: () => setShowMascota(false) }),
-            showAlbum && React.createElement(AlbumCromos, { patient: activePatient, onClose: () => setShowAlbum(false) }),
-            React.createElement(CompanionReactions, null),
+            isLudico(activePatient) && showMascota && React.createElement(Mascota, { patient: activePatient, onClose: () => setShowMascota(false) }),
+            isLudico(activePatient) && showAlbum && React.createElement(AlbumCromos, { patient: activePatient, onClose: () => setShowAlbum(false) }),
+            isLudico(activePatient) && React.createElement(CompanionReactions, null),
             React.createElement(QuickSwitcher, { patients: patients, activePatient: activePatient, onPick: function (p) { setActivePatient(p); setArea(null); setActivity(null); try { storeSave("lastActivePatientId", p.id); } catch (e) { } window.scrollTo(0, 0); }, onHome: function () { setActivePatient(null); setArea(null); setActivity(null); } }),
             navRestore && React.createElement("div", { style: { position: "fixed", left: "50%", bottom: 86, transform: "translateX(-50%)", zIndex: 4400, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.22)", border: "2px solid " + C.primaryL, padding: "12px 14px", width: "min(420px, 92vw)", display: "flex", alignItems: "center", gap: 10 } },
                 React.createElement("div", { style: { flex: 1, fontSize: 13.5, color: "#333", lineHeight: 1.4 } }, "¿Seguir donde lo dejaste con ", React.createElement("strong", null, navRestore.patient.name || "el paciente"), "?"),
@@ -43511,6 +43903,7 @@ function TerapiAppInner() {
                                         React.createElement("div", { style: { fontSize: 11, color: C.textL, lineHeight: 1.3 } }, m.desc));
                                 })));
                 })() :
+                ((activePatient && activePatient.enfoque === "clinico") ? React.createElement(EspacioClinico, { patient: activePatient }) : (
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 } }, AREAS.map(a => {
                     var _a, _b;
                     const count = ((_a = AREA_ACTIVITIES[a.id]) === null || _a === void 0 ? void 0 : _a.length) || 0;
@@ -43533,7 +43926,7 @@ function TerapiAppInner() {
                                 "\u2728 ",
                                 aiCount,
                                 " con IA"))));
-                })),
+                })))),
                 // ── Favorite activities quick-access ──
                 (() => {
                     void favRefresh; // re-render dependency
@@ -43706,7 +44099,7 @@ function TerapiAppInner() {
                     "Pablo Maestro Redondo",
                     React.createElement("div", { style: { fontSize: 10, fontWeight: 500, color: C.textL } }, "Psicólogo General Sanitario"))),
             React.createElement("div", { style: { fontSize: 10, color: C.textL, marginBottom: 4 } },
-                "© 2026 Todos los derechos reservados · TerapiApp v25.76"),
+                "© 2026 Todos los derechos reservados · TerapiApp v25.81"),
             React.createElement("div", { style: { fontSize: 10, color: C.textL } },
                 totalActivities, " actividades · ", totalAI, " con IA")),
         React.createElement(ScrollToTop, null),
@@ -44254,7 +44647,14 @@ function ScrollToTop() {
 // ═══════════════════════════════════════════════════════════════
 function TerapiApp() {
     const [mode, setMode] = useState(() => storeLoad("themeMode") || "light");
-    const theme = mode === "dark" ? themeDark : themeLight;
+    const [, _bump] = useState(0);
+    useEffect(function () {
+        var h = function () { _bump(function (x) { return x + 1; }); };
+        try { window.addEventListener("tap:patientchange", h); } catch (e) { }
+        return function () { try { window.removeEventListener("tap:patientchange", h); } catch (e) { } };
+    }, []);
+    const base = (typeof _activePatientFull !== "undefined" && _activePatientFull && _activePatientFull.enfoque === "clinico") ? themeSobrio : themeLight;
+    const theme = mode === "dark" ? themeDark : base;
     // Keep global C in sync so static references work
     C = theme;
     const toggleTheme = () => {
